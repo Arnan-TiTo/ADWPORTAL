@@ -1,0 +1,18 @@
+﻿@page
+@using miniApp.Web.Models
+@model IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+    Layout = "_Layout";
+}
+
+<div class="p-6">
+    <h1 class="text-2xl font-bold mb-4">Welcome, @User.Identity?.Name</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        <partial name="_DashboardCard" model='new DashboardCardModel { Title = "Stock In Today", Value = "12", Color = "blue" }' />
+        <partial name="_DashboardCard" model='new DashboardCardModel { Title = "Adjustments", Value = "3", Color = "yellow" }' />
+        <partial name="_DashboardCard" model='new DashboardCardModel { Title = "Stock Count", Value = "7", Color = "green" }' />
+    </div>
+</div>

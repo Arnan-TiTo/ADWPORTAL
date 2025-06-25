@@ -1,0 +1,55 @@
+﻿@using Microsoft.AspNetCore.Http
+@inject IHttpContextAccessor HttpContextAccessor
+
+@{
+    var token = HttpContextAccessor.HttpContext?.Session.GetString("JWT");
+    var isAuthenticated = !string.IsNullOrEmpty(token);
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - miniApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
+            sidebar.classList.toggle("hidden");
+        }
+    </script>
+</head>
+<body class="bg-gray-100">
+
+    @if (isAuthenticated)
+    {
+        <!-- Layout เมื่อ Login แล้ว -->
+        <div class="flex h-screen">
+            <!-- Sidebar (ซ่อนไว้บนมือถือ) -->
+            <partial name="_Sidebar" />
+
+            <!-- Main Section -->
+            <div class="flex-1 flex flex-col">
+                <!-- Navbar -->
+                <partial name="_Navbar" />
+
+                <!-- Content Area -->
+                <main class="flex-1 overflow-y-auto p-6">
+                    @RenderBody()
+                </main>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Layout สำหรับหน้า Login/Register -->
+        <main class="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+            @RenderBody()
+        </main>
+    }
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>
