@@ -32,7 +32,8 @@ namespace miniApp.API.Controllers
             [FromForm] string Note,
             [FromForm] float Latitude,
             [FromForm] float Longitude,
-            [FromForm] List<IFormFile> Image)
+            [FromForm] List<IFormFile> Image,
+            [FromForm] string Usernames)
         {
             Console.WriteLine($"Name: {Name}, Note: {Note}, Latitude: {Latitude}, Longitude: {Longitude}");
 
@@ -44,7 +45,7 @@ namespace miniApp.API.Controllers
                 }
             }
 
-            var username = User.Identity?.Name;
+            var username = Usernames;
             if (string.IsNullOrEmpty(username))
                 return Unauthorized();
 

@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Humanizer.Configuration;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using miniApp.Web.Services;
+using Microsoft.Extensions.Configuration;
 using miniApp.Web.Models;
+using miniApp.Web.Services;
 using System.Threading.Tasks;
 
 namespace miniApp.Web.Pages
@@ -9,10 +11,18 @@ namespace miniApp.Web.Pages
     public class LocationModel : PageModel
     {
         private readonly LocationService _locationService;
-        public LocationModel(LocationService locationService)
+        private readonly IConfiguration _configuration;
+        public string Usernames { get; set; } = "";
+        public LocationModel(LocationService locationService,IConfiguration configuration)
         {
             _locationService = locationService;
+            _configuration = configuration;
+        }
 
+        public void OnGet()
+        {
+            ViewData["ApiBaseUrl"] = _configuration["ApiBaseUrl"];
+            Usernames = User.Identity?.Name ?? "";
         }
 
         [BindProperty]

@@ -32,10 +32,8 @@ namespace miniApp.Web.Pages
                 return Page();
             }
 
-            // ✅ เก็บ JWT ไว้ใน Session (สำหรับ API)
             HttpContext.Session.SetString("JWT", token);
 
-            // ✅ สร้าง Claims และ SignIn ด้วย Cookie
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.Name, Login.Username),

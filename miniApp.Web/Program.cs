@@ -3,6 +3,8 @@ using miniApp.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration.AddEnvironmentVariables();
+
 builder.Services.AddSession(options =>
 {
     options.Cookie.HttpOnly = true;  // กำหนดให้ cookie สามารถเข้าถึงได้จาก server-side เท่านั้น
@@ -13,6 +15,8 @@ builder.Services.AddSession(options =>
 builder.Services.AddRazorPages();
 builder.Services.AddHttpClient();
 builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
 builder.Services.AddSession(options =>
 {
@@ -41,6 +45,8 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
 }
+
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
 
 app.UseStaticFiles();
 app.UseRouting();

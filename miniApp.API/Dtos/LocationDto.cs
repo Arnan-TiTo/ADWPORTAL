@@ -10,5 +10,6 @@ namespace miniApp.API.Dtos
         public float Latitude { get; set; } = 0;
         public float Longitude { get; set; } = 0;
         public List<IFormFile> Image { get; set; } = new();
+        public string Usernames { get; set; } = string.Empty;
     }
 }

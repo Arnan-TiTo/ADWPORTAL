@@ -2,6 +2,7 @@
 @model miniApp.Web.Pages.LocationModel
 @{
     ViewData["Title"] = "Location";
+    ViewData["ApiBaseUrl"] = "http://localhost:5252";
 }
 
 <div class="bg-yellow-200 text-center py-4 rounded-b-3xl relative">
@@ -19,20 +20,20 @@
     <div class="text-sm mt-4 text-gray-600">Date : @Model.CurrentDate</div>
     <div class="text-sm font-semibold text-blue-700">Time : @Model.CurrentTime</div>
 
-    <div class="mt-4">
-        <label for="upload" class="cursor-pointer">
-            <div class="bg-green-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm5 3a1 1 0 112 0v3h2a1 1 0 110 2h-2v3a1 1 0 11-2 0v-3H7a1 1 0 110-2h2V6z" />
-                </svg>
+    <!-- Upload Images -->
+    <div class="mt-6 text-left">
+        <label class="block text-sm font-medium text-gray-700">Images</label>
+        <div id="imageInputs" class="space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-4">
+                <input type="file" name="Image" class="image-upload-input" accept="image/*" capture="environment" onchange="previewImage(this)" />
+                <button type="button" class="remove-btn text-red-500 font-bold text-xl sm:mt-0 mt-2">−</button>
             </div>
-            <p class="text-xs mt-2 text-gray-500">Click to upload your pictures</p>
-        </label>
-        <input id="upload" type="file" name="Upload" multiple class="hidden" accept="image/*" />
-        <div id="previewContainer" class="flex flex-wrap justify-center gap-2 mt-2"></div>
+        </div>
+        <button type="button" id="addImageBtn" class="mt-4 px-4 py-1 text-sm bg-green-500 text-white rounded-full">+ Add Image</button>
     </div>
 </div>
 
+<!-- Form -->
 <form id="locationForm" class="px-4 mt-6 space-y-4">
     <input id="Name" placeholder="Location name" class="w-full px-4 py-2 border rounded-md shadow-sm" />
     <span class="text-red-600 text-sm" id="nameError"></span>
@@ -40,7 +41,6 @@
     <input id="Note" placeholder="Note" class="w-full px-4 py-2 border rounded-md shadow-sm" />
     <span class="text-red-600 text-sm" id="noteError"></span>
 
-    <!-- Read-only Latitude and Longitude fields -->
     <div class="mt-4">
         <label for="Latitude" class="block text-sm font-medium text-gray-700">Latitude</label>
         <input id="Latitude" type="text" class="w-full px-4 py-2 border rounded-md shadow-sm bg-gray-100" readonly />
@@ -53,12 +53,12 @@
 
     <input type="hidden" id="LatitudeHidden" />
     <input type="hidden" id="LongitudeHidden" />
+    <input type="hidden" id="Usernames" value="@Model.Usernames" />
 
     <button type="submit" class="w-full bg-black text-white py-3 rounded-md font-semibold">Save</button>
 </form>
 
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
     <script>
         function toggleSidebar() {
             const sidebar = document.getElementById("sidebar");
@@ -69,8 +69,6 @@
             e.preventDefault();
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(function (position) {
-                    console.log('Location Data:', position);
-
                     document.getElementById("Latitude").value = position.coords.latitude;
                     document.getElementById("Longitude").value = position.coords.longitude;
                     document.getElementById("LatitudeHidden").value = position.coords.latitude;
@@ -83,40 +81,83 @@
                 alert("Geolocation is not supported by this browser.");
             }
         });
+        function previewImage(inputElement) {
+            const file = inputElement.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    let preview = inputElement.parentElement.querySelector('img');
+                    if (!preview) {
+                        preview = document.createElement('img');
+                        preview.className = "w-24 h-24 object-cover rounded border mt-2";
+                        inputElement.parentElement.appendChild(preview);
+                    }
+                    preview.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        document.getElementById('addImageBtn').addEventListener('click', () => {
+            const container = document.getElementById('imageInputs');
+            if (container.children.length >= 5) {
+                alert("You can only upload up to 5 images.");
+                return;
+            }
+
+            const newInputDiv = document.createElement('div');
+            newInputDiv.classList = 'flex flex-col sm:flex-row sm:items-center sm:space-x-4';
+            newInputDiv.innerHTML = `
+                <input type="file" name="Image" class="image-upload-input" accept="image/*" capture="environment" onchange="previewImage(this)" />
+                <button type="button" class="remove-btn text-red-500 font-bold text-xl sm:mt-0 mt-2">−</button>
+            `;
+            container.appendChild(newInputDiv);
+        });
+
+       document.getElementById('imageInputs').addEventListener('click', (e) => {
+            if (e.target && e.target.classList.contains('remove-btn')) {
+                e.target.parentElement.remove();
+            }
+        });
 
         document.getElementById('locationForm').addEventListener('submit', async function (event) {
-            event.preventDefault();  // Prevent the form from refreshing the page
+            event.preventDefault();
 
             const formData = new FormData();
             formData.append('Name', document.getElementById('Name').value);
             formData.append('Note', document.getElementById('Note').value);
             formData.append('Latitude', document.getElementById('LatitudeHidden').value);
             formData.append('Longitude', document.getElementById('LongitudeHidden').value);
+            formData.append('Usernames', document.getElementById('Usernames').value);
 
-            const fileInput = document.getElementById('upload');
-            if (fileInput.files.length > 0) {
-                Array.from(fileInput.files).forEach(file => {
-                    formData.append('Image', file);
-                });
+        const imageInputs = document.querySelectorAll('.image-upload-input');
+        imageInputs.forEach(input => {
+            const files = input.files;
+            for (let i = 0; i < files.length; i++) {
+                formData.append('Image', files[i]);
             }
+        });
+            const apiBaseUrl = '@ViewData["ApiBaseUrl"]';
+            const apiUrl = apiBaseUrl + '/api/locations';
 
             try {
-                // Call API to save location, targeting `api/locations` directly
-                const response = await fetch('/locations', {  // Change URL to api/locations
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     body: formData
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to submit location');
+                    const errorText = await response.text();
+                    console.error("Failed:", errorText);
+                    throw new Error('Submit failed');
                 }
 
                 const result = await response.json();
-                console.log('API Response:', result);
                 alert('Location saved successfully!');
+                console.log(result);
             } catch (error) {
-                console.error('Error:', error);
-                alert('Failed to submit location');
+                alert('Error submitting location');
+                console.error(error);
             }
         });
     </script>

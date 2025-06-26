@@ -27,20 +27,23 @@ namespace miniApp.Web.Services
         public async Task<bool> CreateLocationAsync(LocationDto location)
         {
             // ดึง JWT token จาก cookies
-            var httpContext = _httpContextAccessor.HttpContext;
-            if (httpContext == null)
-            {
-                throw new InvalidOperationException("HttpContext is not available.");
-            }
+            //var httpContext = _httpContextAccessor.HttpContext;
+            //if (httpContext == null)
+            //{
+            //    throw new InvalidOperationException("HttpContext is not available.");
+            //}
 
-            var token = httpContext.Request.Cookies["MiniApp.Auth"]; // Access the cookie
-            if (string.IsNullOrEmpty(token))
-            {
-                throw new UnauthorizedAccessException("Authorization required. Please log in.");
-            }
+            //var token = httpContext.Request.Cookies["MiniApp.Auth"]; // Access the cookie
+            //if (string.IsNullOrEmpty(token))
+            //{
+            //    throw new UnauthorizedAccessException("Authorization required. Please log in.");
+            //}
 
-            // เพิ่ม Authorization header
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            //// เพิ่ม Authorization header
+            //_httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var apiBase = _config["ApiBaseUrl"] ?? "http://localhost:5252";
+            _httpClient.BaseAddress = new System.Uri(apiBase);
 
             var form = new MultipartFormDataContent
             {
@@ -69,7 +72,7 @@ namespace miniApp.Web.Services
             try
             {
                 // ใช้ _httpClient ส่งคำขอ POST ไปยัง API
-                var response = await _httpClient.PostAsync("api/locations", form); // ตรวจสอบ URL ใน API
+                var response = await _httpClient.PostAsync("/api/locations", form); // ตรวจสอบ URL ใน API
                 var content = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
