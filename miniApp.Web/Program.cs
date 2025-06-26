@@ -1,9 +1,13 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using miniApp.Web.Middlewares;
+﻿using miniApp.Web.Middlewares;
+using miniApp.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSession(options =>
+{
+    options.Cookie.HttpOnly = true;  // กำหนดให้ cookie สามารถเข้าถึงได้จาก server-side เท่านั้น
+    options.IdleTimeout = TimeSpan.FromMinutes(30);  // ระยะเวลาใช้งาน session
+});
 
 // Services
 builder.Services.AddRazorPages();
@@ -28,6 +32,7 @@ builder.Services.AddAuthentication("MyCookieAuth")
 // DI
 builder.Services.AddScoped<miniApp.Web.Services.AuthService>();
 builder.Services.AddScoped<miniApp.Web.Services.LocationService>();
+
 
 var app = builder.Build();
 

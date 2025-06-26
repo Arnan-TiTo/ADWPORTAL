@@ -14,12 +14,11 @@ namespace miniApp.API.Models
 
         [ForeignKey("UserId")]
         public User? User { get; set; }
-
         public string Name { get; set; } = string.Empty;
+        public string? Note { get; set; } = string.Empty;
         public float Latitude { get; set; }
         public float Longitude { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        public ICollection<LocationImage>? Images { get; set; }
     }
 }

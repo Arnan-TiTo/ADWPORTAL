@@ -1,9 +1,10 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using miniApp.API.Data;
+using miniApp.API.Dtos;
 using miniApp.API.Models;
 using System;
 using System.Collections.Generic;
@@ -14,61 +15,86 @@ namespace miniApp.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
-    public class LocationController : ControllerBase
+    public class LocationsController : ControllerBase
     {
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _env;
 
-        public LocationController(AppDbContext context, IWebHostEnvironment env)
+        public LocationsController(AppDbContext context, IWebHostEnvironment env)
         {
             _context = context;
             _env = env;
         }
 
-        [HttpPost("upload")]
-        public async Task<IActionResult> UploadLocation([FromForm] LocationUploadRequest request)
+        [HttpPost]
+        public async Task<IActionResult> CreateLocation(
+            [FromForm] string Name,
+            [FromForm] string Note,
+            [FromForm] float Latitude,
+            [FromForm] float Longitude,
+            [FromForm] List<IFormFile> Image)
         {
+            Console.WriteLine($"Name: {Name}, Note: {Note}, Latitude: {Latitude}, Longitude: {Longitude}");
+
+            if (Image != null && Image.Count > 0)
+            {
+                foreach (var file in Image)
+                {
+                    Console.WriteLine($"Received file: {file.FileName}");
+                }
+            }
+
+            var username = User.Identity?.Name;
+            if (string.IsNullOrEmpty(username))
+                return Unauthorized();
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null)
+                return Unauthorized();
+
             var location = new Location
             {
-                Name = request.Name,
-                Latitude = (float)request.Latitude,
-                Longitude = (float)request.Longitude,
-                UserId = request.UserId,
+                UserId = user.Id,
+                Name = Name,
+                Note = Note,
+                Latitude = Latitude,
+                Longitude = Longitude,
                 CreatedAt = DateTime.UtcNow
             };
+
             _context.Locations.Add(location);
             await _context.SaveChangesAsync();
 
-            if (request.Images != null)
-            {
-                foreach (var img in request.Images)
-                {
-                    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(img.FileName)}";
-                    var savePath = Path.Combine(_env.WebRootPath, "uploads", fileName);
-                    Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
-                    using var stream = System.IO.File.Create(savePath);
-                    await img.CopyToAsync(stream);
+            Console.WriteLine($"Saved Location with ID: {location.Id}");
 
-                    _context.LocationImages.Add(new LocationImage
+            if (Image != null && Image.Count > 0)
+            {
+                var uploadsFolder = Path.Combine(_env.WebRootPath ?? "wwwroot", "uploads");
+                Directory.CreateDirectory(uploadsFolder);
+
+                foreach (var file in Image)
+                {
+                    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+                    var filePath = Path.Combine(uploadsFolder, fileName);
+
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+
+                    var image = new LocationImage
                     {
                         LocationId = location.Id,
                         ImageUrl = $"/uploads/{fileName}"
-                    });
+                    };
+
+                    _context.LocationImages.Add(image);
                 }
+
                 await _context.SaveChangesAsync();
             }
 
-            return Ok(location);
+            return Ok(new { message = "Location saved", location.Id });
         }
-    }
-
-    public class LocationUploadRequest
-    {
-        public string Name { get; set; } = string.Empty;
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
-        public int UserId { get; set; }
-        public List<IFormFile>? Images { get; set; }
     }
 }

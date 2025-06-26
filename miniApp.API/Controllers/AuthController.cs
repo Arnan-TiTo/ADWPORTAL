@@ -1,13 +1,15 @@
+using BCrypt.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using miniApp.API.Auth;
 using miniApp.API.Data;
+using miniApp.API.Dtos;
 using miniApp.API.Models;
+using System;
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using BCrypt.Net;
-using miniApp.API.Dtos;
 
 namespace miniApp.API.Controllers
 {
@@ -31,6 +33,16 @@ namespace miniApp.API.Controllers
                 return BadRequest("Username already exists.");
 
             var hashed = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+           
+            RoleType role = RoleType.Staff; // ??????????
+            if (Enum.TryParse(dto.Role, true, out RoleType parsedRole))
+            {
+                role = parsedRole; // ????????????? ?????? parsedRole
+            }
+            else
+            {
+                role = RoleType.Staff; // ???????????? ?????? default "Staff"
+            }
 
             var user = new User
             {
@@ -39,7 +51,7 @@ namespace miniApp.API.Controllers
                 Fullname = dto.Fullname,
                 Phone = dto.Phone,
                 Email = dto.Email,
-                Role = "staff"
+                Role = role
             };
 
             _context.Users.Add(user);

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Humanizer;
+using Microsoft.EntityFrameworkCore;
 using miniApp.API.Models;
 using System;
 using System.Threading.Tasks;
@@ -11,14 +12,15 @@ namespace miniApp.API.Data
         {
             if (!await context.Users.AnyAsync())
             {
-                context.Users.Add(new User
+
+               context.Users.Add(new User
                 {
                     Username = "admin",
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456"),
                     Fullname = "Admin Tester",
                     Email = "admin@demo.com",
                     Phone = "0800000000",
-                    Role = "admin"
+                    Role = RoleType.Staff
                 });
             }
 

@@ -1,7 +1,7 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.IdentityModel.Tokens;
 using miniApp.Web.Services;
+using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 
 namespace miniApp.Web.Pages
@@ -22,6 +22,11 @@ namespace miniApp.Web.Pages
 
         public async Task<IActionResult> OnPostAsync()
         {
+            if (!ModelState.IsValid)
+            {
+                return Page(); // แสดง error ด้านล่างช่องกรอก
+            }
+
             var (success, error) = await _authService.RegisterAsync(Register);
             if (!success)
             {
@@ -34,11 +39,22 @@ namespace miniApp.Web.Pages
 
         public class UserRequest
         {
-            public string Username { get; set; } = "";
-            public string Password { get; set; } = "";
+            [Required(ErrorMessage = "Full name is required.")]
             public string Fullname { get; set; } = "";
+
+            [Required(ErrorMessage = "Username is required.")]
+            public string Username { get; set; } = "";
+
+            [Required(ErrorMessage = "Email is required.")]
+            [EmailAddress(ErrorMessage = "Invalid email format.")]
             public string Email { get; set; } = "";
+
+            [Required(ErrorMessage = "Phone is required.")]
+            [RegularExpression(@"^0[689]\d{8}$", ErrorMessage = "Phone must be 10 digits starting with 06, 08, or 09.")]
             public string Phone { get; set; } = "";
+
+            [Required(ErrorMessage = "Password is required.")]
+            public string Password { get; set; } = "";
         }
     }
 }
