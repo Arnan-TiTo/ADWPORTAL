@@ -1,6 +1,46 @@
 ﻿@page
 @model miniApp.Web.Pages.StockInModel
-<h2>Stock In</h2>
-<form method="post">
-    <!-- product select, qty -->
-</form>
+@{
+    ViewData["Title"] = "Stock In";
+}
+
+<div class="max-w-md mx-auto bg-white p-4 min-h-screen">
+    <div class="flex items-center mb-4">
+        <button onclick="history.back()" class="text-xl">&#8592;</button>
+        <h1 class="text-center flex-grow text-lg font-semibold">Stock in</h1>
+    </div>
+
+    <div class="mb-4">
+        <input type="text" placeholder="Search" class="w-full bg-gray-100 rounded-xl px-4 py-2 focus:outline-none" />
+    </div>
+
+    <button class="bg-blue-800 text-white font-semibold px-4 py-2 rounded-full mb-4">+ Add Item</button>
+
+    <form method="post" class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+            <input type="text" placeholder="Date : Auto" disabled class="border rounded-xl px-3 py-2 w-full" />
+            <input type="text" placeholder="SKU no :" class="border rounded-xl px-3 py-2 w-full" />
+        </div>
+
+        <select class="border rounded-xl px-3 py-2 w-full">
+            <option selected hidden>Hotel/Location name</option>
+            @* Dynamically loaded options *@
+        </select>
+
+        <input type="text" placeholder="Product name" class="border rounded-xl px-3 py-2 w-full" />
+
+        <select class="border rounded-xl px-3 py-2 w-full">
+            <option selected hidden>Qty</option>
+            @for (int i = 1; i <= 100; i++)
+            {
+                <option value="@i">@i</option>
+            }
+        </select>
+
+        <input type="text" placeholder="Field agent name" class="border rounded-xl px-3 py-2 w-full" />
+
+        <textarea placeholder="Note" class="border rounded-xl px-3 py-2 w-full h-24"></textarea>
+
+        <button type="submit" class="w-full bg-black text-white rounded-xl py-2 font-semibold">Submit</button>
+    </form>
+</div>

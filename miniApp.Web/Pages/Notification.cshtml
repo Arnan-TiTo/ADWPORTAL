@@ -1,0 +1,33 @@
+﻿@page
+@model miniApp.Web.Pages.NotificationModel
+@{
+    ViewData["Title"] = "Notifications";
+}
+
+<!-- Header -->
+<div class="bg-white py-4 px-4 border-b shadow-sm flex items-center justify-between">
+    <h1 class="text-lg font-semibold text-gray-900">🔔 Notifications</h1>
+</div>
+
+<!-- Notification List -->
+<div class="px-4 py-4 space-y-4 bg-white min-h-screen">
+    <!-- Notification Item -->
+    <div class="border rounded-xl p-4 shadow-sm hover:bg-gray-50 transition">
+        <div class="flex justify-between items-center">
+            <h2 class="text-base font-medium text-gray-800">New Stock Added</h2>
+            <span class="text-xs text-gray-400">5m ago</span>
+        </div>
+        <p class="text-sm text-gray-600 mt-1">You added 10 units of SN24 Sunscreen to Aonang Hotel.</p>
+    </div>
+
+    <!-- Notification Item -->
+    <div class="border rounded-xl p-4 shadow-sm hover:bg-gray-50 transition">
+        <div class="flex justify-between items-center">
+            <h2 class="text-base font-medium text-gray-800">Low Stock Alert</h2>
+            <span class="text-xs text-gray-400">2h ago</span>
+        </div>
+        <p class="text-sm text-gray-600 mt-1">Product XYZ is below minimum stock level.</p>
+    </div>
+
+    <!-- More notifications ... -->
+</div>

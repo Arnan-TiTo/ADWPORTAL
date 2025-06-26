@@ -1,3 +1,45 @@
 ﻿@page
 @model miniApp.Web.Pages.StockCountModel
-<h2>Count Stock</h2>
+@{
+    ViewData["Title"] = "Stock Count";
+}
+
+<div class="max-w-md mx-auto bg-white min-h-screen flex flex-col justify-between">
+    <!-- Header -->
+    <div>
+        <div class="flex items-center p-4">
+            <button onclick="history.back()" class="text-xl">&#8592;</button>
+            <h1 class="text-center flex-grow text-lg font-semibold">Stock count</h1>
+        </div>
+
+        <!-- Search + Filter -->
+        <div class="px-4 mb-3">
+            <input type="text" placeholder="Search" class="w-full bg-gray-100 rounded-xl px-4 py-2 focus:outline-none mb-2" />
+            <div class="flex gap-2">
+                <button class="bg-white border rounded-xl p-2 text-gray-700"><i class="fas fa-list"></i></button>
+                <button class="bg-white border rounded-xl p-2 text-gray-700"><i class="fas fa-filter"></i></button>
+            </div>
+        </div>
+
+        <!-- Product List -->
+        <div class="space-y-4 px-4">
+            @for (int i = 0; i < 6; i++)
+            {
+                <div class="flex items-center gap-4 border-b pb-2">
+                    <img src="/images/vibechic_logo.png" alt="Product" class="w-12 h-12 rounded" />
+                    <div class="flex-grow">
+                        <div class="font-semibold">SN24 Sunscreen</div>
+                        <div class="text-sm text-gray-500">SKU : 1234</div>
+                    </div>
+                    <input type="number" value="245" class="w-20 bg-gray-100 text-right rounded-xl px-2 py-1 text-gray-700" />
+                    <span class="text-sm text-gray-500 ml-1">ชิ้น</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Save Button -->
+    <div class="px-4 pt-6 pb-20">
+        <button type="submit" class="w-full bg-black text-white py-2 rounded-xl font-semibold">SAVE</button>
+    </div>
+</div>

@@ -1,0 +1,53 @@
+﻿@page
+@model miniApp.Web.Pages.ProductModel
+@{
+    ViewData["Title"] = "Product";
+}
+
+<div class="max-w-md w-full mx-auto px-4 py-4 space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <button onclick="history.back()" class="text-xl">&#8592;</button>
+        <h1 class="text-lg font-semibold text-center flex-1">Product</h1>
+    </div>
+
+    <!-- Search & Filter -->
+    <div>
+        <input type="text" placeholder="Search" class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm" />
+        <div class="flex gap-2 mt-2">
+            <button class="bg-white border rounded-xl p-2">
+                <img src="/images/icons/sort.png" alt="Sort Icon" class="w-5 h-5" />
+            </button>
+            <button class="bg-white border rounded-xl p-2">
+                <img src="/images/icons/Alignment.png" alt="Filter Icon" class="w-5 h-5" />
+            </button>
+        </div>
+    </div>
+
+    <!-- Product Info -->
+    <div class="text-center">
+        <img src="/images/products/logo.png" alt="Product" class="w-20 h-20 mx-auto mb-2" />
+        <h2 class="font-semibold text-md">SN24 Sunscreen</h2>
+    </div>
+
+    <!-- Form -->
+    <form class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+            <input type="text" placeholder="Date : dd/mm/yyyy" class="w-full border rounded-xl px-4 py-2 text-sm" />
+            <input type="text" placeholder="SKU no : 1234" class="w-full border rounded-xl px-4 py-2 text-sm" />
+        </div>
+
+        <select class="w-full border rounded-xl px-4 py-2 text-sm">
+            <option>Aonang Hotel</option>
+            <option>Bangkok Hotel</option>
+        </select>
+
+        <input type="text" placeholder="SN24 Sunscreen SPF50 PA++++" class="w-full border rounded-xl px-4 py-2 text-sm" />
+        <input type="text" placeholder="250 ชิ้น" class="w-full border rounded-xl px-4 py-2 text-sm" />
+        <input type="text" placeholder="คุณภาสนาม จัดการสินค้า" class="w-full border rounded-xl px-4 py-2 text-sm" />
+        <input type="text" placeholder="Note" class="w-full border rounded-xl px-4 py-2 text-sm" />
+
+        <button type="submit" class="w-full bg-black text-white py-3 rounded-xl font-semibold">Edit Item</button>
+    </form>
+</div>
