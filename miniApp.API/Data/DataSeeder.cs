@@ -10,10 +10,11 @@ namespace miniApp.API.Data
     {
         public static async Task SeedAsync(AppDbContext context)
         {
+            bool needSave = false;
+
             if (!await context.Users.AnyAsync())
             {
-
-               context.Users.Add(new User
+                context.Users.Add(new User
                 {
                     Username = "admin",
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456"),
@@ -22,18 +23,22 @@ namespace miniApp.API.Data
                     Phone = "0800000000",
                     Role = RoleType.Staff
                 });
+                needSave = true;
             }
 
             if (!await context.Products.AnyAsync())
             {
                 context.Products.AddRange(
-                    new Product { Name = "Notebook", Description = "Demo product notebook" },
-                    new Product { Name = "Mouse", Description = "Wireless Mouse" },
-                    new Product { Name = "Keyboard", Description = "Mechanical Keyboard" }
+                    new Product { Name = "Notebook", Description = "Demo product notebook", Sku = "SKU001" },
+                    new Product { Name = "Mouse", Description = "Wireless Mouse", Sku = "SKU002" },
+                    new Product { Name = "Keyboard", Description = "Mechanical Keyboard", Sku = "SKU003" }
                 );
+                needSave = true;
             }
 
-            // Get userId และ productId ที่จะใช้
+            if (needSave)
+                await context.SaveChangesAsync(); // ต้อง save ก่อนเพื่อให้ ID ถูกสร้าง
+
             var user = await context.Users.FirstOrDefaultAsync();
             var product = await context.Products.FirstOrDefaultAsync();
 
@@ -49,6 +54,18 @@ namespace miniApp.API.Data
                         Longitude = 100.5018f,
                         CreatedAt = DateTime.UtcNow
                     });
+                    await context.SaveChangesAsync();
+                }
+
+                var location = await context.Locations.FirstOrDefaultAsync();
+
+                if (location != null && !await context.LocationImages.AnyAsync())
+                {
+                    context.LocationImages.AddRange(
+                        new LocationImage { LocationId = location.Id, ImageUrl = "/uploads/demo1.jpg" },
+                        new LocationImage { LocationId = location.Id, ImageUrl = "/uploads/demo2.jpg" },
+                        new LocationImage { LocationId = location.Id, ImageUrl = "/uploads/demo3.jpg" }
+                    );
                 }
 
                 if (!await context.Inventories.AnyAsync())
@@ -59,47 +76,36 @@ namespace miniApp.API.Data
                         Quantity = 100
                     });
                 }
+
+                if (!await context.StockMovements.AnyAsync())
+                {
+                    context.StockMovements.AddRange(
+                        new StockMovement
+                        {
+                            ProductId = product.Id,
+                            Type = "IN",
+                            Quantity = 50,
+                            Timestamp = DateTime.UtcNow.AddDays(-2)
+                        },
+                        new StockMovement
+                        {
+                            ProductId = product.Id,
+                            Type = "COUNT",
+                            Quantity = 90,
+                            Timestamp = DateTime.UtcNow.AddDays(-1)
+                        },
+                        new StockMovement
+                        {
+                            ProductId = product.Id,
+                            Type = "ADJUST",
+                            Quantity = 100,
+                            Timestamp = DateTime.UtcNow
+                        }
+                    );
+                }
+
+                await context.SaveChangesAsync();
             }
-
-            var location = await context.Locations.FirstOrDefaultAsync();
-            if (location != null && !await context.LocationImages.AnyAsync())
-            {
-                context.LocationImages.AddRange(
-                    new LocationImage { LocationId = location.Id, ImageUrl = "/uploads/demo1.jpg" },
-                    new LocationImage { LocationId = location.Id, ImageUrl = "/uploads/demo2.jpg" },
-                    new LocationImage { LocationId = location.Id, ImageUrl = "/uploads/demo3.jpg" }
-                );
-            }
-
-            if (!await context.StockMovements.AnyAsync())
-            {
-                context.StockMovements.AddRange(
-                    new StockMovement
-                    {
-                        ProductId = product.Id,
-                        Type = "IN",
-                        Quantity = 50,
-                        Timestamp = DateTime.UtcNow.AddDays(-2)
-                    },
-                    new StockMovement
-                    {
-                        ProductId = product.Id,
-                        Type = "COUNT",
-                        Quantity = 90,
-                        Timestamp = DateTime.UtcNow.AddDays(-1)
-                    },
-                    new StockMovement
-                    {
-                        ProductId = product.Id,
-                        Type = "ADJUST",
-                        Quantity = 100,
-                        Timestamp = DateTime.UtcNow
-                    }
-                );
-            }
-
-
-            await context.SaveChangesAsync();
         }
     }
 }

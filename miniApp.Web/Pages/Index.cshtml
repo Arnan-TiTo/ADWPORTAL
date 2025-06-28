@@ -1,18 +1,52 @@
 ﻿@page
-@using miniApp.Web.Models
-@model IndexModel
+@model miniApp.Web.Pages.IndexModel
 @{
-    ViewData["Title"] = "Dashboard";
-    Layout = "_Layout";
+    ViewData["Title"] = "Menu";
 }
+<div class="min-h-screen flex flex-col bg-white text-black font-sans">
 
-<div class="p-6">
-    <h1 class="text-2xl font-bold mb-4">Welcome, @User.Identity?.Name</h1>
+    <!-- Top Menu -->
+    <div class="flex flex-col items-center space-y-4 px-6">
+       <input type="text" placeholder="🔍 Search"
+               class="bg-gray-200 w-full rounded-xl p-3 border text-center shadow hover:bg-gray-300"/>
+    </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <!-- Logo -->
+    <div class="flex justify-center my-6">
+        <img src="/images/logo.png" alt="Logo" class="w-28 h-auto" />
+    </div>
 
-        <partial name="_DashboardCard" model='new DashboardCardModel { Title = "Stock In Today", Value = "12", Color = "blue" }' />
-        <partial name="_DashboardCard" model='new DashboardCardModel { Title = "Adjustments", Value = "3", Color = "yellow" }' />
-        <partial name="_DashboardCard" model='new DashboardCardModel { Title = "Stock Count", Value = "7", Color = "green" }' />
+    <!-- Buttons -->
+    <div class="flex flex-col items-center space-y-4 px-6">
+
+        <a href="/locations"
+           class="bg-gray-200 w-full rounded-xl p-6 border text-center shadow hover:bg-gray-300">
+            <img src="/images/icons/box.png" class="w-8 h-8 mx-auto mb-2" />
+            <p class="font-medium">Find location</p>
+        </a>
+
+        <a href="/product"
+           class="bg-gray-200 w-full rounded-2xl p-6 text-center hover:bg-gray-300">
+            <img src="/images/icons/inventory.png" class="w-8 h-8 mx-auto mb-2" />
+            <p class="font-medium">Inventory Management</p>
+        </a>
+
+    </div>
+
+    <!-- Bottom Nav -->
+    <div class="fixed bottom-0 left-0 w-full bg-white border-t px-4 py-2 flex justify-around text-gray-600">
+        <a href="/index" class="text-blue-700">🏠</a>
+        <a href="#"><span>📄</span></a>
+        <a href="#"><span>📤</span></a>
+        <a href="#"><span>🔔</span></a>
+        <a href="/profile"><span>👤</span></a>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        function toggleSidebar() {
+            document.getElementById("sidebar").classList.toggle("hidden");
+        }
+    </script>
+}

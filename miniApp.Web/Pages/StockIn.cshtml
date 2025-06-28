@@ -1,35 +1,48 @@
 ﻿@page
 @model miniApp.Web.Pages.StockInModel
+@inject IHttpClientFactory HttpClientFactory
 @{
     ViewData["Title"] = "Stock In";
+    var authToken = ViewData["AUTHTOKEN"] ?? "";
+    var apiBaseUrl = ViewData["APIBASEURL"] ?? "";
 }
 
-<div class="max-w-md mx-auto bg-white p-4 min-h-screen">
-    <div class="flex items-center mb-4">
+<div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-4">
+    <!-- Header -->
+    <div class="flex items-center mb-2">
         <button onclick="history.back()" class="text-xl">&#8592;</button>
         <h1 class="text-center flex-grow text-lg font-semibold">Stock in</h1>
     </div>
 
-    <div class="mb-4">
+    <!-- Search -->
+    <div>
         <input type="text" placeholder="Search" class="w-full bg-gray-100 rounded-xl px-4 py-2 focus:outline-none" />
     </div>
 
-    <button class="bg-blue-800 text-white font-semibold px-4 py-2 rounded-full mb-4">+ Add Item</button>
+    <!-- Add Item Button -->
+    <button onclick="clearForm()" type="button" class="bg-blue-800 text-white font-semibold px-4 py-2 rounded-full">
+        + Add Item
+    </button>
 
-    <form method="post" class="space-y-3">
+    <!-- Stock In Form -->
+    <form id="stockInForm" onsubmit="return submitStockIn(this, event);" class="space-y-3">
         <div class="grid grid-cols-2 gap-3">
-            <input type="text" placeholder="Date : Auto" disabled class="border rounded-xl px-3 py-2 w-full" />
-            <input type="text" placeholder="SKU no :" class="border rounded-xl px-3 py-2 w-full" />
+            <input type="text" name="CreatedAt" id="CreatedAt" value="@DateTime.Now.ToString("dd/MM/yyyy")"
+                   disabled class="border rounded-xl px-3 py-2 w-full bg-gray-100 text-gray-500" />
+            <input type="text" name="Sku" placeholder="SKU no :" class="border rounded-xl px-3 py-2 w-full" />
         </div>
 
-        <select class="border rounded-xl px-3 py-2 w-full">
-            <option selected hidden>Hotel/Location name</option>
-            @* Dynamically loaded options *@
+        <select name="LocationId" class="border rounded-xl px-3 py-2 w-full" required>
+            <option value="" selected hidden>Hotel/Location name</option>
+            @foreach (var loc in Model.LocationDropdown)
+            {
+                <option value="@loc.Id">@loc.Name</option>
+            }
         </select>
 
-        <input type="text" placeholder="Product name" class="border rounded-xl px-3 py-2 w-full" />
+        <input type="text" name="Name" placeholder="Product name" class="border rounded-xl px-3 py-2 w-full" required />
 
-        <select class="border rounded-xl px-3 py-2 w-full">
+        <select name="Quantity" class="border rounded-xl px-3 py-2 w-full">
             <option selected hidden>Qty</option>
             @for (int i = 1; i <= 100; i++)
             {
@@ -37,10 +50,71 @@
             }
         </select>
 
-        <input type="text" placeholder="Field agent name" class="border rounded-xl px-3 py-2 w-full" />
+        <input type="text" name="UserFullname" value="@Model.CurrentUserFullname" readonly
+               class="border rounded-xl px-3 py-2 w-full bg-gray-100 text-gray-500" />
+        <input type="hidden" name="UserId" value="@Model.CurrentUserId" />
 
-        <textarea placeholder="Note" class="border rounded-xl px-3 py-2 w-full h-24"></textarea>
+        <textarea name="Note" placeholder="Note" class="border rounded-xl px-3 py-2 w-full h-24"></textarea>
 
         <button type="submit" class="w-full bg-black text-white rounded-xl py-2 font-semibold">Submit</button>
     </form>
 </div>
+
+<!-- Toast Notification -->
+<div id="toast" class="fixed top-5 right-5 z-50 hidden">
+    <div id="toastContent" class="px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium"></div>
+</div>
+
+@section Scripts {
+    <script>
+        function clearForm() {
+            document.getElementById("stockInForm").reset();
+        }
+
+        async function submitStockIn(formElement, event) {
+            event?.preventDefault();
+
+            const formData = new FormData(formElement);
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                data[key] = value;
+            }
+
+            const apiBaseUrl = '@apiBaseUrl';
+            const authToken = '@authToken';
+
+            try {
+                const res = await fetch(apiBaseUrl + "/api/product", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + authToken
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    showToast("✅ Stock-in recorded successfully", "green");
+                    formElement.reset();
+                } else {
+                    showToast("❌ Failed to record stock-in", "red");
+                }
+            } catch (err) {
+                console.error("Error:", err);
+                showToast("🚨 Error occurred", "red");
+            }
+
+            return false;
+        }
+
+        function showToast(message, color) {
+            const toast = document.getElementById("toast");
+            const content = document.getElementById("toastContent");
+            content.textContent = message;
+            content.className =
+                "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-" + color + "-500";
+            toast.classList.remove("hidden");
+            setTimeout(() => toast.classList.add("hidden"), 5000);
+        }
+    </script>
+}

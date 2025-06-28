@@ -19,6 +19,6 @@ namespace miniApp.API.Models
         public float Latitude { get; set; }
         public float Longitude { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
+        public ICollection<LocationImage> Images { get; set; } = new List<LocationImage>();
     }
 }

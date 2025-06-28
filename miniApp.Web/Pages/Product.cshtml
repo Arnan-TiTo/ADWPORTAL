@@ -1,53 +1,156 @@
 ﻿@page
 @model miniApp.Web.Pages.ProductModel
+@inject IHttpClientFactory HttpClientFactory
 @{
     ViewData["Title"] = "Product";
+    var authToken = @Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration config
+        ? config["AUTHTOKEN"] ?? ""
+        : "";
+    var apiBaseUrl = @Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg
+        ? cfg["APIBASEURL"] ?? ""
+        : "";
 }
 
 <div class="max-w-md w-full mx-auto px-4 py-4 space-y-6">
-
     <!-- Header -->
     <div class="flex items-center justify-between">
         <button onclick="history.back()" class="text-xl">&#8592;</button>
         <h1 class="text-lg font-semibold text-center flex-1">Product</h1>
     </div>
 
-    <!-- Search & Filter -->
-    <div>
-        <input type="text" placeholder="Search" class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm" />
-        <div class="flex gap-2 mt-2">
-            <button class="bg-white border rounded-xl p-2">
-                <img src="/images/icons/sort.png" alt="Sort Icon" class="w-5 h-5" />
-            </button>
-            <button class="bg-white border rounded-xl p-2">
-                <img src="/images/icons/Alignment.png" alt="Filter Icon" class="w-5 h-5" />
-            </button>
-        </div>
-    </div>
-
-    <!-- Product Info -->
-    <div class="text-center">
-        <img src="/images/products/logo.png" alt="Product" class="w-20 h-20 mx-auto mb-2" />
-        <h2 class="font-semibold text-md">SN24 Sunscreen</h2>
-    </div>
-
-    <!-- Form -->
-    <form class="space-y-4">
-        <div class="grid grid-cols-2 gap-3">
-            <input type="text" placeholder="Date : dd/mm/yyyy" class="w-full border rounded-xl px-4 py-2 text-sm" />
-            <input type="text" placeholder="SKU no : 1234" class="w-full border rounded-xl px-4 py-2 text-sm" />
-        </div>
-
-        <select class="w-full border rounded-xl px-4 py-2 text-sm">
-            <option>Aonang Hotel</option>
-            <option>Bangkok Hotel</option>
-        </select>
-
-        <input type="text" placeholder="SN24 Sunscreen SPF50 PA++++" class="w-full border rounded-xl px-4 py-2 text-sm" />
-        <input type="text" placeholder="250 ชิ้น" class="w-full border rounded-xl px-4 py-2 text-sm" />
-        <input type="text" placeholder="คุณภาสนาม จัดการสินค้า" class="w-full border rounded-xl px-4 py-2 text-sm" />
-        <input type="text" placeholder="Note" class="w-full border rounded-xl px-4 py-2 text-sm" />
-
-        <button type="submit" class="w-full bg-black text-white py-3 rounded-xl font-semibold">Edit Item</button>
+    <!-- Search -->
+    <form method="get" class="relative">
+        <input type="text" name="query" value="@Model.SearchQuery" placeholder="Search by name or SKU"
+               class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm" />
+        <button type="submit"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+            🔍
+        </button>
     </form>
+
+    <!-- Sort & Alignment Buttons -->
+    <div class="flex gap-2 mb-4">
+        <a href="?query=@Model.SearchQuery&sort=asc" class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm">
+            <img src="/images/icons/Alignment.PNG" class="w-5 h-5 inline" />
+        </a>
+        <a href="?query=@Model.SearchQuery&sort=@(Model.SortOrder == "asc" ? "desc" : "asc")"
+           class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+            <img src="/images/icons/Sort.png" alt="Sort Icon" class="w-5 h-5" />
+            Sort @(Model.SortOrder == "asc" ? "🔽" : "🔼")
+        </a>
+    </div>
+
+    <!-- Results -->
+    @if (Model.Products != null && Model.Products.Count > 0)
+    {
+        <div class="space-y-6">
+            @foreach (var product in Model.Products)
+            {
+                <div class="bg-white border rounded-xl p-4 shadow-sm">
+                    <div class="text-center mb-2">
+                        <img src="/images/products/@product.ImageUrl" alt="Product" class="w-20 h-20 mx-auto mb-2" />
+                        <p class="text-sm text-gray-500">@product.Name</p>
+                    </div>
+
+                    <form onsubmit="return submitEditItem(this, event);" class="space-y-4">
+                        <input type="hidden" name="Name" value="@product.Name" />
+                        <input type="hidden" name="Sku" value="@product.Sku" />
+                        <input type="hidden" name="Description" value="@product.Description" />
+                        <input type="hidden" name="LocationId" value="@product.LocationId" />
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="text" name="Date" value="@product.CreatedAt?.ToString("dd/MM/yyyy")"
+                                   class="w-full border rounded-xl px-4 py-2 text-sm bg-gray-100 text-gray-500" readonly />
+                            <input type="text" value="@product.Sku"
+                                   class="w-full border rounded-xl px-4 py-2 text-sm bg-gray-100 text-gray-500" readonly />
+                        </div>
+
+                        <input type="number" name="Quantity" value="@product.Quantity"
+                               class="w-full border rounded-xl px-4 py-2 text-sm" required />
+
+                        <input type="text" value="@product.Description"
+                               class="w-full border rounded-xl px-4 py-2 text-sm bg-gray-100 text-gray-500" readonly />
+
+                        <input type="text" readonly value="@product.UserFullname"
+                               class="w-full border rounded-xl px-4 py-2 text-sm text-gray-500 bg-gray-100" />
+
+                        <input type="hidden" name="UserId" value="@product.UserId" />
+                        <input type="text" name="Note" value="@product.Note"
+                               placeholder="Note" class="w-full border rounded-xl px-4 py-2 text-sm" />
+                        <input type="hidden" name="Id" value="@product.Id" />
+
+                        <button type="submit" class="w-full bg-black text-white py-3 rounded-xl font-semibold">
+                            Edit Item
+                        </button>
+                    </form>
+                </div>
+            }
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(Model.SearchQuery))
+    {
+        <p class="text-center text-sm text-gray-500">No products found for "@Model.SearchQuery"</p>
+    }
 </div>
+
+<!--Toast Notification Container -->
+<div id="toast" class="fixed top-5 right-5 z-50 hidden">
+    <div id="toastContent" class="px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium"></div>
+</div>
+
+@section Scripts {
+    <script>
+        async function submitEditItem(formElement) {
+            event?.preventDefault();
+
+            const formData = new FormData(formElement);
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                data[key] = value;
+            }
+
+            const apiBaseUrl = '@ViewData["APIBASEURL"]';
+            const apiUrl = apiBaseUrl + '/api/Product';
+
+            const authToken = '@ViewData["AUTHTOKEN"]';
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + authToken
+                    },
+                    body: JSON.stringify(data)
+
+                });
+
+                if (response.ok) {
+                    showToast("✅ Product updated successfully", "green");
+                } else {
+                    showToast("❌ Failed to update product", "red");
+                    alert(JSON.stringify(data) +" : "+ apiBaseUrl +" : "+ formData);
+                }
+            } catch (err) {
+                console.error("Error:", err);
+                showToast("🚨 Error occurred", "red");
+            }
+
+            return false;
+        }
+
+        function showToast(message, color) {
+            const toast = document.getElementById("toast");
+            const content = document.getElementById("toastContent");
+            content.textContent = message;
+            content.className =
+                "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-" + color + "-500";
+
+            toast.classList.remove("hidden");
+
+            setTimeout(() => {
+                toast.classList.add("hidden");
+            }, 6000);
+        }
+    </script>
+}

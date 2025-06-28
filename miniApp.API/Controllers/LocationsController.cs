@@ -9,6 +9,7 @@ using miniApp.API.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace miniApp.API.Controllers
@@ -96,6 +97,97 @@ namespace miniApp.API.Controllers
             }
 
             return Ok(new { message = "Location saved", location.Id });
+        }
+
+        [HttpGet("all")]
+        public async Task<IActionResult> GetAllLocations()
+        {
+            var locations = await _context.Locations
+                .Include(l => l.User)
+                .Include(l => l.Images)
+                .ToListAsync();
+            return Ok(locations);
+        }
+
+        [HttpGet("dropdown")]
+        public async Task<IActionResult> GetLocationDropdown()
+        {
+            var locations = await _context.Locations
+                .Select(l => new
+                {
+                    l.Id,
+                    l.Name
+                })
+                .ToListAsync();
+
+            return Ok(locations);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateLocation(
+            int id,
+            [FromForm] string Name,
+            [FromForm] string Note,
+            [FromForm] float Latitude,
+            [FromForm] float Longitude,
+            [FromForm] List<IFormFile> Image,
+            [FromForm] string Usernames)
+        {
+            var username = Usernames;
+            if (string.IsNullOrEmpty(username)) return Unauthorized();
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null) return Unauthorized();
+
+            var location = await _context.Locations.Include(l => l.Images).FirstOrDefaultAsync(l => l.Id == id && l.UserId == user.Id);
+            if (location == null) return NotFound();
+
+            location.Name = Name;
+            location.Note = Note;
+            location.Latitude = Latitude;
+            location.Longitude = Longitude;
+
+            if (Image != null && Image.Count > 0)
+            {
+                var uploadsFolder = Path.Combine(_env.WebRootPath ?? "wwwroot", "uploads");
+                Directory.CreateDirectory(uploadsFolder);
+
+                foreach (var file in Image)
+                {
+                    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+                    var filePath = Path.Combine(uploadsFolder, fileName);
+
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+
+                    var image = new LocationImage
+                    {
+                        LocationId = location.Id,
+                        ImageUrl = $"/uploads/{fileName}"
+                    };
+
+                    _context.LocationImages.Add(image);
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Location updated" });
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteLocation(int id, [FromQuery] string username)
+        {
+            if (string.IsNullOrEmpty(username)) return Unauthorized();
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null) return Unauthorized();
+
+            var location = await _context.Locations.FirstOrDefaultAsync(l => l.Id == id && l.UserId == user.Id);
+            if (location == null) return NotFound();
+
+            _context.Locations.Remove(location);
+            await _context.SaveChangesAsync();
+            return NoContent();
         }
     }
 }

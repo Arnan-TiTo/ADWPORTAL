@@ -17,7 +17,17 @@
     <script>
         function toggleSidebar() {
             const sidebar = document.getElementById("sidebar");
-            sidebar.classList.toggle("hidden");
+            const overlay = document.getElementById("overlay");
+
+            const isHidden = sidebar.classList.contains("hidden");
+
+            if (isHidden) {
+                sidebar.classList.remove("hidden");
+                overlay.classList.remove("hidden");
+            } else {
+                sidebar.classList.add("hidden");
+                overlay.classList.add("hidden");
+            }
         }
     </script>
 </head>
@@ -25,24 +35,34 @@
 
     @if (isAuthenticated)
     {
-        <!-- Layout เมื่อ Login แล้ว -->
-        <div class="flex h-screen  bg-whit">
-            <!-- Sidebar (ซ่อนไว้บนมือถือ) -->
-            <partial name="_Sidebar" />
+        <div class="flex h-screen bg-white relative">
+            <!-- Sidebar -->
+            <div id="sidebar" class="fixed top-0 left-0 bg-white w-64 h-full shadow-lg z-50 hidden transition duration-300">
+                @await Html.PartialAsync("_Sidebar")
+            </div>
 
-            <!-- Main Section -->
-            <div class="flex-1 flex flex-col  bg-white">
+            <!-- Overlay (mobile & desktop) -->
+            <div id="overlay" class="fixed inset-0 bg-black bg-opacity-40 z-40 hidden" onclick="toggleSidebar()"></div>
+
+            <!-- Main Content -->
+            <div class="flex-1 flex flex-col bg-white">
                 <!-- Navbar -->
-                <partial name="_Navbar" />
+                <div class="flex justify-between items-center px-4 py-3 shadow-md bg-white sticky top-0 z-30">
+                    <button onclick="toggleSidebar()" class="text-2xl">☰</button>
+                    <!--<h1 class="text-lg font-semibold">@ViewData["Title"]</h1>-->
+
+                    <!-- แสดงชื่อผู้ใช้ -->
+                    <div class="text-sm text-gray-700 font-medium">
+                       Welcome : 👤 @User.Identity?.Name
+                    </div>
+                </div>
+
 
                 <!-- Page Content + Footer -->
-                <div class="flex-1 flex flex-col relative ">
-                    <!-- Content -->
+                <div class="flex-1 flex flex-col relative">
                     <main class="flex-1 overflow-y-auto p-6 pb-20 bg-white">
                         @RenderBody()
                     </main>
-
-                    <!-- FooterMenu -->
                     <div class="absolute bottom-0 left-0 right-0 bg-white">
                         @await Html.PartialAsync("_FooterMenu")
                     </div>
@@ -52,7 +72,6 @@
     }
     else
     {
-        <!-- Layout สำหรับหน้า Login/Register -->
         <main class="min-h-screen flex items-center justify-center bg-gray-100 p-4">
             @RenderBody()
         </main>
