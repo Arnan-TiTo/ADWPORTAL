@@ -3,11 +3,11 @@
 @{
     ViewData["Title"] = "Login";
 }
-
-<div class="min-h-screen flex items-center justify-center bg-white">
-    <div class="bg-white p-6 rounded-xl w-full max-w-md">
+<div class="h-screen flex items-center justify-center bg-white overflow-hidden">
+    <div class="bg-white p-6 rounded-xl w-full max-w-md shadow-md">
+        <!-- Logo + Welcome -->
         <div class="text-center mb-6">
-            <img src="/images/logo.png" alt="Logo" class="mx-auto w-28 h-28 mb-4">
+            <img src="/images/logo.png" alt="Logo" class="mx-auto w-24 h-24 mb-4" />
             <h2 class="text-xl font-semibold text-black">Welcome to miniApp</h2>
             <p class="text-sm text-gray-600">Sign in to your account</p>
         </div>
@@ -19,36 +19,57 @@
             </div>
         }
 
+        <!-- Login Form -->
         <form method="post" class="space-y-4">
-            <input asp-for="Login.Username" placeholder="Username" class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
-            <input asp-for="Login.Password" type="password" placeholder="Password" class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
+            <input asp-for="Login.Username"
+                   placeholder="Username"
+                   class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black" />
 
-            <button type="submit" class="w-full bg-black text-white py-3 rounded-md font-semibold">Continue</button>
+            <input asp-for="Login.Password" type="password"
+                   placeholder="Password"
+                   class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black" />
 
+            <button type="submit"
+                    class="w-full bg-black text-white py-3 rounded-xl font-semibold transition hover:bg-gray-900">
+                Continue
+            </button>
+
+            <!-- Divider -->
             <div class="flex items-center justify-center my-2">
                 <div class="border-t border-gray-300 w-full"></div>
                 <span class="px-2 text-gray-400 text-sm">or</span>
                 <div class="border-t border-gray-300 w-full"></div>
             </div>
 
-            <!-- ✅ QR Container -->
+            <!-- QR Login -->
             <div id="qrContainer" class="hidden flex justify-center">
                 <div id="qrCanvasWrapper" class="border p-2 rounded"></div>
             </div>
 
-            <button type="button" onclick="generateQR()" class="w-full bg-gray-100 border border-gray-300 py-3 rounded-md font-medium flex justify-center items-center gap-2 text-sm">
+            <button type="button"
+                    onclick="generateQR()"
+                    class="w-full bg-gray-100 border border-gray-300 py-3 rounded-xl font-medium flex justify-center items-center gap-2 text-sm text-gray-700 hover:bg-gray-200 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h4v4H3V3zm0 8h4v4H3v-4zm8-8h4v4h-4V3zm8 0h4v4h-4V3zM3 19h4v2H3v-2zm8 0h2v2h-2v-2zm4 0h4v2h-4v-2z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M3 3h4v4H3V3zm0 8h4v4H3v-4zm8-8h4v4h-4V3zm8 0h4v4h-4V3zM3 19h4v2H3v-2zm8 0h2v2h-2v-2zm4 0h4v2h-4v-2z" />
                 </svg>
                 Continue with QR Code
             </button>
 
-            <button type="button" onclick="simulateScan()" class="w-full text-blue-600 underline text-sm mt-1">Simulate QR Scan</button>
+            <button type="button" onclick="simulateScan()" class="w-full text-blue-600 underline text-sm mt-1">
+                Simulate QR Scan
+            </button>
 
-            <a href="/Register" class="w-full block bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md text-center font-semibold text-sm">Register</a>
+            <!-- Register -->
+            <a href="/Register"
+               class="w-full block bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-center font-semibold text-sm transition">
+                Register
+            </a>
 
             <p class="text-xs text-center text-gray-400 mt-2">
-                By signing in, you agree to our <a href="/terms" class="underline">Terms</a> and <a href="/privacy" class="underline">Privacy Policy</a>
+                By signing in, you agree to our
+                <a href="/terms" class="underline">Terms</a> and
+                <a href="/privacy" class="underline">Privacy Policy</a>
             </p>
         </form>
     </div>
@@ -67,7 +88,7 @@
             qrToken = data.qrToken;
 
             const wrapper = document.getElementById("qrCanvasWrapper");
-            wrapper.innerHTML = ""; // reset
+            wrapper.innerHTML = "";
             QRCode.toCanvas(qrToken, { width: 200 }, function (err, canvas) {
                 if (err) return console.error(err);
                 wrapper.appendChild(canvas);
@@ -91,7 +112,7 @@
             });
 
             if (res.ok) {
-                pollImmediately(); // call scan immediately after confirm
+                pollImmediately();
             }
         }
 
@@ -102,7 +123,6 @@
                 body: '{}'
             });
 
-           
             if (response.ok) {
                 const result = await response.json();
 
@@ -110,7 +130,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token: result.token }),
-                    credential: 'include'
+                    credentials: 'include'
                 });
 
                 window.location.href = "/";

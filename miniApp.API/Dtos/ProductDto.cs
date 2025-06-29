@@ -53,6 +53,12 @@ namespace miniApp.API.Dtos
         public IFormFile? Image { get; set; } // รองรับการแก้ไขรูปภาพ
     }
 
+    public class UpdateQuantityDto
+    {
+        public int Id { get; set; }
+        public int Quantity { get; set; }
+    }
+
     public class ProductResponseDto
     {
         public int Id { get; set; }

@@ -16,6 +16,7 @@ namespace miniApp.API.Data
         public DbSet<LocationImage> LocationImages { get; set; }
         public DbSet<Inventory> Inventories { get; set; }
         public DbSet<StockMovement> StockMovements { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -4,42 +4,126 @@
     ViewData["Title"] = "Stock Count";
 }
 
-<div class="max-w-md mx-auto bg-white min-h-screen flex flex-col justify-between">
+<div class="max-w-md w-full mx-auto px-4 py-4 space-y-6">
     <!-- Header -->
-    <div>
-        <div class="flex items-center p-4">
-            <button onclick="history.back()" class="text-xl">&#8592;</button>
-            <h1 class="text-center flex-grow text-lg font-semibold">Stock count</h1>
-        </div>
+    <div class="flex items-center justify-between">
+        <button onclick="history.back()" class="text-xl">&#8592;</button>
+        <h1 class="text-lg font-semibold text-center flex-1">Stock Count</h1>
+    </div>
 
-        <!-- Search + Filter -->
-        <div class="px-4 mb-3">
-            <input type="text" placeholder="Search" class="w-full bg-gray-100 rounded-xl px-4 py-2 focus:outline-none mb-2" />
-            <div class="flex gap-2">
-                <button class="bg-white border rounded-xl p-2 text-gray-700"><i class="fas fa-list"></i></button>
-                <button class="bg-white border rounded-xl p-2 text-gray-700"><i class="fas fa-filter"></i></button>
-            </div>
-        </div>
+    <!-- Search -->
+    <form method="get" class="relative">
+        <input type="text" name="query" value="@Model.SearchQuery" placeholder="Search by name or SKU"
+               class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm" />
+        <input type="hidden" name="sort" value="@Model.SortOrder" />
+        <button type="submit"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+            🔍
+        </button>
+    </form>
 
-        <!-- Product List -->
-        <div class="space-y-4 px-4">
-            @for (int i = 0; i < 6; i++)
-            {
-                <div class="flex items-center gap-4 border-b pb-2">
-                    <img src="/images/vibechic_logo.png" alt="Product" class="w-12 h-12 rounded" />
-                    <div class="flex-grow">
-                        <div class="font-semibold">SN24 Sunscreen</div>
-                        <div class="text-sm text-gray-500">SKU : 1234</div>
+    <!-- Sort & Alignment Buttons -->
+    <div class="flex gap-2 mb-4">
+        <a href="?query=@Model.SearchQuery&sort=asc" class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm">
+            <img src="/images/icons/Alignment.PNG" class="w-5 h-5 inline" />
+        </a>
+        <a href="?query=@Model.SearchQuery&sort=@(Model.SortOrder == "asc" ? "desc" : "asc")"
+           class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+            <img src="/images/icons/Sort.png" alt="Sort Icon" class="w-5 h-5" />
+            Sort @(Model.SortOrder == "asc" ? "🔽" : "🔼")
+        </a>
+    </div>
+
+    <!-- Product List -->
+    @if (Model.Products.Count > 0)
+    {
+        <form id="saveForm" onsubmit="return saveAll(event)">
+            <div class="space-y-4" id="productList">
+                @for (int i = 0; i < Model.Products.Count; i++)
+                {
+                    var p = Model.Products[i];
+                    <div class="flex items-center gap-4 border-b pb-2">
+                        <img src="/images/products/@(!string.IsNullOrEmpty(p.ImageUrl) ? p.ImageUrl : "vibechic_logo.png")"
+                             alt="Product" class="w-12 h-12 rounded" />
+                        <div class="flex-grow">
+                            <div class="font-semibold">@p.Name</div>
+                            <div class="text-sm text-gray-500">SKU : @(p.Sku ?? "-")</div>
+                        </div>
+                        <input type="hidden" name="products[@i].Id" value="@p.Id" />
+                        <input type="number" name="products[@i].Quantity" value="@p.Quantity"
+                               class="w-20 bg-gray-100 text-right rounded-xl px-2 py-1 text-gray-700" />
+                        <span class="text-sm text-gray-500 ml-1">ชิ้น</span>
                     </div>
-                    <input type="number" value="245" class="w-20 bg-gray-100 text-right rounded-xl px-2 py-1 text-gray-700" />
-                    <span class="text-sm text-gray-500 ml-1">ชิ้น</span>
-                </div>
-            }
-        </div>
-    </div>
+                }
+            </div>
 
-    <!-- Save Button -->
-    <div class="px-4 pt-6 pb-20">
-        <button type="submit" class="w-full bg-black text-white py-2 rounded-xl font-semibold">SAVE</button>
-    </div>
+            <!-- Save Button -->
+            <div class="pt-6 pb-20">
+                <button type="submit" class="w-full bg-black text-white py-2 rounded-xl font-semibold">SAVE</button>
+            </div>
+        </form>
+    }
+    else if (!string.IsNullOrEmpty(Model.SearchQuery))
+    {
+        <p class="text-center text-sm text-gray-500">No products found for "@Model.SearchQuery"</p>
+    }
 </div>
+
+<!-- Toast -->
+<div id="toast" class="fixed top-5 right-5 z-50 hidden">
+    <div id="toastContent" class="px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-green-600"></div>
+</div>
+
+@section Scripts {
+    <script>
+        const APIBASEURL = '@ViewData["APIBASEURL"]';
+        const AUTHTOKEN = '@ViewData["AUTHTOKEN"]';
+
+        async function saveAll(event) {
+            event.preventDefault();
+
+            const form = document.getElementById("saveForm");
+            const inputs = form.querySelectorAll("input[name*='products']");
+            const products = [];
+
+            for (let i = 0; i < inputs.length; i += 2) {
+                const id = parseInt(inputs[i].value);
+                const qty = parseInt(inputs[i + 1].value);
+                if (!isNaN(id)) {
+                    products.push({ id, quantity: qty });
+                }
+            }
+
+            try {
+                const res = await fetch(`${APIBASEURL}/api/product/updatequantities`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${AUTHTOKEN}`
+                    },
+                    body: JSON.stringify(products)
+                });
+
+                if (res.ok) {
+                    showToast("✅ Quantities saved successfully");
+                } else {
+                    showToast("❌ Failed to save quantities", "red");
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("🚨 Error occurred", "red");
+            }
+        }
+
+        function showToast(message, color = "green") {
+            const toast = document.getElementById("toast");
+            const content = document.getElementById("toastContent");
+            content.textContent = message;
+            content.className = `px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-${color}-600`;
+            toast.classList.remove("hidden");
+            setTimeout(() => {
+                toast.classList.add("hidden");
+            }, 4000);
+        }
+    </script>
+}

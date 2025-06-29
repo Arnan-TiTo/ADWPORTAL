@@ -7,6 +7,7 @@ using miniApp.API.Data;
 using miniApp.API.Dtos;
 using miniApp.API.Models;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -43,7 +44,7 @@ namespace miniApp.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            if (!IsAuthorized()) return Unauthorized();
+            //if (!IsAuthorized()) return Unauthorized();
 
             var products = await _context.Products
                 .Select(p => new ProductResponseDto
@@ -171,6 +172,30 @@ namespace miniApp.API.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(product);
+        }
+
+
+        [HttpPut("updatequantities")]
+        public async Task<IActionResult> UpdateQuantities([FromBody] List<UpdateQuantityDto> dtos)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+
+            if (dtos == null || dtos.Count == 0)
+                return BadRequest("No data to update.");
+
+            var productIds = dtos.Select(d => d.Id).ToList();
+            var products = await _context.Products
+                .Where(p => productIds.Contains(p.Id))
+                .ToListAsync();
+
+            foreach (var product in products)
+            {
+                var dto = dtos.First(d => d.Id == product.Id);
+                product.Quantity = dto.Quantity;
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new { updated = products.Count });
         }
 
         [HttpDelete("{id}")]

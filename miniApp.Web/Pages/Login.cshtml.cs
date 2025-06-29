@@ -1,9 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using miniApp.Web.Services;
+using System.Linq;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using miniApp.API.Dtos;
 
 namespace miniApp.Web.Pages
 {
@@ -11,7 +12,9 @@ namespace miniApp.Web.Pages
     {
         private readonly AuthService _authService;
         private readonly IConfiguration _config;
+
         public string ApiBaseUrl => _config["ApiBaseUrl"] ?? "http://localhost:5252";
+
         public LoginModel(AuthService authService, IConfiguration config)
         {
             _authService = authService;
@@ -25,19 +28,23 @@ namespace miniApp.Web.Pages
 
         public async Task<IActionResult> OnPostAsync()
         {
-            var token = await _authService.LoginAsync(Login);
-            if (string.IsNullOrEmpty(token))
+            var result = await _authService.LoginAsync(Login);
+            if (result == null || string.IsNullOrEmpty(result.token))
             {
                 ErrorMessage = "Invalid credentials.";
                 return Page();
             }
 
-            HttpContext.Session.SetString("JWT", token);
+            HttpContext.Session.SetString("JWT", result.token);
+            HttpContext.Session.SetInt32("USERID", result.userid);
+            HttpContext.Session.SetString("FULLNAME", result.fullname);
 
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.Name, Login.Username),
-                new Claim("JWT", token)
+                new Claim("USERID", result.userid.ToString()),
+                new Claim("JWT", result.token),
+                new Claim("FULLNAME",result.fullname)
             };
 
             var identity = new ClaimsIdentity(claims, "MyCookieAuth");
@@ -46,12 +53,6 @@ namespace miniApp.Web.Pages
             await HttpContext.SignInAsync("MyCookieAuth", principal);
 
             return RedirectToPage("/Index");
-        }
-
-        public class LoginRequest
-        {
-            public string Username { get; set; } = "";
-            public string Password { get; set; } = "";
         }
     }
 }

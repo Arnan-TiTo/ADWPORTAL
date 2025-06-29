@@ -20,11 +20,17 @@ namespace miniApp.Web.Pages
 
         public string? ErrorMessage { get; set; }
 
+        public void OnGet()
+        {
+            Register = new UserRequest();
+            ErrorMessage = null;
+        }
+
         public async Task<IActionResult> OnPostAsync()
         {
             if (!ModelState.IsValid)
             {
-                return Page(); // แสดง error ด้านล่างช่องกรอก
+                return Page();
             }
 
             var (success, error) = await _authService.RegisterAsync(Register);

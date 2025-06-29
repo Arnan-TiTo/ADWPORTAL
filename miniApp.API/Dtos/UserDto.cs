@@ -24,4 +24,17 @@
         public string Phone { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
     }
+
+    public class LoginRequest
+    {
+        public string Username { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    public class LoginResponse
+    {
+        public string token { get; set; } = "";
+        public int userid { get; set; } = 0;
+        public string fullname { get; set; } = "";
+    }
 }

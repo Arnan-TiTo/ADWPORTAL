@@ -34,14 +34,14 @@ namespace miniApp.API.Controllers
 
             var hashed = BCrypt.Net.BCrypt.HashPassword(dto.Password);
            
-            RoleType role = RoleType.Staff; // ??????????
+            RoleType role = RoleType.Staff; 
             if (Enum.TryParse(dto.Role, true, out RoleType parsedRole))
             {
-                role = parsedRole; // ????????????? ?????? parsedRole
+                role = parsedRole;
             }
             else
             {
-                role = RoleType.Staff; // ???????????? ?????? default "Staff"
+                role = RoleType.Staff; 
             }
 
             var user = new User
@@ -70,8 +70,15 @@ namespace miniApp.API.Controllers
                 return Unauthorized("Invalid credentials.");
 
             var token = _jwtService.GenerateToken(user);
-            return Ok(new { token });
+
+            return Ok(new
+            {
+                token,
+                userId = user.Id,
+                fullname = user.Fullname
+            });
         }
+
     }
 
     public class LoginDto

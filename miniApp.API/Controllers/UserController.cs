@@ -40,5 +40,27 @@ namespace miniApp.API.Controllers
             return Ok(userDto);
         }
 
+        [HttpGet("profilebyid")]
+        public async Task<ActionResult<UserResponseDto>> GetUserProfile([FromQuery] int userid)
+        {
+            if (string.IsNullOrEmpty(userid.ToString()))
+                return BadRequest("Userid is required");
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userid);
+            if (user == null)
+                return NotFound("User not found");
+
+            var userDto = new UserResponseDto
+            {
+                Id = user.Id,
+                Username = user.Username,
+                Fullname = user.Fullname,
+                Email = user.Email ?? "",
+                Phone = user.Phone ?? "",
+                Role = user.Role.ToString()
+            };
+
+            return Ok(userDto);
+        }
     }
 }

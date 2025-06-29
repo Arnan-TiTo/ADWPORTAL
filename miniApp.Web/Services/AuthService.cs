@@ -1,7 +1,9 @@
 ﻿using Microsoft.Extensions.Configuration;
 using miniApp.API.Dtos;
+using miniApp.Web.Pages;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Runtime.Intrinsics.Arm;
 using System.Threading.Tasks;
 using static miniApp.Web.Pages.RegisterModel;
 
@@ -23,7 +25,7 @@ namespace miniApp.Web.Services
 
         public async Task<(bool Success, string Error)> RegisterAsync(UserRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
+            var response = await _httpClient.PostAsJsonAsync("/api/auth/register", request);
             var content = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
@@ -33,19 +35,17 @@ namespace miniApp.Web.Services
         }
 
 
-        public async Task<string?> LoginAsync(object loginModel)
+        public async Task<LoginResponse?> LoginAsync(LoginRequest login)
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/auth/login", loginModel);
+            var response = await _httpClient.PostAsJsonAsync("/api/Auth/login", login);
+
             if (!response.IsSuccessStatusCode)
                 return null;
 
-            var json = await response.Content.ReadFromJsonAsync<AuthResponse>();
-            return json?.Token;
+            var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+            return result;
         }
 
-        private class AuthResponse
-        {
-            public string? Token { get; set; }
-        }
+
     }
 }
