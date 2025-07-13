@@ -1,13 +1,13 @@
-﻿using Microsoft.AspNetCore.Http;  
+﻿using Microsoft.AspNetCore.Http;  // สำหรับ IHttpContextAccessor
 using Microsoft.Extensions.Configuration;
-using miniApp.Web.Models;
+using miniApp.WebOrders.Models;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace miniApp.Web.Services
+namespace miniApp.WebOrders.Services
 {
     public class LocationService
     {

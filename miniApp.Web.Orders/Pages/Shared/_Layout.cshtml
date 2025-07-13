@@ -1,0 +1,81 @@
+﻿@using Microsoft.AspNetCore.Http
+@inject IHttpContextAccessor HttpContextAccessor
+
+@{
+    var token = HttpContextAccessor.HttpContext?.Session.GetString("JWT");
+    var isAuthenticated = !string.IsNullOrEmpty(token);
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - miniApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
+            const overlay = document.getElementById("overlay");
+            const isHidden = sidebar.classList.contains("hidden");
+
+            if (isHidden) {
+                sidebar.classList.remove("hidden");
+                overlay.classList.remove("hidden");
+            } else {
+                sidebar.classList.add("hidden");
+                overlay.classList.add("hidden");
+            }
+        }
+    </script>
+</head>
+<body class="h-full bg-white text-black">
+
+    @if (isAuthenticated)
+    {
+        <div class="flex h-full">
+            <!-- Sidebar -->
+            <div id="sidebar" class="fixed top-0 left-0 bg-white w-64 h-full shadow-lg z-50 hidden transition duration-300">
+                @await Html.PartialAsync("_Sidebar")
+            </div>
+
+            <!-- Overlay (mobile & desktop) -->
+            <div id="overlay" class="fixed inset-0 bg-black bg-opacity-40 z-40 hidden" onclick="toggleSidebar()"></div>
+
+            <!-- Main Content Area -->
+            <div class="flex flex-col flex-1 h-full">
+                <!-- Navbar -->
+                <div class="flex justify-between items-center px-4 py-3 shadow-md bg-white sticky top-0 z-30">
+                    <button onclick="toggleSidebar()" class="text-2xl">☰</button>
+                    <div class="text-sm text-gray-700 font-medium">
+                        Welcome : 👤  @HttpContextAccessor.HttpContext?.Session.GetString("FULLNAME")
+                    </div>
+                </div>
+
+                <!-- Content and Footer -->
+                <div class="flex flex-col flex-1 overflow-hidden">
+                    <!-- Page Content -->
+                    <main class="flex-1 overflow-y-auto p-4">
+                        @RenderBody()
+                    </main>
+
+                    <!-- Footer -->
+                    <footer class="bg-white border-t">
+                        @await Html.PartialAsync("_FooterMenu")
+                    </footer>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Layout สำหรับหน้า Login/Register -->
+        <main class="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+            @RenderBody()
+        </main>
+    }
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>

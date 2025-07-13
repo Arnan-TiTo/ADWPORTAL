@@ -1,0 +1,18 @@
+﻿<div class="p-4 flex justify-between items-center border-b">
+    <div class="text-xl font-bold text-green-600">miniApp</div>
+    <button onclick="toggleSidebar()" class="text-gray-600 text-xl">✖</button>
+</div>
+
+<nav class="space-y-2 px-4 mt-4">
+    <a href="/Index" class="block px-3 py-2 rounded hover:bg-green-100">🏠 Home</a>
+    <a href="/Locations" class="block px-3 py-2 rounded hover:bg-green-100">📍 Locations</a>
+    <a href="/StockIn" class="block px-3 py-2 rounded hover:bg-green-100">📥 Stock In</a>
+    <a href="/StockAdjust" class="block px-3 py-2 rounded hover:bg-green-100">🔧 Adjust Stock</a>
+    <a href="/StockCount" class="block px-3 py-2 rounded hover:bg-green-100">📊 Stock Count</a>
+    <a href="/Product" class="block px-3 py-2 rounded hover:bg-green-100">🛒 Products</a>
+    <form method="post" asp-page="/Logout">
+        <button type="submit" class="w-full text-left px-3 py-2 rounded hover:bg-red-100 text-red-600">
+            🚪 Logout
+        </button>
+    </form>
+</nav>
