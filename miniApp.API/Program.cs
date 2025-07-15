@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using miniApp.API.Auth;
@@ -17,7 +19,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ========== CONFIG DATABASE ========== //
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite("Data Source=miniApp.db")); 
+    //options.UseSqlite("Data Source=miniApp.db"));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
 
 // ========== CONFIG JWT AUTH ========== //
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "super_secret_key_for_jwt_auth";

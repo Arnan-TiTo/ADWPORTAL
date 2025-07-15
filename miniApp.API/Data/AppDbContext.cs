@@ -25,6 +25,19 @@ namespace miniApp.API.Data
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Username)
                 .IsUnique();
+
+
+            modelBuilder.Entity<Product>()
+                .HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Restrict); 
+
+            modelBuilder.Entity<Product>()
+                .HasOne(p => p.Location)
+                .WithMany()
+                .HasForeignKey(p => p.LocationId)
+                .OnDelete(DeleteBehavior.Restrict); 
         }
     }
 }

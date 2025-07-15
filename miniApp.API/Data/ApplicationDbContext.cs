@@ -10,7 +10,6 @@ namespace miniApp.API.Data
         {
         }
 
-        // เพิ่ม DbSet ที่คุณใช้ เช่น:
         public DbSet<User> Users { get; set; }
         public DbSet<QrLoginInfo> QrLoginInfos { get; set; }
     }

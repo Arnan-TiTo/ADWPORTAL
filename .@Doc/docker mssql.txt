@@ -1,0 +1,19 @@
+PS C:\Users\Arnan> docker --version
+Docker version 28.3.0, build 38b7060
+PS C:\Users\Arnan> docker pull mcr.microsoft.com/mssql/server:2022-latest
+2022-latest: Pulling from mssql/server
+9c44873e77b3: Pull complete
+a7f551132cc7: Pull complete
+15f18156905c: Pull complete
+Digest: sha256:7c29dfbac885ad7519e219c7fe4aee0e67283e21a10e9c252d13b0fbde1866f8
+Status: Downloaded newer image for mcr.microsoft.com/mssql/server:2022-latest
+mcr.microsoft.com/mssql/server:2022-latest
+PS C:\Users\Arnan> ^C
+PS C:\Users\Arnan> docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=Admin@9999" `
+>>   -p 1433:1433 --name sql2022 `
+>>   -d mcr.microsoft.com/mssql/server:2022-latest
+2d9a4748f36550795a70b719fed0532ed0d0c94739191c4b90c99319c2251e07
+PS C:\Users\Arnan> docker ps
+CONTAINER ID   IMAGE                                        COMMAND                  CREATED          STATUS          PORTS                                         NAMES
+2d9a4748f365   mcr.microsoft.com/mssql/server:2022-latest   "/opt/mssql/bin/laun…"   29 seconds ago   Up 29 seconds   0.0.0.0:1433->1433/tcp, [::]:1433->1433/tcp   sql2022
+PS C:\Users\Arnan>
