@@ -18,6 +18,9 @@ namespace miniApp.API.Data
         public DbSet<Inventory> Inventories { get; set; }
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<ProductBrand> ProductBrands { get; set; }
+        public DbSet<OrderHd> OrderHd { get; set; }
+        public DbSet<OrderDt> OrderDt { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

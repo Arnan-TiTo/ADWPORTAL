@@ -26,7 +26,8 @@ namespace miniApp.API.Controllers
                 .Select(c => new ProductCategoryDto
                 {
                     Id = c.Id,
-                    Name = c.Name
+                    Name = c.Name,
+                    ImageUrl = c.ImageUrl
                 }).ToListAsync();
 
             return Ok(categories);
@@ -40,7 +41,8 @@ namespace miniApp.API.Controllers
 
             var category = new ProductCategory
             {
-                Name = dto.Name
+                Name = dto.Name,
+                ImageUrl = dto.ImageUrl
             };
 
             _context.ProductCategories.Add(category);
@@ -49,7 +51,8 @@ namespace miniApp.API.Controllers
             return Ok(new ProductCategoryDto
             {
                 Id = category.Id,
-                Name = category.Name
+                Name = category.Name,
+                ImageUrl = category.ImageUrl
             });
         }
 
@@ -61,12 +64,14 @@ namespace miniApp.API.Controllers
                 return NotFound();
 
             category.Name = dto.Name;
+            category.ImageUrl = dto.ImageUrl;
             await _context.SaveChangesAsync();
 
             return Ok(new ProductCategoryDto
             {
                 Id = category.Id,
-                Name = category.Name
+                Name = category.Name,
+                ImageUrl = category.ImageUrl
             });
         }
 

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace miniApp.API.Dtos
 {
@@ -26,6 +27,14 @@ namespace miniApp.API.Dtos
         public IFormFile? Image { get; set; }
 
         public DateTime CreatedAt { get; set; }
+
+        public decimal Price { get; set; }
+
+        [Required]
+        public int? BrandId { get; set; }
+
+        [Required]
+        public int? CategoryId { get; set; }
     }
 
     public class ProductUpdateDto
@@ -50,7 +59,15 @@ namespace miniApp.API.Dtos
         [Required]
         public int LocationId { get; set; }
 
-        public IFormFile? Image { get; set; } // รองรับการแก้ไขรูปภาพ
+        public IFormFile? Image { get; set; }
+
+        public decimal Price { get; set; }
+
+        [Required]
+        public int? BrandId { get; set; }
+
+        [Required]
+        public int? CategoryId { get; set; }
     }
 
     public class UpdateQuantityDto
@@ -75,5 +92,8 @@ namespace miniApp.API.Dtos
         public DateTime CreatedAt { get; set; }
         public int? CategoryId { get; set; } 
         public string? CategoryName { get; set; }
+        public decimal Price { get; set; }
+        public int? BrandId { get; set; }
+        public string? BrandName { get; set; }
     }
 }

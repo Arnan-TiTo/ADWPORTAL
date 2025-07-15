@@ -1,0 +1,133 @@
+﻿@page
+@model miniApp.WebOrders.Pages.Orders.Customer_Model
+@{
+    ViewData["Title"] = "Add Order - Step 1";
+    var apiBase = ViewData["APIBASEURL"];
+    var token = ViewData["AUTHTOKEN"];
+    var userId = ViewData["USERID"];
+}
+
+<div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <button onclick="history.back()" class="text-xl">&#8592;</button>
+        <h1 class="text-lg font-semibold text-center flex-1">Add Order</h1>
+    </div>
+
+    <!-- Search -->
+    <form method="get" class="relative">
+        <input type="text" name="query" value="" placeholder="Search by name or SKU"
+               class="w-full bg-gray-100 border border-gray-300 rounded-xl px-4 py-2 text-sm" />
+        <button type="submit"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+            🔍
+        </button>
+    </form>
+
+    <!-- Favorites / History Buttons -->
+    <div class="flex justify-start space-x-2">
+        <button type="button" class="flex items-center space-x-1 px-3 py-1 border border-gray-300 rounded-full text-sm">
+            <span>♥</span><span>Favorites</span>
+        </button>
+        <button type="button" class="flex items-center space-x-1 px-3 py-1 border border-gray-300 rounded-full text-sm">
+            <span>⏲</span><span>History</span>
+        </button>
+    </div>
+
+    <!-- Navbar / Steps -->
+    <div class="flex justify-between items-center text-center text-sm font-medium my-4">
+        <div class="flex flex-col items-center flex-1">
+            <div class="w-3 h-3 bg-yellow-400 rounded-full mb-1"></div>
+            <div class="text-black font-semibold">Customer</div>
+        </div>
+        <div class="flex-1 border-t border-dashed border-gray-400 mx-2 mt-2"></div>
+        <div class="flex flex-col items-center flex-1">
+            <div class="w-3 h-3 bg-gray-300 rounded-full mb-1"></div>
+            <div class="text-gray-400">Order Summary</div>
+        </div>
+        <div class="flex-1 border-t border-dashed border-gray-400 mx-2 mt-2"></div>
+        <div class="flex flex-col items-center flex-1">
+            <div class="w-3 h-3 bg-gray-300 rounded-full mb-1"></div>
+            <div class="text-gray-400">Payment</div>
+        </div>
+    </div>
+
+    <form method="post" class="space-y-4">
+        <div>
+            <label class="block text-sm font-medium">Customer Name</label>
+            <input asp-for="Customer.CustomerName" class="form-input w-full rounded-xl border border-gray-300" required />
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium">Gender</label>
+                <select asp-for="Customer.Gender" class="form-select w-full rounded-xl border border-gray-300">
+                    <option value="">-- Select --</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium">Birth Date</label>
+                <input asp-for="Customer.BirthDate" type="date" class="form-input w-full rounded-xl border border-gray-300" />
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium">Occupation</label>
+            <input asp-for="Customer.Occupation" class="form-input w-full rounded-xl border border-gray-300" />
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium">Nationality</label>
+            <input asp-for="Customer.Nationality" class="form-input w-full rounded-xl border border-gray-300" />
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium">Phone</label>
+            <input asp-for="Customer.CustomerPhone" class="form-input w-full rounded-xl border border-gray-300" required />
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium">Email</label>
+            <input asp-for="Customer.CustomerEmail" type="email" class="form-input w-full rounded-xl border border-gray-300" />
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium">Address Line</label>
+            <input asp-for="Customer.AddressLine" class="form-input w-full rounded-xl border border-gray-300" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium">Sub-District</label>
+                <input asp-for="Customer.SubDistrict" class="form-input w-full rounded-xl border border-gray-300" />
+            </div>
+            <div>
+                <label class="block text-sm font-medium">District</label>
+                <input asp-for="Customer.District" class="form-input w-full rounded-xl border border-gray-300" />
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium">Province</label>
+                <input asp-for="Customer.Province" class="form-input w-full rounded-xl border border-gray-300" />
+            </div>
+            <div>
+                <label class="block text-sm font-medium">Zip Code</label>
+                <input asp-for="Customer.ZipCode" class="form-input w-full rounded-xl border border-gray-300" />
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <input asp-for="Customer.MayIAsk" type="checkbox" class="form-checkbox rounded" />
+            <label for="Customer_MayIAsk" class="text-sm">May we ask to contact you later?</label>
+        </div>
+
+        <div class="text-center">
+            <button type="submit" class="form-input w-full rounded-xl bg-black text-white px-6 py-2 rounded-xl">Next</button>
+        </div>
+    </form>
+</div>

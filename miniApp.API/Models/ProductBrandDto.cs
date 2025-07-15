@@ -1,22 +1,22 @@
 ﻿namespace miniApp.API.Dtos
 {
-    public class ProductCategoryDto
+    public class ProductBrandDto
     {
         public int Id { get; set; }
         public string Name { get; set; } = "";
-        public string? ImageUrl { get; set; }
+        public string? Description { get; set; }
     }
 
-    public class CreateProductCategoryDto
+    public class CreateProductBrandDto
     {
         public string Name { get; set; } = "";
-        public string? ImageUrl { get; set; }
+        public string? Description { get; set; }
     }
 
-    public class UpdateProductCategoryDto
+    public class UpdateProductBrandDto
     {
         public int Id { get; set; }
         public string Name { get; set; } = "";
-        public string? ImageUrl { get; set; }
+        public string? Description { get; set; }
     }
 }

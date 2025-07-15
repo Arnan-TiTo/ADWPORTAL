@@ -37,9 +37,13 @@ namespace miniApp.API.Models
         // Navigation properties
         public ICollection<Inventory>? Inventories { get; set; }
         public ICollection<StockMovement>? StockMovements { get; set; }
-
         public int? CategoryId { get; set; }
         public ProductCategory? Category { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal Price { get; set; }
+        public int? BrandId { get; set; }
+        public ProductBrand? Brand { get; set; }
 
     }
 }

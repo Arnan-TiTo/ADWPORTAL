@@ -61,7 +61,10 @@ namespace miniApp.API.Controllers
                     LocationId = p.LocationId,
                     CreatedAt = p.CreatedAt,
                     CategoryId = p.CategoryId,
-                    CategoryName = p.Category != null ? p.Category.Name : null
+                    CategoryName = p.Category != null ? p.Category.Name : null,
+                    Price = p.Price,
+                    BrandId = p.BrandId,
+                    BrandName = p.Brand != null ? p.Brand.Name : null
                 })
                 .ToListAsync();
 
@@ -91,7 +94,10 @@ namespace miniApp.API.Controllers
                     CreatedAt = p.CreatedAt,
                     ImageUrl = p.ImageUrl,
                     CategoryId = p.CategoryId,
-                    CategoryName = p.Category != null ? p.Category.Name : null 
+                    CategoryName = p.Category != null ? p.Category.Name : null,
+                    Price = p.Price,
+                    BrandId = p.BrandId,
+                    BrandName = p.Brand != null ? p.Brand.Name : null,
                 })
                 .ToListAsync();
 
@@ -111,6 +117,7 @@ namespace miniApp.API.Controllers
                 .Include(p => p.Category)
                 .Include(p => p.Location)
                 .Include(p => p.User)
+                .Include(p => p.Brand)
                 .Where(p =>
                     (string.IsNullOrWhiteSpace(query) || p.Name.Contains(query) || (p.Sku != null && p.Sku.Contains(query))) &&
                     (categoryId == null || p.CategoryId == categoryId)
@@ -132,7 +139,10 @@ namespace miniApp.API.Controllers
                 CreatedAt = p.CreatedAt,
                 ImageUrl = p.ImageUrl,
                 CategoryId = p.CategoryId,
-                CategoryName = p.Category?.Name
+                CategoryName = p.Category?.Name,
+                Price = p.Price,
+                BrandId = p.BrandId,
+                BrandName = p.Brand != null ? p.Brand.Name : null,
             }).ToList();
 
             return Ok(result);
@@ -174,7 +184,9 @@ namespace miniApp.API.Controllers
                 UserId = dto.UserId,
                 LocationId = dto.LocationId,
                 ImageUrl = imagePath,
-                CreatedAt = dto.CreatedAt 
+                CreatedAt = dto.CreatedAt,
+                Price = dto.Price,
+                BrandId = dto.BrandId
             };
 
             _context.Products.Add(product);
@@ -200,6 +212,9 @@ namespace miniApp.API.Controllers
             product.Quantity = dto.Quantity;
             product.Note = dto.Note;
             product.LocationId = dto.LocationId;
+            product.Price = dto.Price;
+            product.BrandId = dto.BrandId;
+
 
             if (dto.Image != null)
             {
