@@ -37,5 +37,9 @@ namespace miniApp.API.Models
         // Navigation properties
         public ICollection<Inventory>? Inventories { get; set; }
         public ICollection<StockMovement>? StockMovements { get; set; }
+
+        public int? CategoryId { get; set; }
+        public ProductCategory? Category { get; set; }
+
     }
 }

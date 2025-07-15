@@ -73,5 +73,7 @@ namespace miniApp.API.Dtos
         public int LocationId { get; set; }
         public string LocationName { get; set; } = "";
         public DateTime CreatedAt { get; set; }
+        public int? CategoryId { get; set; } 
+        public string? CategoryName { get; set; }
     }
 }

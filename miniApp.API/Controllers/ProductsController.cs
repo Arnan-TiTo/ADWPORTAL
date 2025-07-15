@@ -44,9 +44,10 @@ namespace miniApp.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            //if (!IsAuthorized()) return Unauthorized();
+            if (!IsAuthorized()) return Unauthorized();
 
             var products = await _context.Products
+                .Include(p => p.Category)
                 .Select(p => new ProductResponseDto
                 {
                     Id = p.Id,
@@ -58,25 +59,62 @@ namespace miniApp.API.Controllers
                     ImageUrl = p.ImageUrl,
                     UserId = p.UserId,
                     LocationId = p.LocationId,
-                    CreatedAt = p.CreatedAt
+                    CreatedAt = p.CreatedAt,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.Category != null ? p.Category.Name : null
                 })
                 .ToListAsync();
 
             return Ok(products);
         }
 
+        [HttpGet("ByCategory")]
+        public async Task<IActionResult> GetByCategory([FromQuery] int categoryId)
+        {
+            var products = await _context.Products
+                .Include(p => p.Category)
+                .Include(p => p.Location)
+                .Include(p => p.User)
+                .Where(p => p.CategoryId == categoryId)
+                .Select(p => new ProductResponseDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Sku = p.Sku,
+                    Description = p.Description,
+                    LocationId = p.LocationId,
+                    LocationName = p.Location != null ? p.Location.Name : "", 
+                    UserId = p.UserId,
+                    UserFullname = p.User != null ? p.User.Fullname : "", 
+                    Quantity = p.Quantity,
+                    Note = p.Note,
+                    CreatedAt = p.CreatedAt,
+                    ImageUrl = p.ImageUrl,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.Category != null ? p.Category.Name : null 
+                })
+                .ToListAsync();
+
+            return Ok(products);
+        }
+
+
         [HttpGet("ProductSearch")]
-        public async Task<IActionResult> SearchProducts([FromQuery] string query)
+        public async Task<IActionResult> SearchProducts([FromQuery] string query, [FromQuery] int? categoryId)
         {
             if (!IsAuthorized()) return Unauthorized();
 
-            if (string.IsNullOrWhiteSpace(query))
-                return BadRequest("Query is required.");
+            if (string.IsNullOrWhiteSpace(query) && categoryId == null)
+                return BadRequest("Query or CategoryId is required.");
 
             var matched = await _context.Products
+                .Include(p => p.Category)
                 .Include(p => p.Location)
                 .Include(p => p.User)
-                .Where(p => p.Name.Contains(query) || (p.Sku != null && p.Sku.Contains(query)))
+                .Where(p =>
+                    (string.IsNullOrWhiteSpace(query) || p.Name.Contains(query) || (p.Sku != null && p.Sku.Contains(query))) &&
+                    (categoryId == null || p.CategoryId == categoryId)
+                )
                 .ToListAsync();
 
             var result = matched.Select(p => new ProductResponseDto
@@ -92,11 +130,14 @@ namespace miniApp.API.Controllers
                 Quantity = p.Quantity,
                 Note = p.Note,
                 CreatedAt = p.CreatedAt,
-                ImageUrl = p.ImageUrl
+                ImageUrl = p.ImageUrl,
+                CategoryId = p.CategoryId,
+                CategoryName = p.Category?.Name
             }).ToList();
 
             return Ok(result);
         }
+
 
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] ProductDto dto)

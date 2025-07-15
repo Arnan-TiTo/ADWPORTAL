@@ -12,6 +12,7 @@ namespace miniApp.API.Data
 
         public DbSet<User> Users { get; set; }
         public DbSet<Product> Products { get; set; }
+        public DbSet<ProductCategory> ProductCategories { get; set; }
         public DbSet<Location> Locations { get; set; }
         public DbSet<LocationImage> LocationImages { get; set; }
         public DbSet<Inventory> Inventories { get; set; }
@@ -37,7 +38,13 @@ namespace miniApp.API.Data
                 .HasOne(p => p.Location)
                 .WithMany()
                 .HasForeignKey(p => p.LocationId)
-                .OnDelete(DeleteBehavior.Restrict); 
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProductCategory>()
+                .HasMany(c => c.Products)
+                .WithOne(p => p.Category)
+                .HasForeignKey(p => p.CategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }
