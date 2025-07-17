@@ -1,0 +1,113 @@
+﻿@page
+@model miniApp.WebOrders.Pages.HistoryModel
+@{
+    ViewData["Title"] = "History";
+}
+
+<div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-4">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-2">
+        <a asp-page="/Orders/Payment" class="text-xl">&#8592;</a>
+        <h1 class="text-lg font-semibold text-center flex-1">History</h1>
+    </div>
+
+    <!-- Search -->
+    <form method="get" class="relative">
+        <input type="text" name="query" value="@Model.Query" placeholder="Search"
+               class="w-full bg-gray-100 border border-gray-300 rounded-xl px-4 py-2 text-sm" />
+        <button type="submit"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+            🔍
+        </button>
+    </form>
+
+    <!-- Favorites / History Tab -->
+    <div class="flex justify-center items-center gap-2 my-2">
+        <a class="px-4 py-1 rounded-full border text-sm @(Model.ActiveTab == "Favorites" ? "bg-green-50 border-green-500 text-green-700" : "bg-white border-gray-300 text-gray-500")"
+           asp-page="/Orders/History" asp-route-tab="Favorites">♥ Favorites</a>
+        <a class="px-4 py-1 rounded-full border text-sm @(Model.ActiveTab == "History" ? "bg-green-50 border-green-500 text-green-700" : "bg-white border-gray-300 text-gray-500")"
+           asp-page="/Orders/History" asp-route-tab="History">⏲ History</a>
+    </div>
+
+    <!-- My Order -->
+    <div>
+        <div class="flex items-center mb-2">
+            <span class="font-semibold text-sm flex-1">My Order</span>
+            <label class="flex items-center gap-1 text-sm">
+                <input type="checkbox" id="selectAll" onclick="toggleAll()" />
+                <span>Select all</span>
+            </label>
+        </div>
+
+        <div class="overflow-y-auto max-h-72 space-y-2 pr-2">
+            @if (Model.Orders != null && Model.Orders.Count > 0)
+            {
+                @for (int orderIdx = 0; orderIdx < Model.Orders.Count; orderIdx++)
+                {
+                    var order = Model.Orders[orderIdx];
+                    <div class="mb-3">
+                        <div class="text-xs text-gray-500 mb-1">
+                            @order.OrderNo | @order.OrderDate.ToString("dd/MM/yyyy")
+                        </div>
+                        @for (int itemIdx = 0; itemIdx < order.Items.Count; itemIdx++)
+                        {
+                            var item = order.Items[itemIdx];
+                            <div class="flex items-center gap-2 border-b pb-2">
+                                <input type="checkbox" class="order-check"
+                                       data-order-idx="@orderIdx" data-item-idx="@itemIdx" />
+                                <img src="/images/products/@(string.IsNullOrEmpty(item.ImageUrl) ? "default.png" : item.ImageUrl)"
+                                     class="w-14 h-14 rounded bg-gray-100 border object-cover" />
+                                <div class="flex-1">
+                                    <div class="font-semibold text-xs">@item.ProductId</div>
+                                    <div class="font-semibold text-sm">@item.ProductName</div>
+                                </div>
+                                <div class="text-right font-semibold text-black">
+                                    @item.UnitPrice.ToString("N0") <span class="font-light">฿</span>
+                                    @if (item.Discount > 0)
+                                    {
+                                        <span class="ml-1 text-xs text-red-500">(-@item.Discount.ToString("N0"))</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-gray-400 text-center py-4">No order history found.</div>
+            }
+        </div>
+    </div>
+
+    <!-- Export Form -->
+    <form id="exportForm" method="post" asp-page-handler="ExportCsv">
+        <input type="hidden" id="selectedIds" name="selectedIds" />
+        <button type="button"
+                onclick="doExport()"
+                class="w-full border border-gray-400 rounded-lg bg-white text-black py-2 text-sm">
+            Export to csv.
+        </button>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleAll() {
+            const checked = document.getElementById('selectAll').checked;
+            document.querySelectorAll('.order-check').forEach(cb => cb.checked = checked);
+        }
+
+        function doExport() {
+            let ids = [];
+            document.querySelectorAll('.order-check').forEach(cb => {
+                if (cb.checked) {
+                    ids.push(cb.dataset.orderIdx + '-' + cb.dataset.itemIdx);
+                }
+            });
+            document.getElementById('selectedIds').value = ids.join(',');
+            document.getElementById('exportForm').submit();
+        }
+    </script>
+}

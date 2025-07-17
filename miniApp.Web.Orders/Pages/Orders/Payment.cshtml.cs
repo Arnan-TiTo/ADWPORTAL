@@ -1,0 +1,124 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using miniApp.WebOrders.Models;
+using System.Text.Json;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+
+namespace miniApp.WebOrders.Pages.Orders
+{
+    public class PaymentModel : PageModel
+    {
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _config;
+
+        [BindProperty]
+        public List<CartItemDto> Cart { get; set; } = new();
+        [BindProperty]
+        public string PaymentMethod { get; set; } = string.Empty; 
+        [BindProperty]
+        public IFormFile? Slip { get; set; } 
+
+        public int TotalItems => Cart.Sum(p => p.Quantity);
+        public decimal Subtotal => Cart.Sum(p => p.Price * p.Quantity);
+        public decimal DiscountTotal => Cart.Sum(p => p.Discount);
+        public decimal Total => Subtotal - DiscountTotal;
+
+        public PaymentModel(IHttpClientFactory httpClientFactory, IConfiguration config) =>
+            (_httpClientFactory, _config) = (httpClientFactory, config); 
+
+        public void OnGet()
+        {
+            Cart = GetCart();
+        }
+
+        public async Task<IActionResult> OnPostAsync()
+        {
+            Cart = GetCart();
+
+            var baseUrl = _config["APIBASEURL"] ?? "http://localhost:5252";
+            var token = _config["AUTHTOKEN"] ?? "";
+
+            // 1. ดึงข้อมูลลูกค้าจาก Session
+            var customerJson = HttpContext.Session.GetString("ORDER_CUSTOMER");
+            if (string.IsNullOrEmpty(customerJson))
+                return RedirectToPage("/Orders/Customer");
+
+            var customer = JsonSerializer.Deserialize<CustomerInfoModel>(customerJson);
+            if (customer == null)
+                return RedirectToPage("/Orders/Customer");
+
+            // 2. จัดการรูปสลิป (Upload ไป wwwroot/images/slips/)
+            string? slipImageFileName = null;
+            if (Slip != null && Slip.Length > 0)
+            {
+                var fileName = $"{DateTime.Now:yyyyMMddHHmmssfff}_{Path.GetFileName(Slip.FileName)}";
+                var savePath = Path.Combine("wwwroot/images/slips/", fileName);
+                using (var stream = new FileStream(savePath, FileMode.Create))
+                {
+                    await Slip.CopyToAsync(stream);
+                }
+                slipImageFileName = fileName;
+            }
+
+            // 3. สร้าง OrderCreateDto
+            var orderDto = new OrderCreateDto
+            {
+                CustomerName = customer.CustomerName,
+                Gender = customer.Gender,
+                BirthDate = customer.BirthDate,
+                Occupation = customer.Occupation,
+                Nationality = customer.Nationality,
+                CustomerPhone = customer.CustomerPhone,
+                CustomerEmail = customer.CustomerEmail,
+                AddressLine = customer.AddressLine,
+                SubDistrict = customer.SubDistrict,
+                District = customer.District,
+                Province = customer.Province,
+                ZipCode = customer.ZipCode,
+                MayIAsk = customer.MayIAsk,
+                PaymentMethod = PaymentMethod,
+                SlipImage = slipImageFileName,
+                Items = Cart.Select(c => new OrderItemDto
+                {
+                    ProductId = c.ProductId,
+                    ProductName = c.ProductName,
+                    Quantity = c.Quantity,
+                    UnitPrice = c.Price,
+                    Discount = c.Discount
+                }).ToList()
+            };
+
+            // 4. เรียก API บันทึกออเดอร์ (ใช้ HttpClient เดียว)
+            var client = _httpClientFactory.CreateClient();
+            if (!string.IsNullOrEmpty(token))
+            {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await client.PostAsJsonAsync($"{baseUrl}/api/Order", orderDto);
+            if (response.IsSuccessStatusCode)
+            {
+                HttpContext.Session.Remove("Cart");
+                HttpContext.Session.Remove("ORDER_CUSTOMER");
+
+                TempData["ShowToast"] = "บันทึกข้อมูลเรียบร้อยแล้ว";
+
+                return Page();
+            }
+            else
+            {
+                ModelState.AddModelError("", "บันทึกออเดอร์ไม่สำเร็จ");
+                return Page();
+            }
+        }
+
+        private List<CartItemDto> GetCart()
+        {
+            var cartJson = HttpContext.Session.GetString("Cart");
+            if (string.IsNullOrEmpty(cartJson)) return new();
+            try { return JsonSerializer.Deserialize<List<CartItemDto>>(cartJson) ?? new(); }
+            catch { return new(); }
+        }
+    }
+}

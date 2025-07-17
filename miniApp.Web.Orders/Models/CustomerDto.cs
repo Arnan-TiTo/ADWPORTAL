@@ -1,17 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace miniApp.API.Models
+﻿namespace miniApp.WebOrders.Models
 {
-    public class OrderHd
+    public class CustomerDto
     {
-        public int Id { get; set; }
-
-        public string OrderNo { get; set; } = string.Empty;
-
-        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
-
-        // Customer Info
         public string CustomerName { get; set; } = string.Empty;
         public string Gender { get; set; } = string.Empty;
         public DateTime? BirthDate { get; set; }
@@ -24,15 +14,6 @@ namespace miniApp.API.Models
         public string District { get; set; } = string.Empty;
         public string Province { get; set; } = string.Empty;
         public string ZipCode { get; set; } = string.Empty;
-
-        // Consent Checkbox
-        public bool MayIAsk { get; set; } = false;
-
-        // Payment
-        public string PaymentMethod { get; set; } = string.Empty; 
-        public string? SlipImage { get; set; }
-
-        // Order Items
-        public List<OrderDt> OrderDts { get; set; } = new();
+        public bool MayIAsk { get; set; }
     }
 }

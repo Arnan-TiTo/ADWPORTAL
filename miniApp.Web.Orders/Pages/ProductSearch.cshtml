@@ -5,6 +5,22 @@
     var apiBase = ViewData["APIBASEURL"];
     var token = ViewData["AUTHTOKEN"];
     var userId = ViewData["USERID"];
+    var toastMsg = TempData["ShowToast"] as string;
+}
+
+@if (!string.IsNullOrEmpty(toastMsg))
+{
+    <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded shadow-lg z-50">
+        @toastMsg
+    </div>
+    <script>
+        setTimeout(function() {
+            var toastElement = document.getElementById("toast");
+            if (toastElement) {
+                toastElement.remove();
+            }
+        }, 2500);
+    </script>
 }
 
 <div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-4">
@@ -68,6 +84,9 @@
 
                     <form method="post" asp-page-handler="AddToCart">
                         <input type="hidden" name="ProductId" value="@p.Id" />
+                        <input type="hidden" name="ProductName" value="@p.Name" />
+                        <input type="hidden" name="Price" value="@p.Price" />
+                        <input type="hidden" name="ImageUrl" value="@p.ImageUrl" />
                         <button type="submit"
                                 class="mt-2 w-full bg-yellow-500 text-white text-sm rounded-lg py-1 hover:bg-yellow-600">
                             ➕ เพิ่มลงตะกร้า
@@ -137,6 +156,9 @@
                         </div>
                         <form method="post" action="?handler=AddToCart">
                             <input type="hidden" name="ProductId" value="${p.id}" />
+                            <input type="hidden" name="ProductName" value="${p.name}" />
+                            <input type="hidden" name="Price" value="${p.price}" />
+                            <input type="hidden" name="ImageUrl" value="${p.imageUrl}" />
                             <button type="submit"
                                     class="mt-2 w-full bg-yellow-500 text-white text-sm rounded-lg py-1 hover:bg-yellow-600">
                                 ➕ เพิ่มลงตะกร้า

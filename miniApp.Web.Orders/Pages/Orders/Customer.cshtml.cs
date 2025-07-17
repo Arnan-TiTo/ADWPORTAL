@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace miniApp.WebOrders.Pages.Orders
 {
-    public class Customer_Model : PageModel
+    public class CustomerModel : PageModel
     {
         [BindProperty]
         public CustomerInfoModel Customer { get; set; } = new();
@@ -29,7 +29,7 @@ namespace miniApp.WebOrders.Pages.Orders
             var json = JsonSerializer.Serialize(Customer);
             HttpContext.Session.SetString("ORDER_CUSTOMER", json);
 
-            return RedirectToPage("/Orders/AddOrderStep2");
+            return RedirectToPage("Summary");
         }
     }
 

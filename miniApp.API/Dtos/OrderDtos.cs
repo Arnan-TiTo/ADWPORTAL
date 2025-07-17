@@ -8,25 +8,21 @@ namespace miniApp.API.Dtos
     {
         [Required]
         public string CustomerName { get; set; } = string.Empty;
-
         [Required]
         public string CustomerPhone { get; set; } = string.Empty;
-
         public string CustomerEmail { get; set; } = string.Empty;
         public string AddressLine { get; set; } = string.Empty;
         public string SubDistrict { get; set; } = string.Empty;
         public string District { get; set; } = string.Empty;
         public string Province { get; set; } = string.Empty;
         public string ZipCode { get; set; } = string.Empty;
-
         public string? Gender { get; set; }
         public DateTime? BirthDate { get; set; }
         public string? Occupation { get; set; }
         public string? Nationality { get; set; }
-
         public bool MayIAsk { get; set; } = false;
-
-        public string? PaymentSlip { get; set; }
+        public string PaymentMethod { get; set; } = string.Empty;
+        public string? SlipImage { get; set; }
 
         public List<OrderItemDto> Items { get; set; } = new();
     }
@@ -45,8 +41,9 @@ namespace miniApp.API.Dtos
         public decimal UnitPrice { get; set; }
         public decimal Discount { get; set; }
         public decimal Total => Quantity * UnitPrice;
+        public string ImageUrl { get; set; } = "";
     }
-
+    
     public class OrderViewDto
     {
         public int Id { get; set; }
@@ -69,7 +66,8 @@ namespace miniApp.API.Dtos
 
         public bool MayIAsk { get; set; }
 
-        public string? PaymentSlip { get; set; }
+        public string PaymentMethod { get; set; } = string.Empty;
+        public string? SlipImage { get; set; }
 
         public List<OrderItemDto> Items { get; set; } = new();
     }

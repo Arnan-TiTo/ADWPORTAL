@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using miniApp.WebOrders.Models;
 using System.Collections.Generic;
@@ -54,8 +54,15 @@ namespace miniApp.WebOrders.Pages
             Products = await client.GetFromJsonAsync<List<ProductDto>>(url) ?? new();
         }
 
-        public IActionResult OnPostAddToCart(int productId, string productName, decimal price, string? imageUrl)
+        public IActionResult OnPostAddToCart(int productId)
         {
+            var productName = Request.Form["ProductName"].ToString();
+            var imageUrl = Request.Form["ImageUrl"].ToString();
+
+            decimal.TryParse(Request.Form["Price"], out decimal price);
+
+            Console.WriteLine($"ADD TO CART: {productId}, {productName}, {price}, {imageUrl}");
+
             var cart = GetCart();
             var existing = cart.Find(p => p.ProductId == productId);
             if (existing != null)
@@ -75,9 +82,10 @@ namespace miniApp.WebOrders.Pages
             }
 
             SaveCart(cart);
-            TempData["Success"] = "???????????????????????";
+            TempData["ShowToast"] = $"เพิ่มสินค้า \"{productName}\" ลงตะกร้าเรียบร้อยแล้ว";
             return RedirectToPage();
         }
+
 
         private List<CartItemDto> GetCart()
         {

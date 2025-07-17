@@ -66,7 +66,8 @@ namespace miniApp.API.Controllers
                 Occupation = h.Occupation,
                 Nationality = h.Nationality,
                 MayIAsk = h.MayIAsk,
-                PaymentSlip = h.PaymentSlip,
+                PaymentMethod = h.PaymentMethod,
+                SlipImage = h.SlipImage,
                 Items = h.OrderDts.Select(d => new OrderItemDto
                 {
                     ProductId = d.ProductId,
@@ -79,6 +80,52 @@ namespace miniApp.API.Controllers
 
             return Ok(result);
         }
+
+        [HttpGet("history")]
+        public async Task<ActionResult<IEnumerable<OrderViewDto>>> GetAllHistory()
+        {
+            if (!IsAuthorized()) return Unauthorized();
+
+            var orders = await _context.OrderHd
+                .Include(h => h.OrderDts)
+                .ToListAsync();
+
+            var allProductIds = orders.SelectMany(o => o.OrderDts.Select(dt => dt.ProductId)).Distinct().ToList();
+            var products = await _context.Products
+                .Where(p => allProductIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
+            var result = orders.Select(h => new OrderViewDto
+            {
+                OrderNo = h.OrderNo,
+                OrderDate = h.OrderDate,
+                CustomerName = h.CustomerName,
+                AddressLine = h.AddressLine,
+                SubDistrict = h.SubDistrict,    
+                District = h.District,  
+                Province = h.Province,  
+                ZipCode = h.ZipCode,    
+                CustomerPhone = h.CustomerPhone,    
+                CustomerEmail = h.CustomerEmail,    
+
+                Items = h.OrderDts.Select(d =>
+                {
+                    products.TryGetValue(d.ProductId, out var prod);
+                    return new OrderItemDto
+                    {
+                        ProductId = d.ProductId,
+                        ProductName = d.ProductName,
+                        Quantity = d.Quantity,
+                        UnitPrice = d.UnitPrice,
+                        Discount = d.Discount,
+                        ImageUrl = prod?.ImageUrl ?? "",
+                    };
+                }).ToList()
+            });
+
+            return Ok(result);
+        }
+
 
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
@@ -102,7 +149,8 @@ namespace miniApp.API.Controllers
                 Occupation = dto.Occupation ?? "",
                 Nationality = dto.Nationality ?? "",
                 MayIAsk = dto.MayIAsk,
-                PaymentSlip = dto.PaymentSlip,
+                PaymentMethod = dto.PaymentMethod,
+                SlipImage = dto.SlipImage,
                 OrderDts = dto.Items.Select(i => new OrderDt
                 {
                     ProductId = i.ProductId,
@@ -143,7 +191,8 @@ namespace miniApp.API.Controllers
             order.Occupation = dto.Occupation ?? "";
             order.Nationality = dto.Nationality ?? "";
             order.MayIAsk = dto.MayIAsk;
-            order.PaymentSlip = dto.PaymentSlip;
+            order.PaymentMethod = dto.PaymentMethod;
+            order.SlipImage = dto.SlipImage;
 
             _context.OrderDt.RemoveRange(order.OrderDts);
 
@@ -202,7 +251,8 @@ namespace miniApp.API.Controllers
                 Occupation = order.Occupation,
                 Nationality = order.Nationality,
                 MayIAsk = order.MayIAsk,
-                PaymentSlip = order.PaymentSlip,
+                PaymentMethod = order.PaymentMethod,
+                SlipImage = order.SlipImage,
                 Items = order.OrderDts.Select(d => new OrderItemDto
                 {
                     ProductId = d.ProductId,

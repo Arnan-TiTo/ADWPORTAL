@@ -7,6 +7,6 @@
         public string? ImageUrl { get; set; }
         public decimal Price { get; set; }
         public int Quantity { get; set; } = 1;
+        public decimal Discount { get; set; } 
     }
-
 }

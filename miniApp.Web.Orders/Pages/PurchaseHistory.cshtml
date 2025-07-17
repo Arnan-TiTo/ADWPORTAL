@@ -1,0 +1,148 @@
+﻿@page
+@model miniApp.WebOrders.Pages.PurchaseHistoryModel
+@{
+    ViewData["Title"] = "Purchase History";
+}
+
+@section Scripts {
+    <script>
+        function toggleFilter() {
+            var el = document.getElementById('filterForm');
+            if (el) el.classList.toggle('hidden');
+        }
+    </script>
+}
+
+<div class="max-w-md mx-auto bg-white min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-2 py-2">
+        <a asp-page="/Orders/History" class="text-xl">&#8592;</a>
+        <h1 class="text-lg font-semibold flex-1 text-center">Purchase History</h1>
+        <span class="w-6"></span>
+    </div>
+
+    <!-- Search -->
+    <form method="get" class="relative mb-2">
+        <input type="text" name="Query" value="@Model.Query" placeholder="Search by Order No"
+               class="w-full bg-gray-100 border border-gray-300 rounded-xl px-4 py-2 text-sm" />
+        <input type="hidden" name="SortField" value="@Model.SortField" />
+        <input type="hidden" name="SortDir" value="@Model.SortDir" />
+        <button type="submit"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+            🔍
+        </button>
+    </form>
+
+    <!-- Button bar -->
+    <div class="flex items-center gap-2 mb-3">
+        <!-- List/Sort -->
+        <form method="get" class="flex gap-2 items-center">
+            <select name="SortField" class="border rounded px-1 py-0.5 text-xs" style="min-width: 90px">
+                @foreach (var (value, label) in Model.SortFields)
+                {
+                    <option value="@value" selected="@(Model.SortField == value ? "selected" : null)">@label</option>
+                }
+            </select>
+            <select name="SortDir" class="border rounded px-1 py-0.5 text-xs">
+                <option value="asc" selected="@(Model.SortDir == "asc" ? "selected" : null)">▲</option>
+                <option value="desc" selected="@(Model.SortDir == "desc" ? "selected" : null)">▼</option>
+            </select>
+            <input type="hidden" name="Query" value="@Model.Query" />
+            <input type="hidden" name="ProductFilter" value="@Model.ProductFilter" />
+            <input type="hidden" name="OrderNoFilter" value="@Model.OrderNoFilter" />
+            <input type="hidden" name="UnitPriceFilter" value="@Model.UnitPriceFilter" />
+            <button type="submit" class="ml-1 text-xs bg-green-50 rounded px-2 py-1 border border-green-200">Sort</button>
+        </form>
+        <!-- Filter -->
+        <button type="button" onclick="toggleFilter()" class="px-3 py-1 rounded border flex items-center gap-1 text-gray-700 text-sm bg-gray-50">
+            <span>🔽</span>
+            <span>Filter</span>
+        </button>
+        <!-- Download -->
+        <form method="post" asp-page-handler="Download" class="ml-auto">
+            <button type="submit" class="px-4 py-1 border rounded bg-white text-black text-sm shadow">Download</button>
+        </form>
+    </div>
+
+
+
+    <!-- Filter bar (Toggle) -->
+    <form method="get" id="filterForm" class="mb-3 @(Model.ShowFilter ? "" : "hidden")">
+        <div class="grid grid-cols-3 gap-2">
+            <input type="text" name="ProductFilter" value="@Model.ProductFilter" placeholder="Product Name"
+                   class="bg-gray-100 border border-gray-300 rounded-xl px-2 py-1 text-sm" />
+            <input type="text" name="OrderNoFilter" value="@Model.OrderNoFilter" placeholder="Order No"
+                   class="bg-gray-100 border border-gray-300 rounded-xl px-2 py-1 text-sm" />
+            <input type="text" name="UnitPriceFilter" value="@Model.UnitPriceFilter" placeholder="Unit Price"
+                   class="bg-gray-100 border border-gray-300 rounded-xl px-2 py-1 text-sm" />
+        </div>
+        <input type="hidden" name="Query" value="@Model.Query" />
+        <input type="hidden" name="SortField" value="@Model.SortField" />
+        <input type="hidden" name="SortDir" value="@Model.SortDir" />
+        <button type="submit" class="mt-2 px-4 py-1 rounded bg-green-500 text-white w-full text-sm">Apply Filter</button>
+    </form>
+
+    <!-- Scrollable Table -->
+    <div class="flex-1 min-h-0">
+        <div class="overflow-x-auto h-full max-h-[65vh]">
+            <table class="min-w-[1200px] w-full table-auto text-sm">
+                <thead>
+                    <tr class="border-b bg-gray-100">
+                        <th class="py-1 px-2 font-semibold">Order No</th>
+                        <th class="py-1 px-2 font-semibold">Order Date</th>
+                        <th class="py-1 px-2 font-semibold">Customer</th>
+                        <th class="py-1 px-2 font-semibold">Address</th>
+                        <th class="py-1 px-2 font-semibold">Item</th>
+                        <th class="py-1 px-2 font-semibold text-center">Qty</th>
+                        <th class="py-1 px-2 font-semibold text-center">Unit Price</th>
+                        <th class="py-1 px-2 font-semibold text-center">Discount</th>
+                        <th class="py-1 px-2 font-semibold text-center">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Orders.Any())
+                    {
+                        foreach (var order in Model.Orders)
+                        {
+                            <tr class="bg-green-50 border-b-2 border-green-400">
+                                <td class="py-1 px-2 font-semibold">@order.OrderNo</td>
+                                <td class="py-1 px-2">@order.OrderDate.ToString("dd/MM/yyyy")</td>
+                                <td class="py-1 px-2">@order.CustomerName</td>
+                                <td class="py-1 px-2">
+                                    @order.AddressLine
+                                    @(string.IsNullOrWhiteSpace(order.AddressLine) ? "" : ", ")
+                                    @order.SubDistrict @(string.IsNullOrWhiteSpace(order.SubDistrict) ? "" : ", ")
+                                    @order.District @(string.IsNullOrWhiteSpace(order.District) ? "" : ", ")
+                                    @order.Province @(string.IsNullOrWhiteSpace(order.Province) ? "" : ", ")
+                                    @order.ZipCode
+                                </td>
+                                <td class="py-1 px-2" colspan="5"></td>
+                            </tr>
+                            foreach (var item in order.Items)
+                            {
+                                <tr class="border-b">
+                                    <td class="py-1 px-2"></td>
+                                    <td class="py-1 px-2"></td>
+                                    <td class="py-1 px-2"></td>
+                                    <td class="py-1 px-2"></td>
+                                    <td class="py-1 px-2">@item.ProductName</td>
+                                    <td class="py-1 px-2 text-center">@item.Quantity</td>
+                                    <td class="py-1 px-2 text-center">@item.UnitPrice.ToString("N0")</td>
+                                    <td class="py-1 px-2 text-center">@item.Discount.ToString("N0")</td>
+                                    <td class="py-1 px-2 text-center">@((item.UnitPrice - item.Discount).ToString("N0"))</td>
+                                </tr>
+                            }
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="9" class="text-gray-400 text-center py-4">No purchase history found.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

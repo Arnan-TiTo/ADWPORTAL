@@ -5,12 +5,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddEnvironmentVariables();
 
-builder.Services.AddSession(options =>
-{
-    options.Cookie.HttpOnly = true;  
-    options.IdleTimeout = TimeSpan.FromMinutes(30); 
-});
-
 // Services
 builder.Services.AddRazorPages();
 builder.Services.AddHttpClient();
