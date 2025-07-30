@@ -54,7 +54,7 @@ builder.Services.AddMemoryCache();
 // ========== SWAGGER CONFIG ========== //
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "miniApp API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "APP API", Version = "v1" });
     var jwtSecurityScheme = new OpenApiSecurityScheme
     {
         BearerFormat = "JWT",

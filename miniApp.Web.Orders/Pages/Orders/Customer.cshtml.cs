@@ -29,7 +29,7 @@ namespace miniApp.WebOrders.Pages.Orders
             var json = JsonSerializer.Serialize(Customer);
             HttpContext.Session.SetString("ORDER_CUSTOMER", json);
 
-            return RedirectToPage("Summary");
+            return RedirectToPage("Payment");
         }
     }
 

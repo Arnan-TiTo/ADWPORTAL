@@ -1,22 +1,31 @@
 ﻿<div class="w-full bg-white border-t shadow-md z-50">
     <div class="flex justify-around items-center h-16 text-gray-600 text-xs">
-        <a href="/Index" class="flex flex-col items-center space-y-1 @(ViewContext?.ActionDescriptor?.DisplayName?.Contains("Index") == true ? "text-blue-800" : "")">
+        <a asp-page="/Index"
+           class="flex flex-col items-center space-y-1 @(ViewContext?.ActionDescriptor?.DisplayName?.Contains("Index") == true ? "text-blue-800" : "")">
             <img src="/images/icons/home.png" class="w-6 h-6" />
             <span>Home</span>
         </a>
-        <a href="/ProductSearch" class="flex flex-col items-center space-y-1 @(ViewContext?.ActionDescriptor?.DisplayName?.Contains("StockIn") == true ? "text-blue-800" : "")">
-            <img src="/images/icons/productSearch.png"  class="w-6 h-6" />
+
+        <a asp-page="/ProductSearch"
+           class="flex flex-col items-center space-y-1 @(ViewContext?.ActionDescriptor?.DisplayName?.Contains("ProductSearch") == true ? "text-blue-800" : "")">
+            <img src="/images/icons/productSearch.png" class="w-6 h-6" />
             <span>View Product</span>
         </a>
-        <a href="/Orders/Customer" class="flex flex-col items-center space-y-1 @(ViewContext?.ActionDescriptor?.DisplayName?.Contains("StockCount") == true ? "text-blue-800" : "")">
-            <img src="/images/icons/cart.png" class="w-6 h-6" />
+
+        <a asp-page="/Orders/Summary"
+           class="flex flex-col items-center space-y-1 @(ViewContext?.ActionDescriptor?.DisplayName?.Contains("Summary") == true ? "text-blue-800" : "")">
+            <img src="~/images/icons/cart.png" class="w-6 h-6" />
             <span>Cart</span>
         </a>
-        <a href="/Notification" class="flex flex-col items-center space-y-1">
+
+        <a asp-page="/Notification"
+           class="flex flex-col items-center space-y-1 @(ViewContext?.ActionDescriptor?.DisplayName?.Contains("Notification") == true ? "text-blue-800" : "")">
             <img src="/images/icons/notify.png" class="w-6 h-6" />
             <span>Notify</span>
         </a>
-        <a href="/Profile" class="flex flex-col items-center space-y-1">
+
+        <a asp-page="/Profile"
+           class="flex flex-col items-center space-y-1 @(ViewContext?.ActionDescriptor?.DisplayName?.Contains("Profile") == true ? "text-blue-800" : "")">
             <img src="/images/icons/profile.png" class="w-6 h-6" />
             <span>Profile</span>
         </a>

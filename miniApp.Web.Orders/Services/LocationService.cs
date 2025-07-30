@@ -13,36 +13,19 @@ namespace miniApp.WebOrders.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _config;
-        private readonly IHttpContextAccessor _httpContextAccessor;  // Add IHttpContextAccessor
+        private readonly IHttpContextAccessor _httpContextAccessor;  
 
         // Constructor
         public LocationService(HttpClient httpClient, IConfiguration config, IHttpContextAccessor httpContextAccessor)
         {
             _httpClient = httpClient;
             _config = config;
-            _httpContextAccessor = httpContextAccessor;  // Inject IHttpContextAccessor
+            _httpContextAccessor = httpContextAccessor; 
         }
 
-        // ฟังก์ชันเพื่อเพิ่มข้อมูลตำแหน่งใหม่
         public async Task<bool> CreateLocationAsync(LocationDto location)
         {
-            // ดึง JWT token จาก cookies
-            //var httpContext = _httpContextAccessor.HttpContext;
-            //if (httpContext == null)
-            //{
-            //    throw new InvalidOperationException("HttpContext is not available.");
-            //}
-
-            //var token = httpContext.Request.Cookies["MiniApp.Auth"]; // Access the cookie
-            //if (string.IsNullOrEmpty(token))
-            //{
-            //    throw new UnauthorizedAccessException("Authorization required. Please log in.");
-            //}
-
-            //// เพิ่ม Authorization header
-            //_httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-            var apiBase = _config["ApiBaseUrl"] ?? "http://localhost:5252";
+            var apiBase = _config["ApiBaseUrl"] ?? "";
             _httpClient.BaseAddress = new System.Uri(apiBase);
 
             var form = new MultipartFormDataContent
@@ -53,7 +36,6 @@ namespace miniApp.WebOrders.Services
                 { new StringContent(location.Longitude.ToString()), "Longitude" }
             };
 
-            // ถ้ามีไฟล์ที่ต้องการอัพโหลด
             if (location.Image != null && location.Image.Length > 0)
             {
                 try
@@ -64,29 +46,24 @@ namespace miniApp.WebOrders.Services
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Image upload failed: {ex.Message}");  // เพิ่มข้อความแสดงข้อผิดพลาด
                     throw new Exception("Image upload failed: " + ex.Message);
                 }
             }
 
             try
             {
-                // ใช้ _httpClient ส่งคำขอ POST ไปยัง API
-                var response = await _httpClient.PostAsync("/api/locations", form); // ตรวจสอบ URL ใน API
+                var response = await _httpClient.PostAsync("api/locations", form); 
                 var content = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"Failed to submit location: {content}"); // เพิ่มการ log
                     return false;
                 }
 
-                Console.WriteLine($"Location saved: {content}"); // เพิ่มการ log
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to submit location: {ex.Message}");  // เพิ่ม log
                 throw new Exception("Failed to submit location: " + ex.Message);
             }
         }

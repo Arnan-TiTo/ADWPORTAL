@@ -30,7 +30,7 @@ namespace miniApp.WebOrders.Pages
         public async Task OnGetAsync()
         {
             var client = _httpClientFactory.CreateClient();
-            var baseUrl = _config["APIBASEURL"] ?? "http://localhost:5252";
+            var baseUrl = _config["APIBASEURL"] ?? "";
             var token = _config["AUTHTOKEN"] ?? "";
 
             if (!string.IsNullOrWhiteSpace(token))
@@ -45,11 +45,11 @@ namespace miniApp.WebOrders.Pages
             ViewData["APIBASEURL"] = baseUrl;
             ViewData["AUTHTOKEN"] = token;
 
-            Categories = await client.GetFromJsonAsync<List<ProductCategoryDto>>($"{baseUrl}/api/productcategory") ?? new();
+            Categories = await client.GetFromJsonAsync<List<ProductCategoryDto>>($"{baseUrl}api/productcategory") ?? new();
 
             string url = CategoryId.HasValue
-                ? $"{baseUrl}/api/product/ByCategory?categoryId={CategoryId.Value}"
-                : $"{baseUrl}/api/product";
+                ? $"{baseUrl}api/product/ByCategory?categoryId={CategoryId.Value}"
+                : $"{baseUrl}api/product";
 
             Products = await client.GetFromJsonAsync<List<ProductDto>>(url) ?? new();
         }

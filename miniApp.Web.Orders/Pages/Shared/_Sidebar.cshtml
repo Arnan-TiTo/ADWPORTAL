@@ -4,11 +4,11 @@
 </div>
 
 <nav class="space-y-2 px-4 mt-4">
-    <a href="/Index" class="block px-3 py-2 rounded hover:bg-green-100">🏠 Home</a>
-    <a href="/ProductSearch" class="block px-3 py-2 rounded hover:bg-green-100">🔍 View Product</a>
-    <a href="/Orders/Customer" class="block px-3 py-2 rounded hover:bg-green-100">🛒 Cart</a>
-    <a href="/History" class="block px-3 py-2 rounded hover:bg-green-100">🕑 History</a>
-    <a href="/PurchaseHistory" class="block px-3 py-2 rounded hover:bg-green-100">🕑 History</a>
+    <a asp-page="/Index" class="block px-3 py-2 rounded hover:bg-green-100">🏠 Home</a>
+    <a asp-page="/ProductSearch" class="block px-3 py-2 rounded hover:bg-green-100">🔍 View Product</a>
+    <a asp-page="/Orders/Summary" class="block px-3 py-2 rounded hover:bg-green-100">🛒 Cart</a>
+    <a asp-page="/History" class="block px-3 py-2 rounded hover:bg-green-100">🕑 History</a>
+    <a asp-page="/PurchaseHistory" class="block px-3 py-2 rounded hover:bg-green-100">🕑 Purchase History</a>
     <form method="post" asp-page="/Logout">
         <button type="submit" class="w-full text-left px-3 py-2 rounded hover:bg-red-100 text-red-600">
             🚪 Logout

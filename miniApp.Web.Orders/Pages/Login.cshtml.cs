@@ -26,10 +26,13 @@ namespace miniApp.WebOrders.Pages
 
         public string? ErrorMessage { get; set; }
 
-        public async Task<IActionResult> OnPostAsync()
+        public async Task<IActionResult> OnPostAsync(string? returnUrl = null)
         {
+            if (!ModelState.IsValid)
+                return Page();
+
             var result = await _authService.LoginAsync(Login);
-            if (result == null || string.IsNullOrEmpty(result.token))
+            if (string.IsNullOrEmpty(result?.token))
             {
                 ErrorMessage = "Invalid credentials.";
                 return Page();
@@ -44,7 +47,7 @@ namespace miniApp.WebOrders.Pages
                 new Claim(ClaimTypes.Name, Login.Username),
                 new Claim("USERID", result.userid.ToString()),
                 new Claim("JWT", result.token),
-                new Claim("FULLNAME",result.fullname)
+                new Claim("FULLNAME", result.fullname)
             };
 
             var identity = new ClaimsIdentity(claims, "MyCookieAuth");
@@ -52,7 +55,13 @@ namespace miniApp.WebOrders.Pages
 
             await HttpContext.SignInAsync("MyCookieAuth", principal);
 
-            return RedirectToPage("/Index");
+            var safeUrl = string.IsNullOrEmpty(returnUrl) || !Url.IsLocalUrl(returnUrl)
+                ? Url.Page("/Index")
+                : returnUrl;
+
+            return Redirect(safeUrl!);
+
         }
+
     }
 }

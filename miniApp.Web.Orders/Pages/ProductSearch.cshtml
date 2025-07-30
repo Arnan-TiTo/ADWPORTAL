@@ -124,7 +124,7 @@
                 return;
             }
 
-            const url = `${APIBASEURL}/api/product/ProductSearch?query=${encodeURIComponent(keyword)}`;
+            const url = `${APIBASEURL}api/product/ProductSearch?query=${encodeURIComponent(keyword)}`;
 
             try {
                 const res = await fetch(url, {

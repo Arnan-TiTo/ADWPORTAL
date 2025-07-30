@@ -21,7 +21,7 @@ namespace miniApp.WebOrders.Pages
         public string? ActiveTab { get; set; } = "History";
 
         [BindProperty]
-        public string SelectedIds { get; set; }
+        public List<int> SelectedIds { get; set; } = new();
         public HistoryModel(IHttpClientFactory httpClientFactory, IConfiguration config)
         {
             _httpClientFactory = httpClientFactory;
@@ -33,13 +33,13 @@ namespace miniApp.WebOrders.Pages
             if (string.IsNullOrWhiteSpace(selectedIds))
                 return Content("No items selected.");
 
-            var apiBase = _config["APIBASEURL"] ?? "http://localhost:5252";
+            var apiBase = _config["APIBASEURL"] ?? "";
             var token = _config["AUTHTOKEN"] ?? "";
             var client = _httpClientFactory.CreateClient();
             if (!string.IsNullOrEmpty(token))
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            var response = await client.GetAsync($"{apiBase}/api/Order/history");
+            var response = await client.GetAsync($"{apiBase}api/Order/history");
             var json = await response.Content.ReadAsStringAsync();
             var apiOrders = JsonSerializer.Deserialize<List<OrderHistoryViewDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             var orders = apiOrders ?? new();
@@ -70,9 +70,6 @@ namespace miniApp.WebOrders.Pages
                 }
             }
 
-           // var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
-           // return File(bytes, "text/csv", fileName);
-
             var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
             var fileName = $"orders_{DateTime.Now:yyyyMMddHHmmss}.csv";
             return File(bytes, "text/csv", fileName);
@@ -80,14 +77,14 @@ namespace miniApp.WebOrders.Pages
 
         public async Task OnGetAsync()
         {
-            var apiBase = _config["APIBASEURL"] ?? "http://localhost:5252";
+            var apiBase = _config["APIBASEURL"] ?? "";
             var token = _config["AUTHTOKEN"] ?? "";
 
             var client = _httpClientFactory.CreateClient();
             if (!string.IsNullOrEmpty(token))
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            var url = $"{apiBase}/api/Order/history";
+            var url = $"{apiBase}api/Order/history";
             if (!string.IsNullOrEmpty(Query))
                 url += $"?query={Uri.EscapeDataString(Query)}";
 

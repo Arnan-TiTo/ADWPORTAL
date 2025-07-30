@@ -53,14 +53,14 @@ namespace miniApp.WebOrders.Pages
 
         public async Task OnGetAsync()
         {
-            var apiBase = _config["APIBASEURL"] ?? "http://localhost:5252";
+            var apiBase = _config["APIBASEURL"] ?? "";
             var token = _config["AUTHTOKEN"] ?? "";
 
             var client = _httpClientFactory.CreateClient();
             if (!string.IsNullOrEmpty(token))
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            var response = await client.GetAsync($"{apiBase}/api/Order/history");
+            var response = await client.GetAsync($"{apiBase}api/Order/history");
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();

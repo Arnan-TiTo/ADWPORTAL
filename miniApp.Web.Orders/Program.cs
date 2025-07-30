@@ -1,3 +1,4 @@
+using Microsoft.Extensions.FileProviders;
 using miniApp.WebOrders.Middlewares;
 using miniApp.WebOrders.Services;
 
@@ -43,6 +44,18 @@ if (!app.Environment.IsDevelopment())
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
 
 app.UseStaticFiles();
+
+var iisRoot = builder.Configuration["ImageRootPath"];
+
+if (Directory.Exists(iisRoot))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(iisRoot),
+        RequestPath = "/images"
+    });
+}
+
 app.UseRouting();
 app.UseSession();
 

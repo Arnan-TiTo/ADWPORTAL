@@ -20,7 +20,7 @@ namespace miniApp.WebOrders.Services
         private HttpClient CreateClient()
         {
             var client = _httpClientFactory.CreateClient();
-            var baseUrl = _config["ApiBaseUrl"] ?? "http://localhost:5252";
+            var baseUrl = _config["ApiBaseUrl"] ?? "";
             client.BaseAddress = new Uri(baseUrl);
 
             // Add JWT token if exists

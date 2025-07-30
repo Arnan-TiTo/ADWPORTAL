@@ -24,7 +24,7 @@
 
         async function loadNotifications() {
             try {
-                const res = await fetch(`${APIBASEURL}/api/notification/user/${USERID}`, {
+                const res = await fetch(`${APIBASEURL}api/notification/user/${USERID}`, {
                     headers: {
                         'Authorization': `Bearer ${AUTHTOKEN}`
                     }

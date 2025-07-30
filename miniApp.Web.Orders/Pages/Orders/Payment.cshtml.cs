@@ -36,10 +36,9 @@ namespace miniApp.WebOrders.Pages.Orders
         {
             Cart = GetCart();
 
-            var baseUrl = _config["APIBASEURL"] ?? "http://localhost:5252";
+            var baseUrl = _config["APIBASEURL"] ?? "";
             var token = _config["AUTHTOKEN"] ?? "";
 
-            // 1. ดึงข้อมูลลูกค้าจาก Session
             var customerJson = HttpContext.Session.GetString("ORDER_CUSTOMER");
             if (string.IsNullOrEmpty(customerJson))
                 return RedirectToPage("/Orders/Customer");
@@ -48,12 +47,15 @@ namespace miniApp.WebOrders.Pages.Orders
             if (customer == null)
                 return RedirectToPage("/Orders/Customer");
 
-            // 2. จัดการรูปสลิป (Upload ไป wwwroot/images/slips/)
             string? slipImageFileName = null;
             if (Slip != null && Slip.Length > 0)
             {
+                var saveDir = Path.Combine(_config["ImageRootPath"]!, "slips");
+                if (!Directory.Exists(saveDir))
+                    Directory.CreateDirectory(saveDir);
+
                 var fileName = $"{DateTime.Now:yyyyMMddHHmmssfff}_{Path.GetFileName(Slip.FileName)}";
-                var savePath = Path.Combine("wwwroot/images/slips/", fileName);
+                var savePath = Path.Combine(saveDir, fileName);
                 using (var stream = new FileStream(savePath, FileMode.Create))
                 {
                     await Slip.CopyToAsync(stream);
@@ -61,7 +63,6 @@ namespace miniApp.WebOrders.Pages.Orders
                 slipImageFileName = fileName;
             }
 
-            // 3. สร้าง OrderCreateDto
             var orderDto = new OrderCreateDto
             {
                 CustomerName = customer.CustomerName,
@@ -89,14 +90,13 @@ namespace miniApp.WebOrders.Pages.Orders
                 }).ToList()
             };
 
-            // 4. เรียก API บันทึกออเดอร์ (ใช้ HttpClient เดียว)
             var client = _httpClientFactory.CreateClient();
             if (!string.IsNullOrEmpty(token))
             {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
 
-            var response = await client.PostAsJsonAsync($"{baseUrl}/api/Order", orderDto);
+            var response = await client.PostAsJsonAsync($"{baseUrl}api/Order", orderDto);
             if (response.IsSuccessStatusCode)
             {
                 HttpContext.Session.Remove("Cart");

@@ -8,7 +8,7 @@
         <!-- Logo + Welcome -->
         <div class="text-center mb-6">
             <img src="/images/logo.png" alt="Logo" class="mx-auto w-24 h-24 mb-4" />
-            <h2 class="text-xl font-semibold text-black">Welcome to miniApp</h2>
+            <h2 class="text-xl font-semibold text-black">Welcome to Sale Report</h2>
             <p class="text-sm text-gray-600">Sign in to your account</p>
         </div>
 
@@ -61,15 +61,15 @@
             </button>
 
             <!-- Register -->
-            <a href="/Register"
+            <a asp-page="/Register"
                class="w-full block bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-center font-semibold text-sm transition">
                 Register
             </a>
 
             <p class="text-xs text-center text-gray-400 mt-2">
                 By signing in, you agree to our
-                <a href="/terms" class="underline">Terms</a> and
-                <a href="/privacy" class="underline">Privacy Policy</a>
+                <a asp-page="/Terms" class="underline">Terms</a> and
+                <a asp-page="/Privacy" class="underline">Privacy Policy</a>
             </p>
         </form>
     </div>
@@ -83,7 +83,7 @@
         const apiBase = '@Model.ApiBaseUrl';
 
         async function generateQR() {
-            const res = await fetch(`${apiBase}/api/qrlogin/generate`);
+            const res = await fetch(`${apiBase}api/qrlogin/generate`);
             const data = await res.json();
             qrToken = data.qrToken;
 
@@ -101,7 +101,7 @@
         }
 
         async function simulateScan() {
-            const res = await fetch(`${apiBase}/api/qrlogin/confirm`, {
+            const res = await fetch(`${apiBase}api/qrlogin/confirm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -117,7 +117,7 @@
         }
 
         async function pollImmediately() {
-            const response = await fetch(`${apiBase}/api/qrlogin/scan?token=${qrToken}`, {
+            const response = await fetch(`${apiBase}api/qrlogin/scan?token=${qrToken}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}'

@@ -24,7 +24,7 @@ namespace miniApp.WebOrders.Services
 
         public async Task<(bool Success, string Error)> RegisterAsync(UserRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/auth/register", request);
+            var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
             var content = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
@@ -36,7 +36,7 @@ namespace miniApp.WebOrders.Services
 
         public async Task<LoginResponse?> LoginAsync(LoginRequest login)
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/Auth/login", login);
+            var response = await _httpClient.PostAsJsonAsync("api/Auth/login", login);
 
             if (!response.IsSuccessStatusCode)
                 return null;
