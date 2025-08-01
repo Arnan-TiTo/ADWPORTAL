@@ -75,12 +75,12 @@
                     document.getElementById("Longitude").value = position.coords.longitude;
                     document.getElementById("LatitudeHidden").value = position.coords.latitude;
                     document.getElementById("LongitudeHidden").value = position.coords.longitude;
-                    alert("Lat: " + position.coords.latitude + "\nLng: " + position.coords.longitude);
+                    showToast("Lat: " + position.coords.latitude + "\nLng: " + position.coords.longitude,"green");
                 }, function (error) {
-                    alert("Error getting location: " + error.message);
+                    showToast("Error getting location: " + error.message,"red");
                 });
             } else {
-                alert("Geolocation is not supported by this browser.");
+                showToast("Geolocation is not supported by this browser.","red");
             }
         });
 
@@ -104,7 +104,7 @@
         document.getElementById('addImageBtn').addEventListener('click', () => {
             const container = document.getElementById('imageInputs');
             if (container.children.length >= 5) {
-                alert("You can only upload up to 5 images.");
+                showToast("You can only upload up to 5 images.","red");
                 return;
             }
 
@@ -144,8 +144,6 @@
             const apiBaseUrl = '@ViewData["ApiBaseUrl"]';
             const apiUrl = apiBaseUrl + 'api/locations';
 
-            alert(apiUrl);
-
             try {
                 const response = await fetch(apiUrl, {
                     method: 'POST',
@@ -159,12 +157,22 @@
                 }
 
                 const result = await response.json();
-                alert('Location saved successfully!');
+                showToast("Location saved successfully","green");
                 console.log(result);
             } catch (error) {
-                alert('Error submitting location');
+                showToast("Error submitting location!","red");
                 console.error(error);
             }
         });
+
+        function showToast(message, color) {
+            const toast = document.getElementById("toast");
+            const content = document.getElementById("toastContent");
+            content.textContent = message;
+            content.className =
+                "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-" + color + "-500";
+            toast.classList.remove("hidden");
+            setTimeout(() => toast.classList.add("hidden"), 5000);
+        }
     </script>
 }

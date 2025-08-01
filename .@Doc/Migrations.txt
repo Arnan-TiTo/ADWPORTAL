@@ -1,25 +1,19 @@
-ลบตารางใน database:
-
 sql
 Copy
 Edit
 DROP TABLE LocationImages, StockMovements, Inventories, Locations, Products, Users, Notifications, __EFMigrationsHistory;
-ลบ Migrations/:
 
 bash
 Copy
 Edit
 rm -rf Migrations
-สร้าง migration ใหม่:
 
 bash
 Copy
 Edit
 dotnet ef migrations add InitialCreate
-ให้ EF สร้างตารางทั้งหมด:
 
 bash
 Copy
 Edit
 dotnet ef database update
-✅ ตอนนี้ DataSeeder จะทำงานได้ทันที
