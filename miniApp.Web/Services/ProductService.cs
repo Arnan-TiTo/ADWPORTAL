@@ -18,7 +18,7 @@ namespace miniApp.Web.Services
         public async Task<List<ProductResponseDto>> GetAllProductsAsync(string token)
         {
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            var response = await _http.GetAsync("/api/ProductSearch");
+            var response = await _http.GetAsync("api/ProductSearch");
 
             if (response.IsSuccessStatusCode)
             {

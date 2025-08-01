@@ -46,12 +46,12 @@ namespace miniApp.Web.Pages
 
             if (!string.IsNullOrEmpty(SearchQuery))
             {
-                var apiUrl = $"{APIBASEURL}/api/product/productsearch?query={SearchQuery}";
+                var apiUrl = $"{APIBASEURL}api/product/productsearch?query={SearchQuery}";
                 result = await http.GetFromJsonAsync<List<ProductItem>>(apiUrl);
             }
             else
             {
-                var apiUrl = $"{APIBASEURL}/api/product";
+                var apiUrl = $"{APIBASEURL}api/product";
                 result = await http.GetFromJsonAsync<List<ProductItem>>(apiUrl);
             }
 

@@ -2,7 +2,6 @@
 @model miniApp.Web.Pages.LocationModel
 @{
     ViewData["Title"] = "Location";
-    ViewData["ApiBaseUrl"] = "http://localhost:5252";
 }
 
 <!-- Container ที่คุมทุกอย่าง -->
@@ -143,7 +142,9 @@
             });
 
             const apiBaseUrl = '@ViewData["ApiBaseUrl"]';
-            const apiUrl = apiBaseUrl + '/api/locations';
+            const apiUrl = apiBaseUrl + 'api/locations';
+
+            alert(apiUrl);
 
             try {
                 const response = await fetch(apiUrl, {

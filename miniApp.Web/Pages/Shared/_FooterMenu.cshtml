@@ -1,22 +1,22 @@
 ﻿<div class="w-full bg-white border-t shadow-md z-50">
     <div class="flex justify-around items-center h-16 text-gray-600 text-xs">
-        <a href="/Index" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("Index") ? "text-blue-800" : "")">
+        <a asp-page="/Index" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("Index") ? "text-blue-800" : "")">
             <img src="/images/icons/home.png" class="w-6 h-6" />
             <span>Home</span>
         </a>
-        <a href="/StockIn" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("StockIn") ? "text-blue-800" : "")">
+        <a asp-page="/StockIn" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("StockIn") ? "text-blue-800" : "")">
             <img src="/images/icons/stockin.png"  class="w-6 h-6" />
             <span>Stock In</span>
         </a>
-        <a href="/StockCount" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("StockCount") ? "text-blue-800" : "")">
+        <a asp-page="/StockCount" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("StockCount") ? "text-blue-800" : "")">
             <img src="/images/icons/count.png" class="w-6 h-6" />
             <span>Count</span>
         </a>
-        <a href="/Notification" class="flex flex-col items-center space-y-1">
+        <a asp-page="/Notification" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("Notification") ? "text-blue-800" : "")">
             <img src="/images/icons/notify.png" class="w-6 h-6" />
             <span>Notify</span>
         </a>
-        <a href="/Profile" class="flex flex-col items-center space-y-1">
+        <a asp-page="/Profile" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("Profile") ? "text-blue-800" : "")">
             <img src="/images/icons/profile.png" class="w-6 h-6" />
             <span>Profile</span>
         </a>

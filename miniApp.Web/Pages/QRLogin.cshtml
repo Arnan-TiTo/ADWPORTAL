@@ -20,12 +20,12 @@
 
 @section Scripts {
     <script>
-        const apiBase = '@(Model.ApiBaseUrl ?? "http://localhost:5252")';
+        const apiBase = '@(Model.ApiBaseUrl ?? "")';
          let qrToken = null;
 
         async function generateQR() {
             try {
-                const res = await fetch(`${apiBase}/api/qrlogin/generate`);
+                const res = await fetch(`${apiBase}api/qrlogin/generate`);
                 const data = await res.json();
                 qrToken = data.qrToken;
 
@@ -41,7 +41,7 @@
         async function pollQR() {
             const interval = setInterval(async () => {
                 try {
-                    const res = await fetch(`${apiBase}/api/qrlogin/scan?token=${qrToken}`, {
+                    const res = await fetch(`${apiBase}api/qrlogin/scan?token=${qrToken}`, {
                         method: 'POST'
                     });
 

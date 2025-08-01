@@ -54,9 +54,9 @@ namespace miniApp.Web.Pages
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var client = _httpClientFactory.CreateClient();
-            var apiBase = _config["ApiBaseUrl"] ?? "http://localhost:5252";
+            var apiBase = _config["ApiBaseUrl"] ?? "";
 
-            var response = await client.PostAsync($"{apiBase}/api/qrlogin/confirm", content);
+            var response = await client.PostAsync($"{apiBase}api/qrlogin/confirm", content);
             if (response.IsSuccessStatusCode)
             {
                 Message = "Login confirmed! You may now return to desktop.";

@@ -19,13 +19,13 @@ namespace miniApp.Web.Services
             _httpClient = httpClient;
             _config = config;
 
-            var apiBase = _config["ApiBaseUrl"] ?? "http://localhost:5252";
+            var apiBase = _config["ApiBaseUrl"] ?? "";
             _httpClient.BaseAddress = new System.Uri(apiBase);
         }
 
         public async Task<(bool Success, string Error)> RegisterAsync(UserRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/auth/register", request);
+            var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
             var content = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
@@ -37,7 +37,7 @@ namespace miniApp.Web.Services
 
         public async Task<LoginResponse?> LoginAsync(LoginRequest login)
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/Auth/login", login);
+            var response = await _httpClient.PostAsJsonAsync("api/Auth/login", login);
 
             if (!response.IsSuccessStatusCode)
                 return null;

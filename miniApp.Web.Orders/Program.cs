@@ -3,6 +3,8 @@ using miniApp.WebOrders.Middlewares;
 using miniApp.WebOrders.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+var authToken = builder.Configuration["AuthToken"];
+var config = builder.Configuration;
 
 builder.Configuration.AddEnvironmentVariables();
 

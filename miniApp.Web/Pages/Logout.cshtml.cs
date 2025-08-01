@@ -8,8 +8,13 @@ namespace miniApp.Web.Pages
     {
         public async Task<IActionResult> OnPostAsync()
         {
-            HttpContext.Session.Remove("JWT");
-            await HttpContext.SignOutAsync("MyCookieAuth");
+            HttpContext.Session.Clear();
+
+            await HttpContext.SignOutAsync("MyCookieAuth", new AuthenticationProperties
+            {
+                ExpiresUtc = DateTimeOffset.UtcNow
+            });
+
             return RedirectToPage("/Login");
         }
 

@@ -104,13 +104,15 @@
             event?.preventDefault();
 
             const formData = new FormData(formElement);
-            const data = {};
-            for (let [key, value] of formData.entries()) {
-                data[key] = value;
-            }
+            const dto = {
+                Id: parseInt(formData.get("Id")),
+                Quantity: parseInt(formData.get("Quantity"))
+            };
+
+            const data = [dto];
 
             const apiBaseUrl = '@ViewData["APIBASEURL"]';
-            const apiUrl = apiBaseUrl + '/api/Product';
+            const apiUrl = apiBaseUrl + 'api/Product/updatequantities';
 
             const authToken = '@ViewData["AUTHTOKEN"]';
 
@@ -126,14 +128,14 @@
                 });
 
                 if (response.ok) {
-                    showToast("✅ Product updated successfully", "green");
+                    showToast("Product updated successfully", "green");
                 } else {
-                    showToast("❌ Failed to update product", "red");
-                    alert(JSON.stringify(data) +" : "+ apiBaseUrl +" : "+ formData);
+                    showToast("Failed to update product", "red");
+                    alert(JSON.stringify(data) +" : "+ apiUrl +" : "+ formData + ":"+ authToken);
                 }
             } catch (err) {
                 console.error("Error:", err);
-                showToast("🚨 Error occurred", "red");
+                showToast("Error occurred", "red");
             }
 
             return false;

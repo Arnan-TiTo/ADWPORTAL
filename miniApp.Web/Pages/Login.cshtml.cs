@@ -13,7 +13,7 @@ namespace miniApp.Web.Pages
         private readonly AuthService _authService;
         private readonly IConfiguration _config;
 
-        public string ApiBaseUrl => _config["ApiBaseUrl"] ?? "http://localhost:5252";
+        public string ApiBaseUrl => _config["ApiBaseUrl"] ?? "";
 
         public LoginModel(AuthService authService, IConfiguration config)
         {
@@ -26,7 +26,7 @@ namespace miniApp.Web.Pages
 
         public string? ErrorMessage { get; set; }
 
-        public async Task<IActionResult> OnPostAsync()
+        public async Task<IActionResult> OnPostAsync(string? returnUrl = null)
         {
             var result = await _authService.LoginAsync(Login);
             if (result == null || string.IsNullOrEmpty(result.token))
@@ -52,7 +52,11 @@ namespace miniApp.Web.Pages
 
             await HttpContext.SignInAsync("MyCookieAuth", principal);
 
-            return RedirectToPage("/Index");
+            var safeUrl = string.IsNullOrEmpty(returnUrl) || !Url.IsLocalUrl(returnUrl)
+                ? Url.Page("/Index")
+                : returnUrl;
+
+            return Redirect(safeUrl!);
         }
     }
 }

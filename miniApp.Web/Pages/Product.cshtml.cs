@@ -40,7 +40,7 @@ namespace miniApp.Web.Pages
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AUTHTOKEN);
 
             // Load dropdown
-            var locationResponse = await http.GetFromJsonAsync<List<LocationItem>>($"{APIBASEURL}/api/locations/dropdown");
+            var locationResponse = await http.GetFromJsonAsync<List<LocationItem>>($"{APIBASEURL}api/locations/dropdown");
             if (locationResponse != null)
                 LocationDropdown = locationResponse;
 
@@ -48,7 +48,7 @@ namespace miniApp.Web.Pages
             var username = User.FindFirst(ClaimTypes.Name)?.Value;
             if (!string.IsNullOrEmpty(username))
             {
-                var userInfo = await http.GetFromJsonAsync<UserResponse>($"{APIBASEURL}/api/users/profile?username={username}");
+                var userInfo = await http.GetFromJsonAsync<UserResponse>($"{APIBASEURL}api/users/profile?username={username}");
                 if (userInfo != null)
                 {
                     CurrentUserFullname = userInfo.Fullname;
@@ -60,8 +60,8 @@ namespace miniApp.Web.Pages
             SortOrder = sort ?? "";
 
             var result = string.IsNullOrEmpty(query)
-                ? await http.GetFromJsonAsync<List<ProductItem>>($"{APIBASEURL}/api/product")
-                : await http.GetFromJsonAsync<List<ProductItem>>($"{APIBASEURL}/api/product/productsearch?query={query}");
+                ? await http.GetFromJsonAsync<List<ProductItem>>($"{APIBASEURL}api/product")
+                : await http.GetFromJsonAsync<List<ProductItem>>($"{APIBASEURL}api/product/productsearch?query={query}");
 
             if (result != null)
                 Products = result;

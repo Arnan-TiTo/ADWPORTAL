@@ -39,6 +39,23 @@
                 <option value="@loc.Id">@loc.Name</option>
             }
         </select>
+            
+        <select name="BrandId" class="border rounded-xl px-3 py-2 w-full" required>
+            <option value="" selected hidden>Brand</option>
+            @foreach (var loc in Model.BrandDropdown)
+            {
+                <option value="@loc.Id">@loc.Name</option>
+            }
+        </select>
+
+        <select name="CategoryId" class="border rounded-xl px-3 py-2 w-full" required>
+            <option value="" selected hidden>Category</option>
+            @foreach (var cat in Model.CategoryDropdown)
+            {
+                <option value="@cat.Id">@cat.Name</option>
+            }
+        </select>
+            
 
         <input type="text" name="Name" placeholder="Product name" class="border rounded-xl px-3 py-2 w-full" required />
 
@@ -84,7 +101,7 @@
             const authToken = '@authToken';
 
             try {
-                const res = await fetch(apiBaseUrl + "/api/product", {
+                const res = await fetch(apiBaseUrl + "api/product", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -94,14 +111,14 @@
                 });
 
                 if (res.ok) {
-                    showToast("✅ Stock-in recorded successfully", "green");
+                    showToast("Stock-in recorded successfully", "green");
                     formElement.reset();
                 } else {
-                    showToast("❌ Failed to record stock-in", "red");
+                    showToast("Failed to record stock-in", "red");
                 }
             } catch (err) {
                 console.error("Error:", err);
-                showToast("🚨 Error occurred", "red");
+                showToast("Error occurred", "red");
             }
 
             return false;

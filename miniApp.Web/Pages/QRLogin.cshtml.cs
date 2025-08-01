@@ -26,14 +26,14 @@ namespace miniApp.Web.Pages
 
         public void OnGet()
         {
-            ApiBaseUrl = _config["ApiBaseUrl"] ?? "http://localhost:5252";
+            ApiBaseUrl = _config["ApiBaseUrl"] ?? "";
         }
         public async Task<IActionResult> OnGetAsync()
         {
-            var apiBase = _config["ApiBaseUrl"] ?? "http://localhost:5252";
+            var apiBase = _config["ApiBaseUrl"] ?? "";
             var client = _httpClientFactory.CreateClient();
 
-            var response = await client.GetAsync($"{apiBase}/api/qrlogin/generate");
+            var response = await client.GetAsync($"{apiBase}api/qrlogin/generate");
 
             if (!response.IsSuccessStatusCode)
             {
@@ -45,7 +45,7 @@ namespace miniApp.Web.Pages
             var data = JsonSerializer.Deserialize<GenerateQrResponse>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             QrToken = data?.QrToken;
-            QrImageUrl = $"{apiBase}/api/qrlogin/image?token={QrToken}"; // if using QR image render API (optional)
+            QrImageUrl = $"{apiBase}api/qrlogin/image?token={QrToken}"; 
 
             return Page();
         }

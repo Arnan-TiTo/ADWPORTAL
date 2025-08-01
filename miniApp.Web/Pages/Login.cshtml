@@ -83,7 +83,7 @@
         const apiBase = '@Model.ApiBaseUrl';
 
         async function generateQR() {
-            const res = await fetch(`${apiBase}/api/qrlogin/generate`);
+            const res = await fetch(`${apiBase}api/qrlogin/generate`);
             const data = await res.json();
             qrToken = data.qrToken;
 
@@ -101,7 +101,7 @@
         }
 
         async function simulateScan() {
-            const res = await fetch(`${apiBase}/api/qrlogin/confirm`, {
+            const res = await fetch(`${apiBase}api/qrlogin/confirm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -117,7 +117,7 @@
         }
 
         async function pollImmediately() {
-            const response = await fetch(`${apiBase}/api/qrlogin/scan?token=${qrToken}`, {
+            const response = await fetch(`${apiBase}api/qrlogin/scan?token=${qrToken}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: '{}'

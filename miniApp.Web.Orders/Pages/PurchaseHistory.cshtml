@@ -35,37 +35,39 @@
     </form>
 
     <!-- Button bar -->
-    <div class="flex items-center gap-2 mb-3">
+    <div class="flex flex-wrap items-center gap-2 mb-3">
         <!-- List/Sort -->
         <form method="get" class="flex gap-2 items-center">
-            <select name="SortField" class="border rounded px-1 py-0.5 text-xs" style="min-width: 90px">
+            <select name="SortField" class="border rounded px-1 py-0 text-xs h-7 w-15">
                 @foreach (var (value, label) in Model.SortFields)
                 {
-                    <option value="@value" selected="@(Model.SortField == value ? "selected" : null)">@label</option>
+                    <option value="@value" selected="@(Model.SortField == value ? "selected" : null)">
+                        @label
+                    </option>
                 }
             </select>
-            <select name="SortDir" class="border rounded px-1 py-0.5 text-xs">
+            <select name="SortDir" class="border rounded px-1 py-0 text-xs h-7">
                 <option value="asc" selected="@(Model.SortDir == "asc" ? "selected" : null)">▲</option>
                 <option value="desc" selected="@(Model.SortDir == "desc" ? "selected" : null)">▼</option>
             </select>
-            <input type="hidden" name="Query" value="@Model.Query" />
-            <input type="hidden" name="ProductFilter" value="@Model.ProductFilter" />
-            <input type="hidden" name="OrderNoFilter" value="@Model.OrderNoFilter" />
-            <input type="hidden" name="UnitPriceFilter" value="@Model.UnitPriceFilter" />
-            <button type="submit" class="ml-1 text-xs bg-green-50 rounded px-2 py-1 border border-green-200">Sort</button>
+            <button type="submit" class="ml-1 text-xs bg-green-50 rounded px-1 py-0 border border-green-200 h-7">
+                Sort
+            </button>
         </form>
+
         <!-- Filter -->
-        <button type="button" onclick="toggleFilter()" class="px-3 py-1 rounded border flex items-center gap-1 text-gray-700 text-sm bg-gray-50">
-            <span>🔽</span>
+        <button type="button" onclick="toggleFilter()"
+                class="px-1 py-0 rounded border flex items-center gap-1 text-gray-700 text-sm bg-gray-50 h-7">
             <span>Filter</span>
         </button>
+
         <!-- Download -->
         <form method="post" asp-page-handler="Download" class="ml-auto">
-            <button type="submit" class="px-4 py-1 border rounded bg-white text-black text-sm shadow">Download</button>
+            <button type="submit" class="px-1 py-0 border rounded bg-blue-600 text-white text-xs h-7">
+                Download
+            </button>
         </form>
     </div>
-
-
 
     <!-- Filter bar (Toggle) -->
     <form method="get" id="filterForm" class="mb-3 @(Model.ShowFilter ? "" : "hidden")">
@@ -86,7 +88,7 @@
     <!-- Scrollable Table -->
     <div class="flex-1 min-h-0">
         <div class="overflow-x-auto h-full max-h-[65vh]">
-            <table class="min-w-[1200px] w-full table-auto text-sm">
+            <table class="w-full table-auto text-sm">
                 <thead>
                     <tr class="border-b bg-gray-100">
                         <th class="py-1 px-2 font-semibold">Order No</th>
