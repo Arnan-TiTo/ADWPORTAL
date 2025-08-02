@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Configuration;
-using miniApp.API.Models;
+using miniApp.Web.Models;
 using System.Security.Claims;
 
 namespace miniApp.Web.Pages

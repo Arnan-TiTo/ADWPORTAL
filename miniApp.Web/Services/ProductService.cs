@@ -1,4 +1,4 @@
-﻿using miniApp.API.Dtos;
+﻿using miniApp.Web.Dtos;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
