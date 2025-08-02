@@ -1,4 +1,4 @@
-﻿using miniApp.API.Dtos;
+﻿using miniApp.WebOrders.Dtos;
 
 namespace miniApp.WebOrders.Models
 {

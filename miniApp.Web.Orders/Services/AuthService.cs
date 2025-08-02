@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
-using miniApp.API.Dtos;
+using miniApp.WebOrders.Dtos;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Runtime.Intrinsics.Arm;

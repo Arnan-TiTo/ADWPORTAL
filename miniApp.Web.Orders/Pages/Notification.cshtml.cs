@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Configuration;
-using miniApp.API.Models;
+using miniApp.WebOrders.Models;
 using System.Security.Claims;
 
 namespace miniApp.WebOrders.Pages

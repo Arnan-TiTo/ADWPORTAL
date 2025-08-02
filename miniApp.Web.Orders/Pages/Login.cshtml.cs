@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using miniApp.WebOrders.Services;
 using System.Linq;
 using System.Security.Claims;
-using miniApp.API.Dtos;
+using miniApp.WebOrders.Dtos;
 
 namespace miniApp.WebOrders.Pages
 {
