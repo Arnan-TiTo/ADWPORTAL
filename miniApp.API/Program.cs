@@ -52,30 +52,32 @@ builder.Services.AddMemoryCache();
 
 
 // ========== SWAGGER CONFIG ========== //
-builder.Services.AddSwaggerGen(c =>
+if (builder.Configuration.GetValue<bool>("SwaggerEnabled"))
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "APP API", Version = "v1" });
-    var jwtSecurityScheme = new OpenApiSecurityScheme
+    builder.Services.AddSwaggerGen(c =>
     {
-        BearerFormat = "JWT",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.Http,
-        Scheme = JwtBearerDefaults.AuthenticationScheme,
-        Description = "Input your JWT token in this format: Bearer {your token here}",
-        Reference = new OpenApiReference
+        c.SwaggerDoc("v1", new OpenApiInfo { Title = "APP API", Version = "v1" });
+        var jwtSecurityScheme = new OpenApiSecurityScheme
         {
-            Id = JwtBearerDefaults.AuthenticationScheme,
-            Type = ReferenceType.SecurityScheme
-        }
-    };
-    c.AddSecurityDefinition(jwtSecurityScheme.Reference.Id, jwtSecurityScheme);
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        { jwtSecurityScheme, Array.Empty<string>() }
+            BearerFormat = "JWT",
+            Name = "Authorization",
+            In = ParameterLocation.Header,
+            Type = SecuritySchemeType.Http,
+            Scheme = JwtBearerDefaults.AuthenticationScheme,
+            Description = "Input your JWT token in this format: Bearer {your token here}",
+            Reference = new OpenApiReference
+            {
+                Id = JwtBearerDefaults.AuthenticationScheme,
+                Type = ReferenceType.SecurityScheme
+            }
+        };
+        c.AddSecurityDefinition(jwtSecurityScheme.Reference.Id, jwtSecurityScheme);
+        c.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            { jwtSecurityScheme, Array.Empty<string>() }
+        });
     });
-});
-
+}
 // ========== CORS ========== //
 builder.Services.AddCors(options =>
 {
@@ -99,9 +101,13 @@ Directory.CreateDirectory(uploadsPath);
 
 // ========== MIDDLEWARE ========== //
 app.UseStaticFiles();
-app.UseSwagger();
-app.UseSwaggerUI();
-app.UseCors();
+if (builder.Configuration.GetValue<bool>("SwaggerEnabled"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseCors("AllowSpecificOrigins");
 
 app.UseAuthentication();
 app.UseAuthorization();
