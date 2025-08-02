@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
-using miniApp.API.Dtos;
+using miniApp.Web.Dtos;
 using miniApp.Web.Pages;
 using System.Net.Http;
 using System.Net.Http.Json;

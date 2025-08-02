@@ -5,7 +5,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using miniApp.Web.Models;
 
-namespace miniApp.Web.Middleware
+namespace miniApp.Web.Controllers
 {
     [Route("Session")]
     public class SessionController : Controller
