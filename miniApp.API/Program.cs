@@ -79,13 +79,18 @@ builder.Services.AddSwaggerGen(c =>
 // ========== CORS ========== //
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
+    options.AddPolicy("AllowSpecificOrigins", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        policy.WithOrigins(
+            "https://salereport.vibeandchic.com",
+            "https://frontline.vibeandchic.com"
+        )
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials();
     });
 });
+
 
 var app = builder.Build();
 
