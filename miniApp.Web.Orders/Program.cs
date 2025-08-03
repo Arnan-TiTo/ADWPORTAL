@@ -1,3 +1,4 @@
+﻿using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.FileProviders;
 using miniApp.WebOrders.Middlewares;
 using miniApp.WebOrders.Services;
@@ -20,6 +21,7 @@ builder.Services.AddSession(options =>
     options.IdleTimeout = TimeSpan.FromHours(1);
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 });
 
 builder.Services.AddAuthentication("MyCookieAuth")
@@ -28,27 +30,31 @@ builder.Services.AddAuthentication("MyCookieAuth")
         options.LoginPath = "/Login";
         options.AccessDeniedPath = "/Login";
         options.Cookie.Name = "MiniApp.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; //https
+        options.SlidingExpiration = true;
+        options.ExpireTimeSpan = TimeSpan.FromHours(1);
     });
 
 // DI
-builder.Services.AddScoped<miniApp.WebOrders.Services.AuthService>();
-builder.Services.AddScoped<miniApp.WebOrders.Services.LocationService>();
-
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<LocationService>();
 
 var app = builder.Build();
 
-// Pipeline
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
 }
 
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 app.UseStaticFiles();
 
 var iisRoot = builder.Configuration["ImageRootPath"];
-
 if (Directory.Exists(iisRoot))
 {
     app.UseStaticFiles(new StaticFileOptions
