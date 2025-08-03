@@ -8,6 +8,7 @@ using miniApp.Web.Dtos;
 
 namespace miniApp.Web.Pages
 {
+    [IgnoreAntiforgeryToken]
     public class LoginModel : PageModel
     {
         private readonly AuthService _authService;
@@ -26,25 +27,23 @@ namespace miniApp.Web.Pages
 
         public string? ErrorMessage { get; set; }
 
-        public async Task<IActionResult> OnPostAsync(string? returnUrl = null)
+        public async Task<IActionResult> OnPostSetSessionAsync([FromBody] SetSessionDto dto)
         {
-            var result = await _authService.LoginAsync(Login);
-            if (result == null || string.IsNullOrEmpty(result.token))
-            {
-                ErrorMessage = "Invalid credentials.";
-                return Page();
-            }
+            if (dto == null || string.IsNullOrEmpty(dto.Token))
+                return BadRequest("Invalid token data");
 
-            HttpContext.Session.SetString("JWT", result.token);
-            HttpContext.Session.SetInt32("USERID", result.userid);
-            HttpContext.Session.SetString("FULLNAME", result.fullname);
+            // เก็บลง Session
+            HttpContext.Session.SetString("JWT", dto.Token);
+            HttpContext.Session.SetInt32("USERID", dto.UserId);
+            HttpContext.Session.SetString("FULLNAME", dto.Fullname);
 
+            // Claims สำหรับ CookieAuth
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Name, Login.Username),
-                new Claim("USERID", result.userid.ToString()),
-                new Claim("JWT", result.token),
-                new Claim("FULLNAME",result.fullname)
+                new Claim(ClaimTypes.Name, dto.Username),
+                new Claim("USERID", dto.UserId.ToString()),
+                new Claim("JWT", dto.Token),
+                new Claim("FULLNAME", dto.Fullname)
             };
 
             var identity = new ClaimsIdentity(claims, "MyCookieAuth");
@@ -52,11 +51,16 @@ namespace miniApp.Web.Pages
 
             await HttpContext.SignInAsync("MyCookieAuth", principal);
 
-            var safeUrl = string.IsNullOrEmpty(returnUrl) || !Url.IsLocalUrl(returnUrl)
-                ? Url.Page("/Index")
-                : returnUrl;
-
-            return Redirect(safeUrl!);
+            return new JsonResult(new { success = true });
         }
+
+        public class SetSessionDto
+        {
+            public string Token { get; set; } = "";
+            public int UserId { get; set; }
+            public string Fullname { get; set; } = "";
+            public string Username { get; set; } = "";
+        }
+
     }
 }

@@ -8,7 +8,7 @@
         <!-- Logo + Welcome -->
         <div class="text-center mb-6">
             <img src="/images/logo.png" alt="Logo" class="mx-auto w-24 h-24 mb-4" />
-            <h2 class="text-xl font-semibold text-black">Welcome to Frontline</h2>
+            <h2 class="text-xl font-semibold text-black">Welcome to Sale Report</h2>
             <p class="text-sm text-gray-600">Sign in to your account</p>
         </div>
 
@@ -20,12 +20,12 @@
         }
 
         <!-- Login Form -->
-        <form method="post" class="space-y-4">
-            <input asp-for="Login.Username"
+        <form onsubmit="return loginDirect(event)" class="space-y-4">
+            <input id="username"
                    placeholder="Username"
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black" />
 
-            <input asp-for="Login.Password" type="password"
+            <input id="password" type="password"
                    placeholder="Password"
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black" />
 
@@ -61,80 +61,133 @@
             </button>
 
             <!-- Register -->
-            <a href="/Register"
+            <a asp-page="/Register"
                class="w-full block bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-center font-semibold text-sm transition">
                 Register
             </a>
 
             <p class="text-xs text-center text-gray-400 mt-2">
                 By signing in, you agree to our
-                <a href="/terms" class="underline">Terms</a> and
-                <a href="/privacy" class="underline">Privacy Policy</a>
+                <a asp-page="/Terms" class="underline">Terms</a> and
+                <a asp-page="/Privacy" class="underline">Privacy Policy</a>
             </p>
         </form>
     </div>
 </div>
 
+
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
     <script>
-        let qrToken = null;
-        let pollInterval = null;
-        const apiBase = '@Model.ApiBaseUrl';
+                let qrToken = null;
+                let pollInterval = null;
+                const apiBase = '@Model.ApiBaseUrl';
 
-        async function generateQR() {
-            const res = await fetch(`${apiBase}api/qrlogin/generate`);
-            const data = await res.json();
-            qrToken = data.qrToken;
+                async function loginDirect(event) {
+            event.preventDefault();
 
-            const wrapper = document.getElementById("qrCanvasWrapper");
-            wrapper.innerHTML = "";
-            QRCode.toCanvas(qrToken, { width: 200 }, function (err, canvas) {
-                if (err) return console.error(err);
-                wrapper.appendChild(canvas);
-            });
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
 
-            document.getElementById('qrContainer').classList.remove('hidden');
-
-            if (pollInterval) clearInterval(pollInterval);
-            pollInterval = setInterval(pollImmediately, 2000);
-        }
-
-        async function simulateScan() {
-            const res = await fetch(`${apiBase}api/qrlogin/confirm`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    qrToken: qrToken,
-                    username: 'admin',
-                    password: '123456'
-                })
-            });
-
-            if (res.ok) {
-                pollImmediately();
+            if (!username || !password) {
+                alert("Please enter username and password.");
+                return false;
             }
-        }
 
-        async function pollImmediately() {
-            const response = await fetch(`${apiBase}api/qrlogin/scan?token=${qrToken}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: '{}'
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-
-                await fetch('/Session/SetJwt', {
+            try {
+                const res = await fetch(`${apiBase}api/Auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: result.token }),
-                    credentials: 'include'
+                    body: JSON.stringify({ username, password })
                 });
 
-                window.location.href = "/";
+                if (res.ok) {
+                    const result = await res.json();
+
+                    // เรียก backend Razor Page เพื่อ set session + cookie
+                    const setCookieRes = await fetch('/Login?handler=SetSession', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            token: result.token,
+                            userId: result.userId,
+                            fullname: result.fullname,
+                            username: username
+                        }),
+                        credentials: 'include'
+                    });
+
+                    if (setCookieRes.ok) {
+                        window.location.href = "/Index";
+                    } else {
+                        alert("Failed to set session.");
+                    }
+                } else {
+                    const errorMsg = await res.text();
+                    alert(errorMsg || "Invalid username or password.");
+                }
+            } catch (err) {
+                console.error("Login error:", err);
+                alert("Login failed. Please try again.");
             }
+
+            return false;
         }
+
+
+                async function generateQR() {
+                    const res = await fetch(`${apiBase}api/qrlogin/generate`);
+                    const data = await res.json();
+                    qrToken = data.qrToken;
+
+                    const wrapper = document.getElementById("qrCanvasWrapper");
+                    wrapper.innerHTML = "";
+                    QRCode.toCanvas(qrToken, { width: 200 }, function (err, canvas) {
+                        if (err) return console.error(err);
+                        wrapper.appendChild(canvas);
+                    });
+
+                    document.getElementById('qrContainer').classList.remove('hidden');
+
+                    if (pollInterval) clearInterval(pollInterval);
+                    pollInterval = setInterval(pollImmediately, 2000);
+                }
+
+                async function simulateScan() {
+                    const res = await fetch(`${apiBase}api/qrlogin/confirm`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            qrToken: qrToken,
+                            username: 'admin',
+                            password: '123456'
+                        })
+                    });
+
+                    if (res.ok) {
+                        pollImmediately();
+                    }
+                }
+
+                async function pollImmediately() {
+                    const response = await fetch(`${apiBase}api/qrlogin/scan?token=${qrToken}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: '{}'
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+
+                        await fetch('/Session/SetJwt', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: result.token }),
+                            credentials: 'include'
+                        });
+
+                        window.location.href = "/";
+                    }
+                }
     </script>
 }
