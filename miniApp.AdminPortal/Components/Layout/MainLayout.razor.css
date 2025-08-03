@@ -1,0 +1,151 @@
+﻿:root {
+    --color-primary: #0b3d4b;
+    --color-gradient: linear-gradient(180deg, #0b3d4b 0%, #16324f 50%, #1e2742 100%);
+}
+
+/* Navbar */
+.top-row {
+    height: 3.5rem;
+    background-color: var(--color-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+    z-index: 1001;
+    position: sticky;
+    top: 0;
+}
+
+.navbar-left {
+    display: flex;
+    align-items: center;
+}
+
+.brand {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-left: 1rem;
+    color: white;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 240px;
+    background: var(--color-gradient);
+    overflow-y: auto;
+    transition: transform 0.3s ease-in-out;
+    padding: 1rem;
+    height: calc(100vh - 3.5rem);
+}
+
+    .sidebar.hide {
+        transform: translateX(-100%);
+    }
+
+    .sidebar.show {
+        transform: translateX(0);
+    }
+
+/* Overlay for mobile */
+.overlay {
+    position: fixed;
+    top: 3.5rem;
+    left: 0;
+    width: 100%;
+    height: calc(100vh - 3.5rem);
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+}
+
+/* Main content */
+.layout-container {
+    display: flex;
+    min-height: calc(100vh - 3.5rem);
+    background: #ffffff;
+}
+
+.main {
+    flex: 1;
+    transition: margin-left 0.3s ease-in-out;
+    background: #ffffff;
+    padding: 1rem;
+}
+
+    .main.with-sidebar {
+        margin-left: 240px;
+    }
+
+    .main.full {
+        margin-left: 0;
+    }
+
+.content {
+    background: #ffffff;
+    min-height: 100%;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    padding: 1rem;
+}
+
+/* Section Title */
+.nav-section-title {
+    font-weight: bold;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    color: white;
+    margin-bottom: 0.75rem;
+}
+
+/* Nav items */
+.nav-item ::deep .nav-link {
+    color: white;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    line-height: 2.5rem;
+    width: 100%;
+    padding-left: 0.5rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+.nav-item ::deep a.active {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-weight: bold;
+}
+
+.nav-item ::deep .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+/* Toggle Button */
+.menu-toggle {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+/* Responsive */
+@media (min-width: 992px) {
+    .sidebar {
+        transform: translateX(0) !important;
+        position: sticky;
+        top: 3.5rem;
+    }
+
+    .overlay {
+        display: none !important;
+    }
+
+    .menu-toggle {
+        display: none;
+    }
+}

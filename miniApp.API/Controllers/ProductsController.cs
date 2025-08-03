@@ -1,8 +1,11 @@
-﻿using Microsoft.AspNetCore.Hosting;
+﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.JSInterop;
 using miniApp.API.Data;
 using miniApp.API.Dtos;
 using miniApp.API.Models;
@@ -10,7 +13,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
+using static System.Net.WebRequestMethods;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace miniApp.API.Controllers
 {
@@ -253,6 +260,134 @@ namespace miniApp.API.Controllers
             await _context.SaveChangesAsync();
             return Ok(new { updated = products.Count });
         }
+        @page "/products"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<h3> Product List</h3>
+
+@if(products == null)
+        {
+    < p >< em > Loading...</ em ></ p >
+}
+else if (!products.Any())
+{
+    <p>No products found.</p>
+}
+else
+{
+    <table class="table table-bordered table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Image</th>
+                <th>Name</th>
+                <th>SKU</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Qty</th>
+                <th style = "width:120px;" > Action </ th >
+            </ tr >
+        </ thead >
+        < tbody >
+            @foreach(var p in products)
+            {
+                <tr>
+                    <td>
+                        @if(!string.IsNullOrEmpty(p.ImageUrl))
+    {
+                            < img src = "@($"{ ApiBaseUrl}
+        { p.ImageUrl}
+        ")" alt = "@p.Name" width = "50" height = "50" />
+                        }
+                        else
+                        {
+                            <span>-</span>
+                        }
+                    </ td >
+                    < td > @p.Name </ td >
+                    < td > @p.Sku </ td >
+                    < td > @p.CategoryName </ td >
+                    < td > @p.Price.ToString("C") </ td >
+                    < td > @p.Quantity </ td >
+                    < td >
+                        < button class= "btn btn-sm btn-primary me-2" @onclick = "() => EditProduct(p.Id)" >
+                            < i class= "bi bi-pencil-square" ></ i >
+                        </ button >
+                        < button class= "btn btn-sm btn-danger" @onclick = "() => DeleteProduct(p.Id)" >
+                            < i class= "bi bi-trash" ></ i >
+                        </ button >
+                    </ td >
+                </ tr >
+            }
+        </ tbody >
+    </ table >
+}
+
+@code {
+    private List<ProductDto>? products;
+private string ApiBaseUrl = "http://localhost/appapi"; // ค่า base URL
+
+protected override async Task OnInitializedAsync()
+{
+    // ดึง Token จาก Environment Variable (Registry)
+    var token = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
+
+    if (string.IsNullOrEmpty(token))
+    {
+        await JSRuntime.InvokeVoidAsync("alert", "Auth token not found. Please login.");
+        Navigation.NavigateTo("/login");
+        return;
+    }
+
+    Http.BaseAddress = new Uri(ApiBaseUrl);
+    Http.DefaultRequestHeaders.Authorization =
+        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+    try
+    {
+        products = await Http.GetFromJsonAsync<List<ProductDto>>("api/Product");
+    }
+    catch (Exception ex)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"Failed to load products: {ex.Message}");
+    }
+}
+
+private void EditProduct(int id)
+{
+    Navigation.NavigateTo($"/product-edit/{id}");
+}
+
+private async Task DeleteProduct(int id)
+{
+    var confirm = await JSRuntime.InvokeAsync<bool>("confirm", $"Delete product ID {id}?");
+    if (confirm)
+    {
+        var response = await Http.DeleteAsync($"api/Product/{id}");
+        if (response.IsSuccessStatusCode)
+        {
+            products?.Remove(products.First(p => p.Id == id));
+            StateHasChanged();
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Failed to delete product");
+        }
+    }
+}
+
+public class ProductDto
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+    public string? Sku { get; set; }
+    public string? CategoryName { get; set; }
+    public string? ImageUrl { get; set; }
+    public decimal Price { get; set; }
+    public int Quantity { get; set; }
+}
+}
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)

@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "miniApp.Web", "miniApp.Web\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "miniApp.WebOrders", "miniApp.Web.Orders\miniApp.WebOrders.csproj", "{9ABDC6BD-00C7-4A41-8E7A-48100B0E58CF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "miniApp.AdminPortal", "miniApp.AdminPortal\miniApp.AdminPortal.csproj", "{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{9ABDC6BD-00C7-4A41-8E7A-48100B0E58CF}.Release|x64.Build.0 = Release|Any CPU
 		{9ABDC6BD-00C7-4A41-8E7A-48100B0E58CF}.Release|x86.ActiveCfg = Release|Any CPU
 		{9ABDC6BD-00C7-4A41-8E7A-48100B0E58CF}.Release|x86.Build.0 = Release|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Debug|x64.Build.0 = Debug|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Debug|x86.Build.0 = Debug|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Release|Any CPU.Build.0 = Release|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Release|x64.ActiveCfg = Release|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Release|x64.Build.0 = Release|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Release|x86.ActiveCfg = Release|Any CPU
+		{285C91F6-67DB-47B4-B864-7C3D4D2DEF46}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

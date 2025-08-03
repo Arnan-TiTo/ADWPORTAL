@@ -1,0 +1,55 @@
+﻿@inherits LayoutComponentBase
+@inject IJSRuntime JSRuntime
+
+<script src="~/js/helpers.js"></script>
+
+<div class="page">
+    <div class="top-row navbar">
+        <div class="navbar-left">            
+            <span class="brand">Vibe Chic Innovations</span>
+            <button class="menu-toggle" @onclick="ToggleSidebar">☰</button>
+        </div>
+        <a href="https://vibeandchic.com/" target="_blank">About</a>
+    </div>
+
+    <div class="layout-container">
+        <div class="@SidebarCssClass">
+            <div class="nav-section-title">Pages</div>
+            <NavMenu />
+        </div>
+
+        <main class="@MainCssClass">
+            <article class="content">
+                @Body
+            </article>
+        </main>
+    </div>
+</div>
+
+@if (!sidebarVisible && isMobile)
+{
+    <div class="overlay" @onclick="ToggleSidebar"></div>
+}
+
+@code {
+    private bool sidebarVisible = true;
+    private bool isMobile = false;
+
+    private string SidebarCssClass => sidebarVisible ? "sidebar show" : "sidebar hide";
+    private string MainCssClass => sidebarVisible ? "main with-sidebar" : "main full";
+
+    private void ToggleSidebar()
+    {
+        sidebarVisible = !sidebarVisible;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var width = await JSRuntime.InvokeAsync<int>("blazorHelpers.getWindowWidth");
+            isMobile = width < 992;
+            StateHasChanged();
+        }
+    }
+}
