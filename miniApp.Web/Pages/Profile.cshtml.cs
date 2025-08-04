@@ -27,7 +27,9 @@ namespace miniApp.Web.Pages
         {
             var USERID = HttpContext.Session.GetInt32("USERID") ?? 0;
             var APIBASEURL = _config["APIBASEURL"] ?? "";
-            var AUTHTOKEN = _config["AUTHTOKEN"] ?? "";
+            var AUTHTOKEN = _config["AUTHTOKEN"] ?? Environment.GetEnvironmentVariable("AuthToken") ?? "";
+
+
             var client = _clientFactory.CreateClient();
             client.BaseAddress = new Uri(APIBASEURL);
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AUTHTOKEN);

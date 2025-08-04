@@ -1,55 +1,40 @@
 ﻿@inherits LayoutComponentBase
-@inject IJSRuntime JSRuntime
-
-<script src="~/js/helpers.js"></script>
 
 <div class="page">
-    <div class="top-row navbar">
-        <div class="navbar-left">            
-            <span class="brand">Vibe Chic Innovations</span>
-            <button class="menu-toggle" @onclick="ToggleSidebar">☰</button>
-        </div>
-        <a href="https://vibeandchic.com/" target="_blank">About</a>
+    <!-- Sidebar -->
+    <div class="sidebar @(isSidebarOpen ? "open" : "closed")">
+        <nav>
+            <ul>
+                <li><a href="/">Home</a></li>
+                <li><a href="ProductList">Product</a></li>
+                <li><a href="LocationList">Location</a></li>
+            </ul>
+        </nav>
     </div>
 
-    <div class="layout-container">
-        <div class="@SidebarCssClass">
-            <div class="nav-section-title">Pages</div>
-            <NavMenu />
+    <!-- Main Content -->
+    <div class="main-content @(isSidebarOpen ? "shrink" : "")">
+        <!-- Top bar -->
+        <div class="top-row">
+            <div class="logo-area">
+                <img src="images/logo.png" alt="Logo" class="logo"/>VAC Admin Portal
+                <button class="menu-toggle" @onclick="ToggleSidebar">
+                    ☰
+                </button>
+            </div>
         </div>
 
-        <main class="@MainCssClass">
-            <article class="content">
-                @Body
-            </article>
+        <main>
+            @Body
         </main>
     </div>
 </div>
 
-@if (!sidebarVisible && isMobile)
-{
-    <div class="overlay" @onclick="ToggleSidebar"></div>
-}
-
 @code {
-    private bool sidebarVisible = true;
-    private bool isMobile = false;
-
-    private string SidebarCssClass => sidebarVisible ? "sidebar show" : "sidebar hide";
-    private string MainCssClass => sidebarVisible ? "main with-sidebar" : "main full";
+    private bool isSidebarOpen = false;
 
     private void ToggleSidebar()
     {
-        sidebarVisible = !sidebarVisible;
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            var width = await JSRuntime.InvokeAsync<int>("blazorHelpers.getWindowWidth");
-            isMobile = width < 992;
-            StateHasChanged();
-        }
+        isSidebarOpen = !isSidebarOpen;
     }
 }

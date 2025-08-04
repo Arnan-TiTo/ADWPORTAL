@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -214,20 +215,34 @@ namespace miniApp.API.Controllers
             product.LocationId = dto.LocationId;
             product.Price = dto.Price;
             product.BrandId = dto.BrandId;
-
-
-            if (dto.Image != null)
-            {
-                var fileName = Guid.NewGuid() + Path.GetExtension(dto.Image.FileName);
-                var savePath = Path.Combine(_env.WebRootPath, "images/products", fileName);
-                using var stream = new FileStream(savePath, FileMode.Create);
-                await dto.Image.CopyToAsync(stream);
-                product.ImageUrl = "/images/products/" + fileName;
-            }
+            product.CategoryId = dto.CategoryId;
 
             await _context.SaveChangesAsync();
 
             return Ok(product);
+        }
+
+        [HttpPost("UploadImage/{id}")]
+        public async Task<IActionResult> UploadImage(int id, IFormFile file)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+
+            var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
+            if (product == null) return NotFound();
+
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded.");
+
+            var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
+            var savePath = Path.Combine(_env.WebRootPath, "images/products", fileName);
+
+            using var stream = new FileStream(savePath, FileMode.Create);
+            await file.CopyToAsync(stream);
+
+            product.ImageUrl = "/images/products/" + fileName;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { imageUrl = product.ImageUrl });
         }
 
 

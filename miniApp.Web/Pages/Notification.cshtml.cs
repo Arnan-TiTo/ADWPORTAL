@@ -22,7 +22,8 @@ namespace miniApp.Web.Pages
             var USERID = HttpContext.Session.GetInt32("USERID") ?? 0;
             ViewData["USERID"] = USERID;
             ViewData["APIBASEURL"] = _config["APIBASEURL"] ?? "";
-            ViewData["AUTHTOKEN"] = _config["AUTHTOKEN"] ?? "";
+            ViewData["AUTHTOKEN"] = _config["AUTHTOKEN"] ??
+             Environment.GetEnvironmentVariable("AuthToken") ?? "";
         }
     }
 }

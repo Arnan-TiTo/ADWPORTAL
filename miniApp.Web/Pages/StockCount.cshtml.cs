@@ -16,7 +16,8 @@ namespace miniApp.Web.Pages
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             APIBASEURL = _configuration["APIBASEURL"] ?? "";
-            AUTHTOKEN = _configuration["AUTHTOKEN"] ?? "";
+            AUTHTOKEN = _configuration["AUTHTOKEN"] ?? Environment.GetEnvironmentVariable("AuthToken") ?? "";
+
         }
 
         public string SearchQuery { get; set; } = "";
