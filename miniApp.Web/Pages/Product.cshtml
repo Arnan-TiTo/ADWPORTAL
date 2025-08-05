@@ -1,12 +1,13 @@
 ﻿@page
 @model miniApp.Web.Pages.ProductModel
+@inject IHttpClientFactory HttpClientFactory
 @{
     ViewData["Title"] = "Product";
-    var apiBaseUrl = @Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg
-        ? cfg["ApiBaseUrl"] ?? ""
-        : "";
     var authToken = @Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration config
         ? config["AUTHTOKEN"] ?? ""
+        : "";
+    var apiBaseUrl = @Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg
+        ? cfg["APIBASEURL"] ?? ""
         : "";
 }
 
@@ -18,8 +19,8 @@
     </div>
 
     <!-- Search -->
-    <form onsubmit="return loadProducts(event)" class="relative">
-        <input id="queryInput" type="text" placeholder="Search by name or SKU"
+    <form method="get" class="relative">
+        <input type="text" name="query" value="@Model.SearchQuery" placeholder="Search by name or SKU"
                class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm" />
         <button type="submit"
                 class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
@@ -27,20 +28,69 @@
         </button>
     </form>
 
-    <!-- Sort -->
+    <!-- Sort & Alignment Buttons -->
     <div class="flex gap-2 mb-4">
-        <button onclick="loadProducts(null,'asc')"
-                class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm">
-            🔼
-        </button>
-        <button onclick="loadProducts(null,'desc')"
-                class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm">
-            🔽
-        </button>
+        <a href="?query=@Model.SearchQuery&sort=asc" class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm">
+            <img src="/images/icons/Alignment.PNG" class="w-5 h-5 inline" />
+        </a>
+        <a href="?query=@Model.SearchQuery&sort=@(Model.SortOrder == "asc" ? "desc" : "asc")"
+           class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+            <img src="/images/icons/Sort.png" alt="Sort Icon" class="w-5 h-5" />
+            Sort @(Model.SortOrder == "asc" ? "🔽" : "🔼")
+        </a>
     </div>
 
     <!-- Results -->
-    <div id="productList" class="space-y-6"></div>
+    @if (Model.Products != null && Model.Products.Count > 0)
+    {
+        <div class="space-y-6">
+            @foreach (var product in Model.Products)
+            {
+                <div class="bg-white border rounded-xl p-4 shadow-sm">
+                    <div class="text-center mb-2">
+                        <img src="/images/products/@product.ImageUrl" alt="Product" class="w-20 h-20 mx-auto mb-2" />
+                        <p class="text-sm text-gray-500">@product.Name</p>
+                    </div>
+
+                    <form onsubmit="return submitEditItem(this, event);" class="space-y-4">
+                        <input type="hidden" name="Name" value="@product.Name" />
+                        <input type="hidden" name="Sku" value="@product.Sku" />
+                        <input type="hidden" name="Description" value="@product.Description" />
+                        <input type="hidden" name="LocationId" value="@product.LocationId" />
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="text" name="Date" value="@product.CreatedAt?.ToString("dd/MM/yyyy")"
+                                   class="w-full border rounded-xl px-4 py-2 text-sm bg-gray-100 text-gray-500" readonly />
+                            <input type="text" value="@product.Sku"
+                                   class="w-full border rounded-xl px-4 py-2 text-sm bg-gray-100 text-gray-500" readonly />
+                        </div>
+
+                        <input type="number" name="Quantity" value="@product.Quantity"
+                               class="w-full border rounded-xl px-4 py-2 text-sm" required />
+
+                        <input type="text" value="@product.Description"
+                               class="w-full border rounded-xl px-4 py-2 text-sm bg-gray-100 text-gray-500" readonly />
+
+                        <input type="text" readonly value="@product.UserFullname"
+                               class="w-full border rounded-xl px-4 py-2 text-sm text-gray-500 bg-gray-100" />
+
+                        <input type="hidden" name="UserId" value="@product.UserId" />
+                        <input type="text" name="Note" value="@product.Note"
+                               placeholder="Note" class="w-full border rounded-xl px-4 py-2 text-sm" />
+                        <input type="hidden" name="Id" value="@product.Id" />
+
+                        <button type="submit" class="w-full bg-black text-white py-3 rounded-xl font-semibold">
+                            Edit Item
+                        </button>
+                    </form>
+                </div>
+            }
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(Model.SearchQuery))
+    {
+        <p class="text-center text-sm text-gray-500">No products found for "@Model.SearchQuery"</p>
+    }
 </div>
 
 <!--Toast Notification Container -->
@@ -50,95 +100,44 @@
 
 @section Scripts {
     <script>
-        const apiBaseUrl = '@apiBaseUrl';
-        const authToken = '@authToken';
+        async function submitEditItem(formElement) {
+            event?.preventDefault();
 
-        async function loadProducts(e, sort = null) {
-            if (e) e.preventDefault();
+            const formData = new FormData(formElement);
+            const dto = {
+                Id: parseInt(formData.get("Id")),
+                Quantity: parseInt(formData.get("Quantity"))
+            };
 
-            const query = document.getElementById('queryInput').value.trim();
-            let url = `${apiBaseUrl}api/product`;
-            if (query) url = `${apiBaseUrl}api/product/productsearch?query=${encodeURIComponent(query)}`;
+            const data = [dto];
 
-            try {
-                const res = await fetch(url, {
-                    headers: { "Authorization": "Bearer " + authToken }
-                });
+            const apiBaseUrl = '@ViewData["APIBASEURL"]';
+            const apiUrl = apiBaseUrl + 'api/Product/updatequantities';
 
-                if (!res.ok) throw new Error("Failed to fetch products");
-
-                let products = await res.json();
-
-                if (sort === "asc")
-                    products.sort((a,b) => a.name.localeCompare(b.name));
-                else if (sort === "desc")
-                    products.sort((a,b) => b.name.localeCompare(a.name));
-
-                renderProducts(products);
-
-            } catch (err) {
-                console.error(err);
-                showToast("Error loading products", "red");
-            }
-
-            return false;
-        }
-
-        function renderProducts(products) {
-            const container = document.getElementById("productList");
-            container.innerHTML = "";
-
-            if (!products || products.length === 0) {
-                container.innerHTML = `<p class="text-center text-sm text-gray-500">No products found</p>`;
-                return;
-            }
-
-            for (const p of products) {
-                container.innerHTML += `
-                    <div class="bg-white border rounded-xl p-4 shadow-sm">
-                        <div class="text-center mb-2">
-                            <img src="${p.imageUrl || '/images/no-image.png'}" class="w-20 h-20 mx-auto mb-2" />
-                            <p class="text-sm text-gray-500">${p.name}</p>
-                        </div>
-                        <form onsubmit="return updateQuantity(this,event)">
-                            <input type="hidden" name="Id" value="${p.id}" />
-                            <input type="number" name="Quantity" value="${p.quantity}"
-                                   class="w-full border rounded-xl px-4 py-2 text-sm" required />
-                            <button type="submit"
-                                    class="w-full bg-black text-white py-3 rounded-xl font-semibold mt-2">
-                                Update
-                            </button>
-                        </form>
-                    </div>
-                `;
-            }
-        }
-
-        async function updateQuantity(form, e) {
-            e.preventDefault();
-            const formData = new FormData(form);
-            const dto = [{
-                id: parseInt(formData.get("Id")),
-                quantity: parseInt(formData.get("Quantity"))
-            }];
+            const authToken = '@ViewData["AUTHTOKEN"]';
 
             try {
-                const res = await fetch(`${apiBaseUrl}api/Product/updatequantities`, {
+                const response = await fetch(apiUrl, {
                     method: "PUT",
                     headers: {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + authToken
                     },
-                    body: JSON.stringify(dto)
+                    body: JSON.stringify(data)
+
                 });
 
-                if (res.ok) showToast("Product updated successfully", "green");
-                else showToast("Failed to update product", "red");
-
+                if (response.ok) {
+                    showToast("Product updated successfully", "green");
+                } else {
+                    showToast("Failed to update product", "red");
+                    alert(JSON.stringify(data) +" : "+ apiUrl +" : "+ formData + ":"+ authToken);
+                }
             } catch (err) {
-                console.error(err);
-                showToast("Error updating product", "red");
+                console.error("Error:", err);
+                showToast("Error occurred", "red");
             }
+
             return false;
         }
 
@@ -146,12 +145,14 @@
             const toast = document.getElementById("toast");
             const content = document.getElementById("toastContent");
             content.textContent = message;
-            content.className = `px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-${color}-500`;
-            toast.classList.remove("hidden");
-            setTimeout(() => toast.classList.add("hidden"), 3000);
-        }
+            content.className =
+                "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-" + color + "-500";
 
-        // auto load when page ready
-        document.addEventListener("DOMContentLoaded", () => loadProducts());
+            toast.classList.remove("hidden");
+
+            setTimeout(() => {
+                toast.classList.add("hidden");
+            }, 6000);
+        }
     </script>
 }
