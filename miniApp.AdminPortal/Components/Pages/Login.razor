@@ -1,0 +1,199 @@
+﻿@page "/login"
+@attribute [AllowAnonymous]
+@rendermode InteractiveServer
+@layout EmptyLayout
+
+@using Microsoft.JSInterop
+@inject IHttpClientFactory HttpClientFactory
+@inject IOptions<miniApp.AdminPortal.Models.ApiSettings> Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<!-- แถวนี้คือ wrapper ให้กึ่งกลางจอ -->
+<div class="min-vh-100 d-flex align-items-center justify-content-center bg-body-tertiary">
+    <div class="card shadow rounded-4" style="width:100%;max-width:460px">
+        <div class="card-body p-4">
+
+            <!-- โลโก้ + หัวข้อ -->
+            <div class="text-center mb-4">
+                <img src="/images/logo.png" alt="Logo" class="mb-2" style="height:56px" />
+                <h4 class="fw-semibold mb-1">Admin Portal</h4>
+                <div class="text-secondary small">Sign in to your account</div>
+            </div>
+
+            <EditForm Model="_model" OnValidSubmit="HandleLogin"
+                      @onsubmit:preventDefault FormName="login">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <InputText class="form-control" @bind-Value="_model.Username" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <InputText type="password" class="form-control" @bind-Value="_model.Password" />
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 mb-3" disabled="@_busy">
+                    @(_busy ? "Signing in..." : "Sign in")
+                </button>
+
+                <div class="d-flex align-items-center my-2">
+                    <div class="flex-grow-1 border-top"></div>
+                    <span class="px-2 text-muted small">or</span>
+                    <div class="flex-grow-1 border-top"></div>
+                </div>
+
+                <button type="button" class="btn btn-outline-secondary w-100" @onclick="OpenQrScanner">
+                    Continue with QR Code
+                </button>
+
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <div class="alert alert-danger mt-3 mb-0 py-2">@_error</div>
+                }
+            </EditForm>
+
+            @if (showQr)
+            {
+                <div class="mt-4">
+                    <div class="border rounded-3 overflow-hidden">
+                        <video @ref="_videoRef" class="w-100" style="max-height:280px;background:#000" playsinline></video>
+                    </div>
+
+                    <div class="mt-2 d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="SwitchCamera">Switch Camera</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ChooseQrImage">Choose from Photos</button>
+                        <button class="btn btn-sm btn-outline-danger ms-auto" @onclick="CloseQr">Close</button>
+                    </div>
+
+                    <div class="small text-muted mt-2">@qrStatus</div>
+                    <input id="qrFile" type="file" accept="image/*" style="display:none" />
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+
+@code {
+    private LoginVm _model = new();
+    private bool _busy;
+    private string? _error;
+
+    // ==== QR state ====
+    private bool showQr;
+    private string qrStatus = "";
+    private DotNetObjectReference<Login>? _dotNetRef;
+    private ElementReference _videoRef;
+    private bool _openQrPending;
+
+    private sealed class LoginResponse
+    {
+        public string token { get; set; } = "";
+        public int userId { get; set; }
+        public string fullname { get; set; } = "";
+    }
+
+    private async Task HandleLogin()
+    {
+        _busy = true; _error = null;
+
+        try
+        {
+            // 1) เรียก API login
+            var api = HttpClientFactory.CreateClient("ApiClient");
+            var resp = await api.PostAsJsonAsync("api/Auth/login",
+                           new { username = _model.Username, password = _model.Password });
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                _error = await resp.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(_error)) _error = "Invalid username or password.";
+                return;
+            }
+
+            var data = await resp.Content.ReadFromJsonAsync<LoginResponse>();
+            if (data is null || string.IsNullOrWhiteSpace(data.token))
+            { _error = "No token returned."; return; }
+
+            // 2) ตั้ง session/cookie ผ่าน fetch (ที่ฝั่งเบราว์เซอร์)
+            var ok = await JS.InvokeAsync<bool>("miniapp.setSession", new
+            {
+                token = data.token,
+                userId = data.userId,
+                fullname = data.fullname,
+                username = _model.Username
+            });
+            if (!ok) { _error = "Failed to set session."; return; }
+
+            // 3) reload หน้าแรกให้คุกกี้มีผล
+            Nav.NavigateTo("/", forceLoad: true, replace: true);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    // ==== QR Login ====
+    private Task SwitchCamera() => JS.InvokeVoidAsync("miniqr.switch").AsTask();
+    private Task ChooseQrImage() => JS.InvokeVoidAsync("miniqr.choose", "qrFile").AsTask();
+
+    private async Task CloseQr()
+    {
+        await JS.InvokeVoidAsync("miniqr.close");
+        showQr = false; qrStatus = "";
+    }
+
+    private Task OpenQrScanner()
+    {
+        showQr = true; qrStatus = "Initializing camera...";
+        _openQrPending = true;            // รอเรนเดอร์ก่อนค่อยเปิดกล้อง
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_openQrPending && showQr)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("miniqr.open", _dotNetRef, _videoRef); // ส่ง ElementReference
+            _openQrPending = false;
+        }
+    }
+
+    [JSInvokable]
+    public async Task QrDecoded(string value)
+    {
+        try
+        {
+            qrStatus = "QR detected. Logging in...";
+            var api = HttpClientFactory.CreateClient("ApiClient");
+            var r = await api.PostAsJsonAsync("api/QrLogin/loginByQr", new { qr = value });
+            if (!r.IsSuccessStatusCode) { qrStatus = await r.Content.ReadAsStringAsync(); return; }
+
+            var result = await r.Content.ReadFromJsonAsync<LoginResponse>();
+            if (result is null || string.IsNullOrWhiteSpace(result.token)) { qrStatus = "QR login failed."; return; }
+
+            var ok = await JS.InvokeAsync<bool>("miniapp.setSession", new
+            {
+                token = result.token,
+                userId = result.userId,
+                fullname = result.fullname,
+                username = _model.Username
+            });
+
+            if (ok) Nav.NavigateTo("/", forceLoad: true, replace: true);
+            else qrStatus = "Failed to set session.";
+        }
+        catch (Exception ex) { qrStatus = ex.Message; }
+    }
+
+    public class LoginVm
+    {
+        [System.ComponentModel.DataAnnotations.Required] public string Username { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required] public string Password { get; set; } = "";
+    }
+}
