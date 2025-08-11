@@ -49,10 +49,25 @@
                 <!-- Navbar -->
                 <div class="flex justify-between items-center px-4 py-3 shadow-md bg-white sticky top-0 z-30">
                     <button onclick="toggleSidebar()" class="text-2xl">☰</button>
-                    <div class="text-sm text-gray-700 font-medium truncate max-w-[60%]">
-                        Welcome : 👤  @HttpContextAccessor.HttpContext?.Session.GetString("FULLNAME")
+
+                    <div class="flex items-center gap-2 text-sm text-gray-700 font-medium">
+                        <a asp-page="/Profile"
+                            class="inline-flex items-center gap-2 px-3 py-2 rounded hover:bg-green-100 truncate max-w-[260px]">
+                            <span>Welcome :</span>
+                            <span class="inline-flex items-center gap-1">
+                                👤 @HttpContextAccessor.HttpContext?.Session.GetString("FULLNAME")
+                            </span>
+                        </a>
+
+                        <form method="post" asp-page="/Logout" class="m-0 p-0">
+                            <button type="submit" title="Logout"
+                                    class="inline-flex items-center justify-center w-8 h-8 rounded hover:bg-red-100 text-red-600">
+                                🚪
+                            </button>
+                        </form>
                     </div>
                 </div>
+
 
                 <!-- Content and Footer -->
                 <div class="flex flex-col flex-1">

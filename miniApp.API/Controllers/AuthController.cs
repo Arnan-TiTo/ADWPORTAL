@@ -51,7 +51,8 @@ namespace miniApp.API.Controllers
                 Fullname = dto.Fullname,
                 Phone = dto.Phone,
                 Email = dto.Email,
-                Role = role
+                Role = role,
+                QrLogin = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16))
             };
 
             _context.Users.Add(user);

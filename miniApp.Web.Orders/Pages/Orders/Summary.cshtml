@@ -5,6 +5,26 @@
     var cart = Model.Cart;
 }
 
+@functions {
+    string Img(string? url, string folder = "products")
+    {
+        if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
+
+        var u = url.Replace("\\", "/").Trim();
+
+        if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return u;
+
+        while (u.StartsWith("/")) u = u[1..];
+
+        if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
+        if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
+
+        return $"/images/{folder}/{u}";
+    }
+}
+
 <div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
@@ -56,62 +76,64 @@
     }
     else
     {
-        <form method="post">
-            @for (int i = 0; i < cart.Count; i++)
-            {
-                <div class="flex items-center bg-gray-50 p-2 rounded-xl shadow-sm mb-3">
-                    <img src="/images/products/@cart[i].ImageUrl" class="w-16 h-16 rounded mr-2" />
-                    <div class="flex-1">
-                        <div class="font-bold">@cart[i].ProductName</div>
-                        <div class="text-sm text-gray-500">@cart[i].Price.ToString("N0") Baht</div>
-                        <div class="flex items-center mt-2 space-x-2">
-                            <button formaction="?handler=Decrease" name="productId" value="@cart[i].ProductId"
-                                    class="px-2 py-1 rounded bg-gray-200">
-                                -
-                            </button>
-                            <span>@cart[i].Quantity</span>
-                            <button formaction="?handler=Increase" name="productId" value="@cart[i].ProductId"
-                                    class="px-2 py-1 rounded bg-green-300">
-                                +
-                            </button>
-                        </div>
-                        <div class="mt-2 flex items-center gap-2">
-                            <form method="post" class="flex items-center gap-2">
-                                <input type="hidden" name="productId" value="@cart[i].ProductId" />
-                                <input type="number" name="discount" value="@cart[i].Discount"
-                                       class="form-input w-24 text-right border rounded px-2 py-1"
-                                       min="0" step="1" />
-                                <button formaction="?handler=Discount"
-                                        class="px-2 py-1 rounded bg-yellow-300">
-                                    Set Discount
-                                </button>
-                            </form>
-                        </div>
+        @for (int i = 0; i < cart.Count; i++)
+        {
+            <form method="post" class="flex items-center bg-gray-50 p-2 rounded-xl shadow-sm mb-3">
+                <img src="@Img(cart[i].ImageUrl)" class="w-16 h-16 rounded mr-2 object-cover" />
+                <div class="flex-1">
+                    <div class="font-bold">@cart[i].ProductName</div>
+                    <div class="text-sm text-gray-500">@cart[i].Price.ToString("N0") Baht</div>
+
+                    <div class="flex items-center mt-2 space-x-2">
+                        <button formaction="?handler=Decrease" name="productId" value="@cart[i].ProductId"
+                                class="px-2 py-1 rounded bg-gray-200">
+                            -
+                        </button>
+                        <span>@cart[i].Quantity</span>
+                        <button formaction="?handler=Increase" name="productId" value="@cart[i].ProductId"
+                                class="px-2 py-1 rounded bg-green-300">
+                            +
+                        </button>
                     </div>
-                    <button formaction="?handler=Remove" name="productId" value="@cart[i].ProductId" class="text-red-400">🗑</button>
-                </div>
-            }
 
-            <div class="text-sm p-2 border-t">
-                <div class="flex justify-between py-1">
-                    <span>Items</span><span>@Model.TotalItems</span>
+                    <div class="mt-2 flex items-center gap-2">
+                        <input type="hidden" name="productId" value="@cart[i].ProductId" />
+                        <input type="number" name="discount" value="@cart[i].Discount"
+                               class="form-input w-24 text-right border rounded px-2 py-1"
+                               min="0" step="1" />
+                        <button formaction="?handler=Discount"
+                                class="px-2 py-1 rounded bg-yellow-300">
+                            Set Discount
+                        </button>
+                    </div>
                 </div>
-                <div class="flex justify-between py-1">
-                    <span>Subtotal</span><span>@Model.Subtotal.ToString("N0") Baht</span>
-                </div>
-                <div class="flex justify-between py-1">
-                    <span>Discount</span><span>@Model.DiscountTotal.ToString("N0") Baht</span>
-                </div>
-                <div class="border-t my-2"></div>
-                <div class="flex justify-between font-bold">
-                    <span>Total</span><span>@Model.Total.ToString("N0") Baht</span>
-                </div>
-            </div>
 
-            <div class="flex justify-between mt-6">
-                <a asp-page="/ProductSearch" class="px-6 py-2 rounded-xl bg-gray-300">Back</a>
-                <a asp-page="/Orders/Customer" class="px-6 py-2 rounded-xl bg-black text-white">Next</a>
+                <button formaction="?handler=Remove" name="productId" value="@cart[i].ProductId"
+                        class="text-red-400">
+                    🗑
+                </button>
+            </form>
+        }
+
+        <div class="text-sm p-2 border-t">
+            <div class="flex justify-between py-1">
+                <span>Items</span><span>@Model.TotalItems</span>
             </div>
-        </form>
+            <div class="flex justify-between py-1">
+                <span>Subtotal</span><span>@Model.Subtotal.ToString("N0") Baht</span>
+            </div>
+            <div class="flex justify-between py-1">
+                <span>Discount</span><span>@Model.DiscountTotal.ToString("N0") Baht</span>
+            </div>
+            <div class="border-t my-2"></div>
+            <div class="flex justify-between font-bold">
+                <span>Total</span><span>@Model.Total.ToString("N0") Baht</span>
+            </div>
+        </div>
+
+        <div class="flex justify-between mt-6">
+            <a asp-page="/ProductSearch" class="px-6 py-2 rounded-xl bg-gray-300">Back</a>
+            <a asp-page="/Orders/Customer" class="px-6 py-2 rounded-xl bg-black text-white">Next</a>
+        </div>
     }
 </div>

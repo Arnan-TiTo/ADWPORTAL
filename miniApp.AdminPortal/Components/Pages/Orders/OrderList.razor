@@ -1,0 +1,492 @@
+﻿@page "/OrderList"
+@using System.Globalization
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using System.Text
+@using Microsoft.Extensions.Options
+@using miniApp.AdminPortal.Components.Pages
+@using miniApp.AdminPortal.Models
+@inject IHttpClientFactory ClientFactory
+@inject IOptions<ApiSettings> Options
+@inject AuthTokenProvider TokenProvider
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<h3 class="d-flex align-items-center justify-content-between">
+    <span>Order List</span>
+    <div class="d-flex gap-2">
+
+        <button class="btn btn-dark btn-sm" @onclick="ExportCsv">Export CSV</button>
+    </div>
+</h3>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Order No</label>
+                <input class="form-control"
+                       placeholder="e.g. OD123456"
+                       @bind="queryOrderNo"
+                       @bind:event="oninput" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Start date</label>
+                <InputDate @bind-Value="dateFrom" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">End date</label>
+                <InputDate @bind-Value="dateTo" class="form-control" />
+            </div>
+            <div class="col-md-1 d-grid">
+                <button class="btn btn-dark" @onclick="ApplyFilter">Search</button>
+            </div>
+            <div class="col-md-1 d-grid">
+                <button class="btn btn-outline-secondary" @onclick="ClearFilter">Clear</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (view is null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!view.Any())
+{
+    <p>No orders found.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped table-sm align-middle">
+            <thead>
+                <tr>
+                    <th style="width:48px">#</th>
+
+                    <th style="cursor:pointer" @onclick="SortByOrderNo">
+                        Order No @SortIcon(nameof(OrderViewDto.OrderNo))
+                    </th>
+
+                    <th style="cursor:pointer" @onclick="SortByOrderDate">
+                        Date @SortIcon(nameof(OrderViewDto.OrderDate))
+                    </th>
+
+                    <th style="cursor:pointer" @onclick="SortByCustomer">
+                        Customer @SortIcon(nameof(OrderViewDto.CustomerName))
+                    </th>
+
+                    <th>Phone</th>
+                    <th>Address</th>
+                    <th>Slip</th>
+
+                    <th class="text-end" style="cursor:pointer" @onclick="SortByItems">
+                        Items @SortIcon("Items")
+                    </th>
+
+                    <th class="text-end" style="cursor:pointer" @onclick="SortByAmount">
+                        Amount @SortIcon("Amount")
+                    </th>
+
+                    <th style="width:160px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in view)
+                {
+                    var amount = CalcOrderAmount(o);
+                    <tr>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    @onclick="() => ToggleExpand(o.Id)">
+                                @(expanded.Contains(o.Id) ? "−" : "+")
+                            </button>
+                        </td>
+                        <td>@o.OrderNo</td>
+                        <td>@o.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@o.CustomerName</td>
+                        <td>@o.CustomerPhone</td>
+                        <td class="text-truncate" style="max-width:320px">
+                            @o.AddressLine, @o.SubDistrict, @o.District, @o.Province, @o.ZipCode
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(o.SlipImage))
+                            {
+                                var slip = BuildImageUrl(o.SlipImage);
+                                <img src="@slip" width="42" height="42" class="rounded border"
+                                     style="cursor:zoom-in"
+                                     @onclick="() => OpenImage(slip)" />
+                            }
+                            else
+                            {
+                                <span>-</span>
+                            }
+                        </td>
+                        <td class="text-end">@((o.Items?.Count ?? 0).ToString())</td>
+                        <td class="text-end">@FormatCurrency(amount)</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary me-2" @onclick="@(() => ViewOrder(o.Id))">View</button>
+                            <button class="btn btn-sm btn-danger" @onclick="@(() => ConfirmDelete(o.Id, o.OrderNo))">Delete</button>
+                        </td>
+                    </tr>
+
+                    @if (expanded.Contains(o.Id) && (o.Items?.Any() ?? false))
+                    {
+                        <tr class="bg-light">
+                            <td></td>
+                            <td colspan="9">
+                                <div class="table-responsive">
+                                    <table class="table table-sm mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:64px;">Image</th>
+                                                <th>Product</th>
+                                                <th class="text-end">Qty</th>
+                                                <th class="text-end">Unit</th>
+                                                <th class="text-end">Discount</th>
+                                                <th class="text-end">Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var it in o.Items)
+                                            {
+                                                var lineTotal = (it.UnitPrice - it.Discount) * it.Quantity;
+                                                var img = BuildImageUrl(it.ImageUrl);
+                                                <tr>
+                                                    <td>
+                                                        @if (!string.IsNullOrWhiteSpace(img))
+                                                        {
+                                                            <img src="@img" width="48" height="48" class="rounded border"
+                                                                 style="cursor:zoom-in"
+                                                                 @onclick="() => OpenImage(img)" />
+                                                        }
+                                                    </td>
+                                                    <td>@it.ProductName</td>
+                                                    <td class="text-end">@it.Quantity</td>
+                                                    <td class="text-end">@FormatCurrency(it.UnitPrice)</td>
+                                                    <td class="text-end">@FormatCurrency(it.Discount)</td>
+                                                    <td class="text-end">@FormatCurrency(lineTotal)</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                        <tfoot>
+                                            <tr>
+                                                <td colspan="5" class="text-end"><strong>Grand Total</strong></td>
+                                                <td class="text-end"><strong>@FormatCurrency(CalcOrderAmount(o))</strong></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<OrderViewDto>? orders;
+    private List<OrderViewDto>? view;
+    private HashSet<int> expanded = new();
+
+    private string? queryOrderNo;
+    private DateTime? dateFrom;
+    private DateTime? dateTo;
+
+    private string? sortField;
+    private bool sortAsc = true;
+
+    private string ApiBaseUrl => Options.Value.ApiBaseUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            client.BaseAddress = new Uri(ApiBaseUrl);
+
+            var token = TokenProvider.Token;
+            if (!string.IsNullOrWhiteSpace(token))
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            orders = await client.GetFromJsonAsync<List<OrderViewDto>>("api/Order") ?? new();
+            foreach (var o in orders) o.Items ??= new();
+
+            sortField = nameof(OrderViewDto.OrderDate);
+            sortAsc = false;
+
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Failed to load orders: {ex.Message}", "error");
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        if (orders is null) { view = new(); return; }
+
+        IEnumerable<OrderViewDto> q = orders;
+
+        if (!string.IsNullOrWhiteSpace(queryOrderNo))
+        {
+            var key = queryOrderNo.Trim();
+            q = q.Where(o => (o.OrderNo ?? "").Contains(key, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (dateFrom is not null)
+        {
+            var fromDate = dateFrom.Value.Date;
+            q = q.Where(o => o.OrderDate.ToLocalTime().Date >= fromDate);
+        }
+        if (dateTo is not null)
+        {
+            var toDate = dateTo.Value.Date;
+            q = q.Where(o => o.OrderDate.ToLocalTime().Date <= toDate);
+        }
+
+        q = ApplySort(q);
+        view = q.ToList();
+        StateHasChanged();
+    }
+
+    private IEnumerable<OrderViewDto> ApplySort(IEnumerable<OrderViewDto> src)
+    {
+        Func<OrderViewDto, object> key = sortField switch
+        {
+            nameof(OrderViewDto.OrderNo) => o => o.OrderNo ?? "",
+            nameof(OrderViewDto.OrderDate) => o => o.OrderDate,
+            nameof(OrderViewDto.CustomerName) => o => o.CustomerName ?? "",
+            "Items" => o => o.Items?.Count ?? 0,
+            "Amount" => o => CalcOrderAmount(o),
+            _ => o => o.Id
+        };
+
+        return sortAsc ? src.OrderBy(key) : src.OrderByDescending(key);
+    }
+
+    private void ToggleSort(string field)
+    {
+        if (sortField == field) sortAsc = !sortAsc;
+        else { sortField = field; sortAsc = true; }
+        ApplyFilter();
+    }
+
+    private void SortByOrderNo() => ToggleSort(nameof(OrderViewDto.OrderNo));
+    private void SortByOrderDate() => ToggleSort(nameof(OrderViewDto.OrderDate));
+    private void SortByCustomer() => ToggleSort(nameof(OrderViewDto.CustomerName));
+    private void SortByItems() => ToggleSort("Items");
+    private void SortByAmount() => ToggleSort("Amount");
+
+    private MarkupString SortIcon(string field)
+        => sortField == field
+            ? (MarkupString)$"&nbsp;<small>{(sortAsc ? "▲" : "▼")}</small>"
+            : (MarkupString)string.Empty;
+
+    private async Task HandleEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") ApplyFilter();
+        await Task.CompletedTask;
+    }
+
+    private void ClearFilter()
+    {
+        queryOrderNo = null;
+        dateFrom = null;
+        dateTo = null;
+
+        sortField = nameof(OrderViewDto.OrderDate);
+        sortAsc = false;
+
+        ApplyFilter();
+    }
+
+    private void ToggleExpand(int id)
+    {
+        if (!expanded.Add(id)) expanded.Remove(id);
+    }
+
+    private decimal CalcOrderAmount(OrderViewDto o)
+        => (o.Items ?? new()).Sum(i => (i.UnitPrice - i.Discount) * i.Quantity);
+
+    private string FormatCurrency(decimal v)
+        => v.ToString("N2", CultureInfo.InvariantCulture);
+
+    private string BuildImageUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+        if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return url;
+
+        if (url.StartsWith("/"))
+            return $"{ApiBaseUrl.TrimEnd('/')}{url}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+
+        var guess = $"/images/slips/{url}";
+        return $"{ApiBaseUrl.TrimEnd('/')}{guess}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+    }
+
+    private async Task OpenImage(string? src)
+    {
+        if (string.IsNullOrWhiteSpace(src)) return;
+        await JS.InvokeVoidAsync("showImage", src);
+    }
+
+    private void ViewOrder(int id) => Navigation.NavigateTo($"/OrderView/{id}");
+
+    private async Task ConfirmDelete(int id, string orderNo)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirmToast",
+            $"Delete order: {orderNo} (ID: {id}) ?", "Delete", "Cancel", "error");
+        if (!ok) return;
+
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            client.BaseAddress = new Uri(ApiBaseUrl);
+
+            var token = TokenProvider.Token;
+            if (!string.IsNullOrWhiteSpace(token))
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await client.DeleteAsync($"api/Order/{id}");
+            if (resp.IsSuccessStatusCode)
+            {
+                orders?.RemoveAll(x => x.Id == id);
+                ApplyFilter();
+                await JS.InvokeVoidAsync("showToast", "Deleted.", "success");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("showToast", $"Delete failed: {await resp.Content.ReadAsStringAsync()}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Delete failed: {ex.Message}", "error");
+        }
+    }
+
+    private async Task ExportCsv()
+    {
+        if (view is null || view.Count == 0)
+        {
+            await JS.InvokeVoidAsync("showToast", "No data to export.", "warning");
+            return;
+        }
+
+        var header = new[]
+        {
+        "OrderNo","OrderDate","Customer","Phone","Address",
+        "Product","Qty","UnitPrice","Discount","LineTotal","OrderAmount"
+    };
+        var lines = new List<string> { string.Join(",", header) };
+
+        string Esc(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            var needs = s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r');
+            s = s.Replace("\"", "\"\"");
+            return needs ? $"\"{s}\"" : s;
+        }
+
+        foreach (var o in view)
+        {
+            var orderAmount = CalcOrderAmount(o)
+                .ToString("0.00", CultureInfo.InvariantCulture);
+
+            var address = $"{o.AddressLine}, {o.SubDistrict}, {o.District}, {o.Province}, {o.ZipCode}";
+
+            var items = o.Items ?? new List<OrderItemDto>();
+            if (items.Count == 0)
+            {
+                lines.Add(string.Join(",", new[]
+                {
+                Esc(o.OrderNo ?? ""),
+                Esc(o.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")),
+                Esc(o.CustomerName ?? ""),
+                Esc(o.CustomerPhone ?? ""),
+                Esc(address),
+                "", "", "", "", "",
+                orderAmount
+            }));
+                continue;
+            }
+
+            foreach (var it in items)
+            {
+                var lineTotal = ((it.UnitPrice - it.Discount) * it.Quantity)
+                    .ToString("0.00", CultureInfo.InvariantCulture);
+
+                lines.Add(string.Join(",", new[]
+                {
+                Esc(o.OrderNo ?? ""),
+                Esc(o.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")),
+                Esc(o.CustomerName ?? ""),
+                Esc(o.CustomerPhone ?? ""),
+                Esc(address),
+                Esc(it.ProductName ?? ""),
+                it.Quantity.ToString(CultureInfo.InvariantCulture),
+                it.UnitPrice.ToString("0.00", CultureInfo.InvariantCulture),
+                it.Discount.ToString("0.00", CultureInfo.InvariantCulture),
+                lineTotal,
+                orderAmount
+            }));
+            }
+        }
+
+        var csvContent = string.Join("\r\n", lines);
+
+        var bom = System.Text.Encoding.UTF8.GetPreamble();
+        var csvBytes = bom.Concat(Encoding.UTF8.GetBytes(csvContent)).ToArray();
+
+        var base64 = Convert.ToBase64String(csvBytes);
+        var fileName = $"orders_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        await JS.InvokeVoidAsync("downloadFile", fileName, "text/csv;charset=utf-8", base64);
+    }
+
+    public class OrderViewDto
+    {
+        public int Id { get; set; }
+        public string OrderNo { get; set; } = "";
+        public DateTime OrderDate { get; set; }
+
+        public string CustomerName { get; set; } = "";
+        public string CustomerPhone { get; set; } = "";
+        public string CustomerEmail { get; set; } = "";
+
+        public string AddressLine { get; set; } = "";
+        public string SubDistrict { get; set; } = "";
+        public string District { get; set; } = "";
+        public string Province { get; set; } = "";
+        public string ZipCode { get; set; } = "";
+
+        public string Gender { get; set; } = "";
+        public DateTime? BirthDate { get; set; }
+        public string Occupation { get; set; } = "";
+        public string Nationality { get; set; } = "";
+        public bool MayIAsk { get; set; }
+
+        public string PaymentMethod { get; set; } = "";
+        public string SlipImage { get; set; } = "";
+
+        public List<OrderItemDto>? Items { get; set; }
+    }
+
+    public class OrderItemDto
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = "";
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public string? ImageUrl { get; set; }
+    }
+}

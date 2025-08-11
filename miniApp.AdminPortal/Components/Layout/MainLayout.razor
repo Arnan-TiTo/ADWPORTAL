@@ -7,7 +7,11 @@
             <ul>
                 <li><a href="/">Home</a></li>
                 <li><a href="ProductList">Product</a></li>
+                <li><a href="ProductCategoryList">Product Category</a></li>
+                <li><a href="ProductBrandList">Product Brand</a></li>
+                <li><a href="OrderList">Order</a></li>
                 <li><a href="LocationList">Location</a></li>
+                <li><a href="NotificationList">Notification</a></li>
             </ul>
         </nav>
     </div>
@@ -27,11 +31,29 @@
         <main>
             @Body
         </main>
+
+        <div class="modal fade" id="image-modal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-xl">
+                <div class="modal-content bg-transparent border-0">
+                    <button type="button" class="btn-close btn-close-white ms-auto me-2 mt-2"
+                            data-bs-dismiss="modal" aria-label="Close"></button>
+                    <div class="d-flex justify-content-center align-items-center p-2">
+                        <img id="image-modal-img" class="img-fluid rounded shadow"
+                             style="max-height:90vh; user-select:none; cursor:grab;" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1080"></div>
+        
+
     </div>
 </div>
 
 @code {
-    private bool isSidebarOpen = false;
+    private bool isSidebarOpen = true;
 
     private void ToggleSidebar()
     {

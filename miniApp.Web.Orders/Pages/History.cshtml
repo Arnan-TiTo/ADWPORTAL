@@ -4,6 +4,26 @@
     ViewData["Title"] = "History";
 }
 
+@functions {
+    string Img(string? url, string folder = "products")
+    {
+        if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
+
+        var u = url.Replace("\\", "/").Trim();
+
+        if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return u;
+
+        while (u.StartsWith("/")) u = u[1..];
+
+        if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
+        if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
+
+        return $"/images/{folder}/{u}";
+    }
+}
+
 <div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-4">
 
     <!-- Header -->
@@ -56,7 +76,7 @@
                             <div class="flex items-center gap-2 border-b pb-2">
                                 <input type="checkbox" class="order-check"
                                        data-order-idx="@orderIdx" data-item-idx="@itemIdx" />
-                                <img src="/images/products/@(string.IsNullOrEmpty(item.ImageUrl) ? "default.png" : item.ImageUrl)"
+                                <img src="@Img(item.ImageUrl)"
                                      class="w-14 h-14 rounded bg-gray-100 border object-cover" />
                                 <div class="flex-1">
                                     <div class="font-semibold text-xs">@item.ProductId</div>
@@ -100,7 +120,7 @@
         }
 
         function doExport() {
-            let ids = [];
+            const ids = [];
             document.querySelectorAll('.order-check').forEach(cb => {
                 if (cb.checked) {
                     ids.push(cb.dataset.orderIdx + '-' + cb.dataset.itemIdx);

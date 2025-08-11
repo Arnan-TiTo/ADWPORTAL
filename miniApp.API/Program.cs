@@ -1,17 +1,14 @@
-using Humanizer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using miniApp.API.Auth;
 using miniApp.API.Data;
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Text;
 
@@ -84,6 +81,10 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowSpecificOrigins", policy =>
     {
         policy.WithOrigins(
+            "https://localhost:5052",
+            "https://localhost:5056",
+            "http://localhost:5067",
+            "https://localhost:7079",
             "https://salereport.vibeandchic.com",
             "https://frontline.vibeandchic.com"
         )
@@ -96,8 +97,10 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
-Directory.CreateDirectory(uploadsPath);
+//var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+//Directory.CreateDirectory(uploadsPath);
+
+
 
 // ========== MIDDLEWARE ========== //
 app.UseStaticFiles();
@@ -111,6 +114,30 @@ app.UseCors("AllowSpecificOrigins");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseStaticFiles();
+
+//var imagesRoot = builder.Configuration["ImageRootPath"];
+//if (!string.IsNullOrWhiteSpace(imagesRoot))
+//{
+//    Directory.CreateDirectory(Path.Combine(imagesRoot, "products"));
+//    Directory.CreateDirectory(Path.Combine(imagesRoot, "uploads"));
+//    app.UseStaticFiles(new StaticFileOptions
+//    {
+//        FileProvider = new PhysicalFileProvider(imagesRoot),
+//        RequestPath = "/images"
+//    });
+//}
+
+var imagesRoot = builder.Configuration["ImageRootPath"];
+if (Directory.Exists(imagesRoot))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(imagesRoot),
+        RequestPath = "/images"
+    });
+}
 
 app.MapControllers();
 

@@ -1,4 +1,5 @@
-﻿using miniApp.AdminPortal.Components;
+﻿using Microsoft.Extensions.FileProviders;
+using miniApp.AdminPortal.Components;
 using miniApp.AdminPortal.Models;
 
 namespace miniApp.AdminPortal
@@ -9,19 +10,15 @@ namespace miniApp.AdminPortal
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // อ่าน AuthToken จาก Environment Variable
             var authToken = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
             builder.Services.AddSingleton(new AuthTokenProvider(authToken ?? ""));
 
-            // โหลด ApiSettings
             builder.Services.Configure<ApiSettings>(
                 builder.Configuration.GetSection("ApiSettings")
             );
 
-            // เพิ่ม HttpClient BaseAddress
             builder.Services.AddHttpClient();
 
-            // Razor Components
             builder.Services.AddRazorComponents()
                 .AddInteractiveServerComponents();
 
@@ -37,8 +34,20 @@ namespace miniApp.AdminPortal
             app.UseStaticFiles();
             app.UseAntiforgery();
 
+            app.UseStaticFiles();
+
             app.MapRazorComponents<App>()
                 .AddInteractiveServerRenderMode();
+
+            var iisRoot = builder.Configuration["ImageRootPath"];
+            if (Directory.Exists(iisRoot))
+            {
+                app.UseStaticFiles(new StaticFileOptions
+                {
+                    FileProvider = new PhysicalFileProvider(iisRoot),
+                    RequestPath = "/images"
+                });
+            }
 
             app.Run();
         }

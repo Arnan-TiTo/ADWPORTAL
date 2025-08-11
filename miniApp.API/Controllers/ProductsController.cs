@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.IdentityModel.Tokens;
 using miniApp.API.Data;
 using miniApp.API.Dtos;
 using miniApp.API.Models;
@@ -30,6 +29,7 @@ namespace miniApp.API.Controllers
             _config = config;
         }
 
+        // ===== Helper =====
         private bool IsAuthorized()
         {
             var expectedToken = _config["AUTH_TOKEN"];
@@ -42,6 +42,20 @@ namespace miniApp.API.Controllers
             return token == expectedToken;
         }
 
+        /// <summary>คืน path โฟลเดอร์รูปจริง (ImageRootPath หรือ wwwroot/images)</summary>
+        private string GetImagesPhysicalRoot()
+        {
+            var configuredRoot = _config["ImageRootPath"];
+            if (!string.IsNullOrWhiteSpace(configuredRoot))
+                return configuredRoot;
+
+            // fallback -> {contentRoot}/wwwroot/images
+            var webRoot = _env.WebRootPath ?? Path.Combine(AppContext.BaseDirectory, "wwwroot");
+            return Path.Combine(webRoot, "images");
+        }
+
+        // ===== Queries =====
+
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -49,6 +63,7 @@ namespace miniApp.API.Controllers
 
             var products = await _context.Products
                 .Include(p => p.Category)
+                .Include(p => p.Brand)
                 .Select(p => new ProductResponseDto
                 {
                     Id = p.Id,
@@ -57,7 +72,7 @@ namespace miniApp.API.Controllers
                     Sku = p.Sku,
                     Quantity = p.Quantity,
                     Note = p.Note,
-                    ImageUrl = p.ImageUrl,
+                    ImageUrl = p.ImageUrl,     // ควรเก็บเป็น /images/products/xxx.jpg
                     UserId = p.UserId,
                     LocationId = p.LocationId,
                     CreatedAt = p.CreatedAt,
@@ -72,11 +87,53 @@ namespace miniApp.API.Controllers
             return Ok(products);
         }
 
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetById(int id)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+
+            var p = await _context.Products
+                .Include(x => x.Category)
+                .Include(x => x.Brand)
+                .Include(x => x.Location)
+                .Include(x => x.User)
+                .FirstOrDefaultAsync(x => x.Id == id);
+
+            if (p == null) return NotFound();
+
+            var dto = new ProductResponseDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                Sku = p.Sku,
+                Quantity = p.Quantity,
+                Note = p.Note,
+                ImageUrl = p.ImageUrl,
+                UserId = p.UserId,
+                LocationId = p.LocationId,
+                CreatedAt = p.CreatedAt,
+                CategoryId = p.CategoryId,
+                CategoryName = p.Category != null ? p.Category.Name : null,
+                Price = p.Price,
+                BrandId = p.BrandId,
+                BrandName = p.Brand != null ? p.Brand.Name : null,
+                LocationName = p.Location != null ? p.Location.Name : "",
+                UserFullname = p.User != null ? p.User.Fullname : ""
+            };
+
+            return Ok(dto);
+        }
+
         [HttpGet("ByCategory")]
         public async Task<IActionResult> GetByCategory([FromQuery] int categoryId)
         {
+            // ถ้าต้องการ protect ด้วย token ให้เปิดบรรทัดนี้
+            // if (!IsAuthorized()) return Unauthorized();
+
             var products = await _context.Products
                 .Include(p => p.Category)
+                .Include(p => p.Brand)
                 .Include(p => p.Location)
                 .Include(p => p.User)
                 .Where(p => p.CategoryId == categoryId)
@@ -104,7 +161,6 @@ namespace miniApp.API.Controllers
 
             return Ok(products);
         }
-
 
         [HttpGet("ProductSearch")]
         public async Task<IActionResult> SearchProducts([FromQuery] string query, [FromQuery] int? categoryId)
@@ -149,7 +205,9 @@ namespace miniApp.API.Controllers
             return Ok(result);
         }
 
+        // ===== Commands =====
 
+        // Create แบบ JSON (ไม่รับไฟล์) — อัปโหลดรูปทีหลังด้วย /UploadImage/{id}
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] ProductDto dto)
         {
@@ -158,22 +216,8 @@ namespace miniApp.API.Controllers
             if (!await _context.Locations.AnyAsync(l => l.Id == dto.LocationId))
                 return BadRequest("Invalid LocationId");
 
-            string? imagePath = null;
-            if (dto.Image != null)
-            {
-                var fileName = Guid.NewGuid() + Path.GetExtension(dto.Image.FileName);
-                var savePath = Path.Combine(_env.WebRootPath, "images/products", fileName);
-                using var stream = new FileStream(savePath, FileMode.Create);
-                await dto.Image.CopyToAsync(stream);
-                imagePath = "/images/products/" + fileName;
-            }
-
-
             if (dto.CreatedAt == default)
-            {
                 dto.CreatedAt = DateTime.UtcNow;
-            }
-
 
             var product = new Product
             {
@@ -184,16 +228,17 @@ namespace miniApp.API.Controllers
                 Note = dto.Note,
                 UserId = dto.UserId,
                 LocationId = dto.LocationId,
-                ImageUrl = imagePath,
+                ImageUrl = null, // จะถูกอัปเดตหลังอัปโหลดรูป
                 CreatedAt = dto.CreatedAt,
                 Price = dto.Price,
-                BrandId = dto.BrandId
+                BrandId = dto.BrandId,
+                CategoryId = dto.CategoryId
             };
 
             _context.Products.Add(product);
             await _context.SaveChangesAsync();
 
-            return Ok(product);
+            return Ok(new { id = product.Id });
         }
 
         [HttpPut]
@@ -219,45 +264,46 @@ namespace miniApp.API.Controllers
 
             await _context.SaveChangesAsync();
 
-            return Ok(product);
+            return Ok(new { id = product.Id });
         }
 
-        [HttpPost("UploadImage/{id}")]
+        // อัปโหลดรูปหลังจากบันทึกข้อมูลแล้ว
+        [HttpPost("UploadImage/{id:int}")]
         public async Task<IActionResult> UploadImage(int id, IFormFile file)
         {
             if (!IsAuthorized()) return Unauthorized();
 
             var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
             if (product == null) return NotFound();
+            if (file == null || file.Length == 0) return BadRequest("No file uploaded.");
 
-            if (file == null || file.Length == 0)
-                return BadRequest("No file uploaded.");
+            var imagesRoot = GetImagesPhysicalRoot();               // C:\inetpub\wwwroot\images (หรือ wwwroot/images)
+            var dir = Path.Combine(imagesRoot, "products");  // โฟลเดอร์เก็บรูปสินค้า
+            Directory.CreateDirectory(dir);
 
-            var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
-            var savePath = Path.Combine(_env.WebRootPath, "images/products", fileName);
+            var ext = Path.GetExtension(file.FileName);
+            var fileName = $"{Guid.NewGuid()}{ext}";
+            var fullPath = Path.Combine(dir, fileName);
 
-            using var stream = new FileStream(savePath, FileMode.Create);
-            await file.CopyToAsync(stream);
+            // เขียนไฟล์ครั้งเดียวให้ถูกตำแหน่ง
+            using (var fs = new FileStream(fullPath, FileMode.Create))
+                await file.CopyToAsync(fs);
 
-            product.ImageUrl = "/images/products/" + fileName;
+            // เก็บเป็น URL สำหรับเสิร์ฟผ่าน StaticFiles (RequestPath = /images)
+            product.ImageUrl = $"/images/products/{fileName}";
             await _context.SaveChangesAsync();
 
             return Ok(new { imageUrl = product.ImageUrl });
         }
 
-
         [HttpPut("updatequantities")]
         public async Task<IActionResult> UpdateQuantities([FromBody] List<UpdateQuantityDto> dtos)
         {
             if (!IsAuthorized()) return Unauthorized();
-
-            if (dtos == null || dtos.Count == 0)
-                return BadRequest("No data to update.");
+            if (dtos == null || dtos.Count == 0) return BadRequest("No data to update.");
 
             var productIds = dtos.Select(d => d.Id).ToList();
-            var products = await _context.Products
-                .Where(p => productIds.Contains(p.Id))
-                .ToListAsync();
+            var products = await _context.Products.Where(p => productIds.Contains(p.Id)).ToListAsync();
 
             foreach (var product in products)
             {
@@ -269,7 +315,7 @@ namespace miniApp.API.Controllers
             return Ok(new { updated = products.Count });
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
             if (!IsAuthorized()) return Unauthorized();
@@ -279,7 +325,6 @@ namespace miniApp.API.Controllers
 
             _context.Products.Remove(product);
             await _context.SaveChangesAsync();
-
             return NoContent();
         }
     }

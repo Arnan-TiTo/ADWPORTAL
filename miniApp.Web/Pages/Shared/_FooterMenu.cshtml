@@ -12,13 +12,13 @@
             <img src="/images/icons/count.png" class="w-6 h-6" />
             <span>Count</span>
         </a>
+        <a asp-page="/Locations" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("Locations") ? "text-blue-800" : "")">
+            <img src="/images/icons/location.png" class="w-6 h-6" />
+            <span>Location</span>
+        </a>
         <a asp-page="/Notification" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("Notification") ? "text-blue-800" : "")">
             <img src="/images/icons/notify.png" class="w-6 h-6" />
             <span>Notify</span>
-        </a>
-        <a asp-page="/Profile" class="flex flex-col items-center space-y-1 @(ViewContext.ActionDescriptor.DisplayName.Contains("Profile") ? "text-blue-800" : "")">
-            <img src="/images/icons/profile.png" class="w-6 h-6" />
-            <span>Profile</span>
         </a>
     </div>
 </div>

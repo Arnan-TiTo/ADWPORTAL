@@ -44,6 +44,34 @@ namespace miniApp.API.Controllers
             return Ok(new { qrToken = token });
         }
 
+        [HttpPost("loginByQr")]
+        public async Task<IActionResult> LoginByQr([FromBody] QrLoginDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Qr))
+                return BadRequest("QR content is required.");
+
+            // เทียบตรงๆ กับคอลัมน์ users.qrlogin
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.QrLogin == dto.Qr);
+            if (user == null)
+                return Unauthorized("QR not found.");
+
+            // (ถ้าต้องการ) ตรวจสอบสถานะ user เพิ่มเติม เช่น Disabled/Locked ฯลฯ
+
+            var jwt = _jwtService.GenerateToken(user);
+            return Ok(new
+            {
+                token = jwt,
+                userId = user.Id,
+                fullname = user.Fullname,
+                username = user.Username
+            });
+        }
+
+        public class QrLoginDto
+        {
+            public string Qr { get; set; } = "";
+        }
+
         [HttpPost("scan")]
         public IActionResult Scan(string token)
         {

@@ -32,12 +32,10 @@ namespace miniApp.WebOrders.Pages
             if (dto == null || string.IsNullOrEmpty(dto.Token))
                 return BadRequest("Invalid token data");
 
-            // เก็บลง Session
             HttpContext.Session.SetString("JWT", dto.Token);
             HttpContext.Session.SetInt32("USERID", dto.UserId);
             HttpContext.Session.SetString("FULLNAME", dto.Fullname);
 
-            // Claims สำหรับ CookieAuth
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.Name, dto.Username),

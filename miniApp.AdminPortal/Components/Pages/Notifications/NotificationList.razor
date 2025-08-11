@@ -1,0 +1,440 @@
+﻿@page "/NotificationList"
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using Microsoft.Extensions.Options
+@using miniApp.AdminPortal.Components.Pages
+@using miniApp.AdminPortal.Models
+@inject IHttpClientFactory ClientFactory
+@inject IOptions<ApiSettings> Options
+@inject AuthTokenProvider TokenProvider
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<h3 class="d-flex align-items-center justify-content-between">
+    <span>Notifications</span>
+    <button class="btn btn-sm btn-primary" @onclick="OpenAdd">+ Add</button>
+</h3>
+
+<div class="row g-2 mb-3">
+    <div class="col-auto">
+        <label class="form-label">Filter by user</label>
+        <select class="form-select form-select-sm" @onchange="OnFilterChanged">
+            <option value="0">All users</option>
+            @foreach (var u in users)
+            {
+                <option value="@u.Id">@u.Fullname (@u.Username)</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!notifications.Any())
+{
+    <p>No notifications.</p>
+}
+else
+{
+    var view = GetSorted(notifications);
+    <div class="table-responsive">
+        <table class="table table-striped table-sm align-middle">
+            <thead>
+                <tr>
+                    <th style="width:80px;">ID</th>
+                    <th style="width:140px;">User</th>
+
+                    <th role="button" class="text-nowrap" @onclick="() => SortBy(nameof(NotificationDto.Type))">
+                        Type @SortIcon(nameof(NotificationDto.Type))
+                    </th>
+
+                    <th role="button" class="text-nowrap" @onclick="() => SortBy(nameof(NotificationDto.Title))">
+                        Title @SortIcon(nameof(NotificationDto.Title))
+                    </th>
+
+                    <th>Message</th>
+
+                    <th style="width:180px;" role="button" class="text-nowrap" @onclick="() => SortBy(nameof(NotificationDto.CreatedAt))">
+                        Created @SortIcon(nameof(NotificationDto.CreatedAt))
+                    </th>
+
+                    <th style="width:100px;" role="button" class="text-nowrap" @onclick="() => SortBy(nameof(NotificationDto.IsRead))">
+                        Read @SortIcon(nameof(NotificationDto.IsRead))
+                    </th>
+
+                    <th style="width:120px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var n in view)
+                {
+                    var u = users.FirstOrDefault(x => x.Id == n.UserId);
+                    <tr>
+                        <td>@n.Id</td>
+                        <td>@(u is null ? n.UserId.ToString() : u.Fullname)</td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(n.Type))
+                            {
+                                <span class="badge @TypeBadge(n.Type)">@n.Type</span>
+                            }
+                        </td>
+                        <td>@n.Title</td>
+                        <td class="text-truncate" style="max-width:420px">@n.Message</td>
+                        <td>@n.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>
+                            @if (n.IsRead)
+                            {
+                                <span class="badge bg-success">Read</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Unread</span>
+                            }
+                        </td>
+                        <td>
+                            @if (!n.IsRead)
+                            {
+                                <button class="btn btn-sm btn-outline-success" @onclick="() => MarkRead(n)">Mark as read</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-secondary" disabled>Done</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (showAdd)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.3);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Notification</h5>
+                    <button type="button" class="btn-close" @onclick="CloseAdd"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Title</label>
+                            <input class="form-control" @bind="form.Title" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Type</label>
+                            <select class="form-select" @bind="form.Type">
+                                @foreach (var t in typeOptions)
+                                {
+                                    <option value="@t">@t</option>
+                                }
+                            </select>
+                            <small class="text-muted">รองรับการจัดหมวด เช่น Info, Warning, Success, Error</small>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Message</label>
+                            <textarea class="form-control" rows="3" @bind="form.Message"></textarea>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input id="chkAll" class="form-check-input" type="checkbox" @bind="form.SendAll" />
+                                <label for="chkAll" class="form-check-label">Send to all users</label>
+                            </div>
+                        </div>
+
+                        @if (!form.SendAll)
+                        {
+                            <div class="col-12">
+                                <label class="form-label">Select recipients</label>
+                                <div class="border rounded p-2" style="max-height:220px; overflow:auto;">
+                                    @foreach (var u in users)
+                                    {
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="@($"u_{u.Id}")"
+                                                   checked="@selectedUserIds.Contains(u.Id)"
+                                                   @onchange="(e) => ToggleSelect(u.Id, e.Value is bool b && b)" />
+                                            <label class="form-check-label" for="@($"u_{u.Id}")">
+                                                @u.Fullname (@u.Username)
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                                <small class="text-muted">ติ๊กเลือกหลายคนได้</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseAdd">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveAdd" disabled="@savingAdd">
+                        @(savingAdd ? "Saving..." : "Save")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool loading = true;
+    private bool showAdd = false;
+    private bool savingAdd = false;
+
+    private List<UserDto> users = new();
+    private List<NotificationDto> notifications = new();
+
+    private int filterUserId = 0; // 0 = all
+    private AddForm form = new();
+    private HashSet<int> selectedUserIds = new();
+
+    private string ApiBaseUrl => Options.Value.ApiBaseUrl;
+
+    private string sortBy = nameof(NotificationDto.CreatedAt);
+    private bool sortAsc = false;
+
+    private readonly string[] typeOptions = new[] { "Info", "Warning", "Success", "Error" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+        await LoadNotifications();
+        loading = false;
+    }
+
+    private async Task<HttpClient> CreateClient()
+    {
+        var c = ClientFactory.CreateClient();
+        c.BaseAddress = new Uri(ApiBaseUrl);
+        var token = TokenProvider.Token;
+        if (!string.IsNullOrWhiteSpace(token))
+            c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return c;
+    }
+
+    private async Task LoadUsers()
+    {
+        try
+        {
+            var c = await CreateClient();
+            users = await c.GetFromJsonAsync<List<UserDto>>("api/Users/all") ?? new();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load users failed: {ex.Message}", "error");
+            users = new();
+        }
+    }
+
+    private async Task LoadNotifications()
+    {
+        try
+        {
+            var c = await CreateClient();
+
+            if (filterUserId > 0)
+                notifications = await c.GetFromJsonAsync<List<NotificationDto>>($"api/notification/user/{filterUserId}") ?? new();
+            else
+                notifications = await c.GetFromJsonAsync<List<NotificationDto>>("api/notification") ?? new();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load notifications failed: {ex.Message}", "error");
+            notifications = new();
+        }
+    }
+
+    private async Task OnFilterChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v))
+            filterUserId = v;
+        await LoadNotifications();
+        StateHasChanged();
+    }
+
+    // ===== add =====
+    private void OpenAdd()
+    {
+        form = new() { Type = "Info" };
+        selectedUserIds.Clear();
+        showAdd = true;
+    }
+
+    private void CloseAdd() => showAdd = false;
+
+    private void ToggleSelect(int userId, bool isChecked)
+    {
+        if (isChecked) selectedUserIds.Add(userId);
+        else selectedUserIds.Remove(userId);
+    }
+
+    private async Task SaveAdd()
+    {
+        if (string.IsNullOrWhiteSpace(form.Title) || string.IsNullOrWhiteSpace(form.Message))
+        {
+            await JS.InvokeVoidAsync("showToast", "Please fill Title and Message.", "warning");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(form.Type))
+        {
+            await JS.InvokeVoidAsync("showToast", "Please select Type.", "warning");
+            return;
+        }
+
+        if (!form.SendAll && selectedUserIds.Count == 0)
+        {
+            await JS.InvokeVoidAsync("showToast", "Please select at least one recipient.", "warning");
+            return;
+        }
+
+        try
+        {
+            savingAdd = true;
+            var c = await CreateClient();
+
+            var targetIds = form.SendAll
+                ? users.Select(u => u.Id).ToList()
+                : selectedUserIds.ToList();
+
+            foreach (var uid in targetIds)
+            {
+                var payload = new NotificationCreate
+                {
+                    UserId = uid,
+                    Title = form.Title,
+                    Message = form.Message,
+                    Type = form.Type
+                };
+                var resp = await c.PostAsJsonAsync("api/notification", payload);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    var msg = await resp.Content.ReadAsStringAsync();
+                    await JS.InvokeVoidAsync("showToast", $"Create failed for userId {uid}: {msg}", "error");
+                }
+            }
+
+            await JS.InvokeVoidAsync("showToast", "Notification(s) created.", "success");
+            showAdd = false;
+            await LoadNotifications();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Create failed: {ex.Message}", "error");
+        }
+        finally
+        {
+            savingAdd = false;
+        }
+    }
+
+    private async Task MarkRead(NotificationDto n)
+    {
+        try
+        {
+            var c = await CreateClient();
+            var resp = await c.PutAsync($"api/notification/{n.Id}/read", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                n.IsRead = true;
+                StateHasChanged();
+                await JS.InvokeVoidAsync("showToast", "Marked as read.", "success");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("showToast", $"Mark read failed: {await resp.Content.ReadAsStringAsync()}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Mark read failed: {ex.Message}", "error");
+        }
+    }
+
+    private void SortBy(string field)
+    {
+        if (sortBy == field) sortAsc = !sortAsc;
+        else { sortBy = field; sortAsc = true; }
+    }
+
+    private RenderFragment SortIcon(string field) => builder =>
+    {
+        if (sortBy != field) return;
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", "ms-1");
+        builder.AddContent(2, sortAsc ? "▲" : "▼");
+        builder.CloseElement();
+    };
+
+    private IEnumerable<NotificationDto> GetSorted(IEnumerable<NotificationDto> src)
+    {
+        Func<NotificationDto, object?> key = sortBy switch
+        {
+            nameof(NotificationDto.Id) => n => n.Id,
+            nameof(NotificationDto.Type) => n => n.Type,
+            nameof(NotificationDto.Title) => n => n.Title,
+            nameof(NotificationDto.Message) => n => n.Message,
+            nameof(NotificationDto.CreatedAt) => n => n.CreatedAt,
+            nameof(NotificationDto.IsRead) => n => n.IsRead,
+            _ => n => n.CreatedAt
+        };
+
+        var ordered = sortAsc ? src.OrderBy(key) : src.OrderByDescending(key);
+        return ordered;
+    }
+
+    private string TypeBadge(string? type)
+        => (type ?? "").ToLowerInvariant() switch
+        {
+            "success" => "badge bg-success",
+            "warning" => "badge bg-warning text-dark",
+            "error" => "badge bg-danger",
+            "info" => "badge bg-info text-dark",
+            _ => "badge bg-secondary"
+        };
+
+    public class UserDto
+    {
+        public int Id { get; set; }
+        public string Username { get; set; } = "";
+        public string Fullname { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string Role { get; set; } = "";
+    }
+
+    public class NotificationDto
+    {
+        public int Id { get; set; }
+        public int UserId { get; set; }
+
+        public string Type { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+
+        public DateTime CreatedAt { get; set; }
+        public bool IsRead { get; set; }
+    }
+
+    public class NotificationCreate
+    {
+        public int UserId { get; set; }
+        public string Type { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+    }
+
+    public class AddForm
+    {
+        public string Type { get; set; } = "Info";
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+        public bool SendAll { get; set; } = false;
+    }
+}

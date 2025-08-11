@@ -1,0 +1,289 @@
+﻿@page "/LocationEdit/{Id:int}"  
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using Microsoft.Extensions.Options
+@using miniApp.AdminPortal.Components.Pages
+@using miniApp.AdminPortal.Models
+@inject IHttpClientFactory ClientFactory
+@inject IOptions<ApiSettings> Options
+@inject AuthTokenProvider TokenProvider
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<h3>Edit Location</h3>
+
+@if (model is null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm Model="model" OnValidSubmit="HandleSave">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Name</label>
+                <InputText class="form-control" @bind-Value="model.Name" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Note</label>
+                <InputText class="form-control" @bind-Value="model.Note" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Latitude</label>
+                <InputNumber class="form-control" @bind-Value="model.Latitude" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Longitude</label>
+                <InputNumber class="form-control" @bind-Value="model.Longitude" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">User</label>
+                <InputSelect class="form-select" @bind-Value="model.UserId">
+                    @if (users != null)
+                    {
+                        @foreach (var u in users)
+                        {
+                            <option value="@u.Id">@u.Fullname (@u.Username)</option>
+                        }
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label">Current Images</label>
+                <div class="d-flex flex-wrap gap-2">
+                    @if (existingThumbs?.Any() == true)
+                    {
+                        @foreach (var src in existingThumbs)
+                        {
+                            @if (!string.IsNullOrWhiteSpace(src))
+                            {
+                                var fullImageUrl = BuildImageUrl(src);
+                                <div class="position-relative d-inline-block">
+                                    <img src="@fullImageUrl"
+                                         width="50" height="50"
+                                         class="rounded border"
+                                         style="cursor: zoom-in"
+                                         @onclick="() => OpenImage(fullImageUrl)" />
+                                </div>
+                            }
+                            else
+                            {
+                                <span>-</span>
+                            }
+                        }
+
+
+                    }
+                    else { <span>-</span> }
+                </div>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label">Add new images</label>
+                <InputFile OnChange="HandleFiles" multiple accept="image/*" />
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    @foreach (var p in newPreviews)
+                    {
+                        <img src="@p" width="96" height="96" class="rounded border" />
+                    }
+                </div>
+            </div>
+
+            <div class="col-12 mt-3">
+                <button class="btn btn-primary" type="submit">Save</button>
+                <button class="btn btn-secondary ms-2" type="button" @onclick="GoBack">Cancel</button>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private LocationEditVm? model;
+    private List<IBrowserFile> newFiles = new();
+    private List<string> newPreviews = new();
+    private List<string>? existingThumbs;
+    private List<UserItem>? users;
+
+    private string ApiBaseUrl => Options.Value.ApiBaseUrl;
+
+    private (string msg, string type)? _pendingToast;
+    private bool _navigateToList;
+
+    private async Task OpenImage(string? src)
+    {
+        if (string.IsNullOrWhiteSpace(src)) return;
+        await JS.InvokeVoidAsync("showImage", src);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            client.BaseAddress = new Uri(ApiBaseUrl);
+            var token = TokenProvider.Token;
+            if (!string.IsNullOrWhiteSpace(token))
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            users = await client.GetFromJsonAsync<List<UserItem>>("api/Users/all");
+
+            var loc = await client.GetFromJsonAsync<LocationDto>($"api/Locations/{Id}");
+            if (loc == null)
+            {
+                _pendingToast = ("Location not found.", "error");
+                _navigateToList = true;
+                return;
+            }
+
+            model = new LocationEditVm
+            {
+                Id = loc.Id,
+                Name = loc.Name,
+                Note = loc.Note ?? "",
+                Latitude = loc.Latitude,
+                Longitude = loc.Longitude,
+                UserId = loc.UserId
+            };
+
+            existingThumbs = loc.Images?.Select(i => BuildImageUrl(i.ImageUrl)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _pendingToast = ($"Failed to load location: {ex.Message}", "error");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingToast is { } t)
+        {
+            await JS.InvokeVoidAsync("showToast", t.msg, t.type);
+            _pendingToast = null;
+
+            if (_navigateToList)
+            {
+                _navigateToList = false;
+                await Task.Delay(400);
+                Navigation.NavigateTo("/LocationList");
+            }
+        }
+    }
+
+    private async Task HandleFiles(InputFileChangeEventArgs e)
+    {
+        newFiles = e.GetMultipleFiles().ToList();
+        newPreviews.Clear();
+
+        foreach (var f in newFiles)
+        {
+            using var s = f.OpenReadStream(5_000_000);
+            using var ms = new MemoryStream();
+            await s.CopyToAsync(ms);
+            newPreviews.Add($"data:{f.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}");
+        }
+        StateHasChanged();
+    }
+
+    private async Task HandleSave()
+    {
+        if (model is null) return;
+
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            client.BaseAddress = new Uri(ApiBaseUrl);
+            var token = TokenProvider.Token;
+            if (!string.IsNullOrWhiteSpace(token))
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var selectedUsername = users?.FirstOrDefault(u => u.Id == model.UserId)?.Username ?? "";
+
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(model.Name ?? ""), "Name");
+            form.Add(new StringContent(model.Note ?? ""), "Note");
+            form.Add(new StringContent(model.Latitude.ToString(System.Globalization.CultureInfo.InvariantCulture)), "Latitude");
+            form.Add(new StringContent(model.Longitude.ToString(System.Globalization.CultureInfo.InvariantCulture)), "Longitude");
+            form.Add(new StringContent(selectedUsername), "Usernames");
+
+            foreach (var f in newFiles)
+            {
+                var sc = new StreamContent(f.OpenReadStream(5_000_000));
+                sc.Headers.ContentType = new MediaTypeHeaderValue(f.ContentType);
+                form.Add(sc, "Image", f.Name);
+            }
+
+            var resp = await client.PutAsync($"api/Locations/{model.Id}", form);
+            if (resp.IsSuccessStatusCode)
+            {
+                await JS.InvokeVoidAsync("showToast", "Location updated.", "success");
+                Navigation.NavigateTo("/LocationList");
+            }
+            else
+            {
+                var err = await resp.Content.ReadAsStringAsync();
+                await JS.InvokeVoidAsync("showToast", $"Update failed: {err}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Update failed: {ex.Message}", "error");
+        }
+    }
+
+    private void GoBack() => Navigation.NavigateTo("/LocationList");
+
+    private string BuildImageUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+
+        if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            return url;
+
+        if (!url.StartsWith("/"))
+            url = "/images/uploads/" + url; 
+
+        var full = $"{ApiBaseUrl.TrimEnd('/')}{url}";
+        return $"{full}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+    }
+
+    public class UserItem
+    {
+        public int Id { get; set; }
+        public string Username { get; set; } = "";
+        public string Fullname { get; set; } = "";
+    }
+
+    public class LocationEditVm
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+        public string? Note { get; set; }
+        public float Latitude { get; set; }
+        public float Longitude { get; set; }
+        public int UserId { get; set; }
+    }
+  
+    public class LocationDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? Note { get; set; }
+        public float Latitude { get; set; }
+        public float Longitude { get; set; }
+        public int UserId { get; set; }
+        public string Username { get; set; } = "";
+        public string Fullname { get; set; } = "";
+        public List<LocationImageDto>? Images { get; set; }
+    }
+    public class LocationImageDto { public int? Id { get; set; } 
+    public string? ImageUrl { get; set; } = ""; }
+}

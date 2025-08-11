@@ -23,8 +23,9 @@ namespace miniApp.Web.Services
             _httpClient.BaseAddress = new System.Uri(apiBase);
         }
 
-        public async Task<(bool Success, string Error)> RegisterAsync(UserRequest request)
+        public async Task<(bool Success, string Error)> RegisterAsync(LoginRequest request)
         {
+            ArgumentNullException.ThrowIfNull(request);
             var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
             var content = await response.Content.ReadAsStringAsync();
 

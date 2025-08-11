@@ -11,6 +11,34 @@
         : "";
 }
 
+@functions {
+    // ทำให้ path รูปเป็นรูปแบบที่ถูกต้องเสมอ
+    // รองรับ: ไฟล์เนมล้วน, "products/xxx.jpg", "/images/products/xxx.jpg", หรือ URL เต็ม (http/https)
+    string Img(string? url, string folder = "products")
+    {
+        if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
+
+        var u = url.Replace("\\", "/").Trim();
+
+        // กรณีเป็น URL เต็ม
+        if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return u;
+
+        // ตัด / นำหน้าออก
+        while (u.StartsWith("/")) u = u[1..];
+
+        // ถ้าเริ่มด้วย images/ แล้ว ให้คืน /images/...
+        if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
+
+        // ถ้าเริ่มด้วย products/... ให้คืน /images/products/...
+        if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
+
+        // เคสไฟล์เนมล้วน
+        return $"/images/{folder}/{u}";
+    }
+}
+
 <div class="max-w-md w-full mx-auto px-4 py-4 space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
@@ -48,7 +76,8 @@
             {
                 <div class="bg-white border rounded-xl p-4 shadow-sm">
                     <div class="text-center mb-2">
-                        <img src="/images/products/@product.ImageUrl" alt="Product" class="w-20 h-20 mx-auto mb-2" />
+                        <!-- ใช้ตัวช่วย Img() กัน path ซ้ำ -->
+                        <img src="@Img(product.ImageUrl)" alt="Product" class="w-20 h-20 mx-auto mb-2 object-cover rounded" />
                         <p class="text-sm text-gray-500">@product.Name</p>
                     </div>
 
@@ -108,12 +137,10 @@
                 Id: parseInt(formData.get("Id")),
                 Quantity: parseInt(formData.get("Quantity"))
             };
-
             const data = [dto];
 
             const apiBaseUrl = '@ViewData["APIBASEURL"]';
             const apiUrl = apiBaseUrl + 'api/Product/updatequantities';
-
             const authToken = '@ViewData["AUTHTOKEN"]';
 
             try {
@@ -124,14 +151,13 @@
                         "Authorization": "Bearer " + authToken
                     },
                     body: JSON.stringify(data)
-
                 });
 
                 if (response.ok) {
                     showToast("Product updated successfully", "green");
                 } else {
                     showToast("Failed to update product", "red");
-                    alert(JSON.stringify(data) +" : "+ apiUrl +" : "+ formData + ":"+ authToken);
+                    console.warn("Payload:", data, "URL:", apiUrl);
                 }
             } catch (err) {
                 console.error("Error:", err);
@@ -147,12 +173,8 @@
             content.textContent = message;
             content.className =
                 "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-" + color + "-500";
-
             toast.classList.remove("hidden");
-
-            setTimeout(() => {
-                toast.classList.add("hidden");
-            }, 6000);
+            setTimeout(() => toast.classList.add("hidden"), 4000);
         }
     </script>
 }

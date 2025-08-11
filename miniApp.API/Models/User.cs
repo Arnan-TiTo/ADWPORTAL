@@ -27,8 +27,11 @@ namespace miniApp.API.Models
         [EmailAddress]
         public string Email { get; set; } = string.Empty;
 
-        public RoleType Role { get; set; } = RoleType.Staff; // ใช้ enum สำหรับ Role
+        public RoleType Role { get; set; } = RoleType.Staff;
 
         public ICollection<Location>? Locations { get; set; }
+        
+        [Required]
+        public string QrLogin { get; set; } = string.Empty;
     }
 }

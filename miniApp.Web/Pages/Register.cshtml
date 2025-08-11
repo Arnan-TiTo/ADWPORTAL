@@ -5,50 +5,153 @@
 }
 
 <div class="min-h-screen flex items-center justify-center bg-white">
-    <div class="bg-white p-6 rounded-xl w-full max-w-md">
-        <div class="text-center mb-6">
-            <img src="/images/logo.png" alt="Logo" class="mx-auto w-28 h-28 mb-4">
-            <h2 class="text-xl font-semibold text-black">Create your account</h2>
-            <p class="text-sm text-gray-600">Fill in your details to register</p>
-        </div>
-
-        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
-        {
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-2 mb-4 rounded">
-                @Model.ErrorMessage
-            </div>
-        }
-
-        <form method="post" class="space-y-4" autocomplete="off">
-            <input asp-for="Register.Fullname" placeholder="Full Name"
-                   class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
-            <span asp-validation-for="Register.Fullname" class="text-red-600 text-sm"></span>
-
-            <input asp-for="Register.Username" placeholder="Username" autocomplete="new-password"
-                   class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
-            <span asp-validation-for="Register.Username" class="text-red-600 text-sm"></span>
-
-            <input asp-for="Register.Email" placeholder="Email" type="email"
-                   class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
-            <span asp-validation-for="Register.Email" class="text-red-600 text-sm"></span>
-
-            <input asp-for="Register.Phone" placeholder="Phone" type="tel" pattern="^0[689]\d{8}" title="Enter a valid Thai phone number"
-                   class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
-            <span asp-validation-for="Register.Phone" class="text-red-600 text-sm"></span>
-
-            <input asp-for="Register.Password" type="password" placeholder="Password" autocomplete="new-password"
-                   class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
-            <span asp-validation-for="Register.Password" class="text-red-600 text-sm"></span>
-
-
-            <button type="submit" class="w-full bg-black text-white py-3 rounded-md font-semibold">Register</button>
-
-            <a href="/Login" class="w-full block text-sm text-blue-600 text-center underline mt-4">Back to Login</a>
-
-            <p class="text-xs text-center text-gray-400 mt-2">
-                By clicking register, you agree to our <a href="/terms" class="underline">Terms of Service</a>
-                and <a href="/privacy" class="underline">Privacy Policy</a>
-            </p>
-        </form>
+  <div class="bg-white p-6 rounded-xl w-full max-w-md">
+    <div class="text-center mb-6">
+      <img src="/images/logo.png" alt="Logo" class="mx-auto w-28 h-28 mb-4">
+      <h2 class="text-xl font-semibold text-black">Create your account</h2>
+      <p class="text-sm text-gray-600">Fill in your details to register</p>
     </div>
+
+    <div id="errBox" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-2 mb-4 rounded"></div>
+
+    <form id="registerForm" class="space-y-4" autocomplete="off" onsubmit="return submitRegister(event)">
+      <input id="fullname" name="fullname" placeholder="Full Name"
+             class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
+
+      <input id="username" name="username" placeholder="Username" autocomplete="new-password"
+             class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
+
+      <input id="email" name="email" placeholder="Email" type="email"
+             class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
+
+      <input id="phone" name="phone" placeholder="Phone" type="tel" pattern="^0[689]\d{8}" title="Enter a valid Thai phone number"
+             class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
+
+      <input id="password" name="password" type="password" placeholder="Password" autocomplete="new-password"
+             class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
+
+      <button type="submit" id="btnRegister" class="w-full bg-black text-white py-3 rounded-md font-semibold">
+        Register
+      </button>
+
+      <a href="/Login" class="w-full block text-sm text-blue-600 text-center underline mt-4">Back to Login</a>
+
+      <p class="text-xs text-center text-gray-400 mt-2">
+        By clicking register, you agree to our
+        <a href="/terms" class="underline">Terms of Service</a>
+        and <a href="/privacy" class="underline">Privacy Policy</a>
+      </p>
+    </form>
+  </div>
 </div>
+
+<div id="qrModal" class="fixed inset-0 bg-black/60 hidden z-50">
+  <div class="bg-white rounded-xl max-w-md w-[95%] mx-auto mt-16 p-5 shadow-lg text-center">
+    <h3 class="font-semibold text-lg">Your QR Login</h3>
+    <p class="text-xs text-gray-500 mt-1">บันทึกภาพนี้ไว้ (แคปหน้าจอ) หรือกดดาวน์โหลด</p>
+
+    <div id="qrCanvasWrap" class="mt-4 flex justify-center">
+      <canvas id="qrCanvas"></canvas>
+    </div>
+
+    <div id="qrValue" class="mt-2 text-[10px] text-gray-500 break-all"></div>
+
+    <div class="mt-4 flex justify-center gap-2">
+      <button id="btnDownloadQR" class="px-3 py-2 rounded bg-blue-600 text-white text-sm">Download</button>
+      <a id="goLogin" href="/Login" class="px-3 py-2 rounded border text-sm hover:bg-gray-100">Go to Login</a>
+    </div>
+
+    <button type="button" class="mt-3 text-gray-500 hover:text-black text-sm" onclick="closeQrModal()">Close</button>
+  </div>
+</div>
+
+@section Scripts {
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@@1.5.1/build/qrcode.min.js"></script>
+
+  <script>
+    const apiBase = '@(ViewData["ApiBaseUrl"] ?? "/")';
+
+    function showError(msg){
+      const box = document.getElementById('errBox');
+      box.textContent = msg || 'Something went wrong.';
+      box.classList.remove('hidden');
+    }
+    function hideError(){
+      document.getElementById('errBox').classList.add('hidden');
+    }
+
+    async function submitRegister(e){
+      e.preventDefault();
+      hideError();
+
+      const fullname = document.getElementById('fullname').value.trim();
+      const username = document.getElementById('username').value.trim();
+      const email    = document.getElementById('email').value.trim();
+      const phone    = document.getElementById('phone').value.trim();
+      const password = document.getElementById('password').value;
+
+      if(!fullname || !username || !email || !phone || !password){
+        showError('Please fill all fields.'); return false;
+      }
+
+      const btn = document.getElementById('btnRegister');
+      btn.disabled = true; const old = btn.textContent; btn.textContent = 'Registering...';
+
+      try{
+        const res = await fetch(`${apiBase}api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullname, username, email, phone, password,
+            role: 'Staff'
+          })
+        });
+
+        const text = await res.text();
+        if(!res.ok){ showError(text || 'Registration failed.'); return false; }
+
+        const data = JSON.parse(text);
+        const qr = data.qrLogin || data.QrLogin || data.qrlogin;
+        if(!qr){ showError('QR value missing from API response.'); return false; }
+
+        await showQrModal(qr, username);
+
+      }catch(err){
+        console.error(err); showError('Registration failed.'); return false;
+      }finally{
+        btn.disabled = false; btn.textContent = old;
+      }
+
+      return false;
+    }
+
+    async function showQrModal(qrValue, username){
+    const qrCanvas = document.getElementById('qrCanvas');
+    const ctx = qrCanvas.getContext('2d'); ctx.clearRect(0,0,qrCanvas.width,qrCanvas.height);
+
+    await new Promise((resolve, reject) => {
+    QRCode.toCanvas(
+        qrCanvas,
+        qrValue,
+        { width: 360, errorCorrectionLevel: 'H', margin: 2 },
+        (err)=> err ? reject(err) : resolve()
+    );
+    });
+
+    document.getElementById('qrValue').textContent = qrValue;
+
+    document.getElementById('btnDownloadQR').onclick = () => {
+    const link = document.createElement('a');
+    link.href = qrCanvas.toDataURL('image/png');
+    link.download = `qr-login-${username||'user'}.png`;
+    link.click();
+    };
+
+    document.getElementById('qrModal').classList.remove('hidden');
+    }
+
+    function closeQrModal(){
+      document.getElementById('qrModal').classList.add('hidden');
+    }
+  </script>
+}

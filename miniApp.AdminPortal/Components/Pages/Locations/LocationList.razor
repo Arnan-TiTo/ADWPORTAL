@@ -1,0 +1,295 @@
+﻿@page "/LocationList"
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using Microsoft.Extensions.Options
+@using miniApp.AdminPortal.Components.Pages
+@using miniApp.AdminPortal.Models
+@inject IHttpClientFactory ClientFactory
+@inject IOptions<ApiSettings> Options
+@inject AuthTokenProvider TokenProvider
+@inject IJSRuntime JS
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<h3 class="d-flex align-items-center justify-content-between">
+    <span>Location List</span>
+</h3>
+
+<!-- Search (auto filter) -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label">Search (Name / Note)</label>
+                <input class="form-control"
+                       placeholder="Type to search name or note…"
+                       @bind="QueryText"
+                       @bind:event="oninput" />
+            </div>
+            <div class="col-md-12 mt-2">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="ClearSearch">Clear</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (viewItems is null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!viewItems.Any())
+{
+    <p>No locations found.</p>
+}
+else
+{
+    <table class="table table-striped table-sm align-middle">
+        <thead>
+            <tr>
+                <th style="width:90px;">Images</th>
+
+                <th style="cursor:pointer" @onclick="SortByName">
+                    Name @SortIcon(nameof(LocationDto.Name))
+                </th>
+
+                <th style="cursor:pointer" @onclick="SortByNote">
+                    Note @SortIcon("Note")
+                </th>
+
+                <th style="cursor:pointer" @onclick="SortByLat">
+                    Lat @SortIcon(nameof(LocationDto.Latitude))
+                </th>
+
+                <th style="cursor:pointer" @onclick="SortByLng">
+                    Lng @SortIcon(nameof(LocationDto.Longitude))
+                </th>
+
+                <th style="cursor:pointer" @onclick="SortByUser">
+                    User @SortIcon("User")
+                </th>
+
+                <th style="width:140px;">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var l in viewItems)
+            {
+                var first = l.Images?.FirstOrDefault()?.ImageUrl;
+                <tr>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(first))
+                        {
+                            var fullImageUrl = BuildImageUrl(first);
+                            <div class="position-relative d-inline-block">
+                                <img src="@fullImageUrl"
+                                     width="50" height="50"
+                                     class="rounded border object-fit-cover"
+                                     style="cursor: zoom-in"
+                                     @onclick="() => OpenImage(fullImageUrl)" />
+                                @if ((l.Images?.Count ?? 0) > 1)
+                                {
+                                    <span class="badge bg-dark position-absolute bottom-0 end-0">
+                                        +@(l.Images!.Count - 1)
+                                    </span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <span>-</span>
+                        }
+                    </td>
+
+                    <td>@l.Name</td>
+                    <td class="text-truncate" style="max-width:320px">@l.Note</td>
+                    <td>@l.Latitude</td>
+                    <td>@l.Longitude</td>
+                    <td>@(string.IsNullOrWhiteSpace(l.Fullname) ? l.Username : l.Fullname)</td>
+
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-primary me-2" @onclick="() => Edit(l.Id)">Edit</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(l.Id, l.Name)">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<LocationDto>? allItems;
+    private List<LocationDto>? viewItems;
+
+    private string? _queryText;
+    private string? QueryText
+    {
+        get => _queryText;
+        set { _queryText = value; ApplyFilter(); } 
+    }
+
+    private string sortField = nameof(LocationDto.Name);
+    private bool sortAsc = true;
+
+    private string ApiBaseUrl => Options.Value.ApiBaseUrl;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            client.BaseAddress = new Uri(ApiBaseUrl);
+
+            var token = TokenProvider.Token;
+            if (!string.IsNullOrWhiteSpace(token))
+                client.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", token);
+
+            allItems = await client.GetFromJsonAsync<List<LocationDto>>("api/Locations/all") ?? new();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Failed to load: {ex.Message}", "error");
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        if (allItems is null) { viewItems = new(); return; }
+
+        IEnumerable<LocationDto> q = allItems;
+
+        if (!string.IsNullOrWhiteSpace(QueryText))
+        {
+            var key = QueryText.Trim();
+            q = q.Where(x =>
+                (x.Name ?? string.Empty).Contains(key, StringComparison.OrdinalIgnoreCase) ||
+                (x.Note ?? string.Empty).Contains(key, StringComparison.OrdinalIgnoreCase));
+        }
+
+        q = ApplySort(q);
+        viewItems = q.ToList();
+        StateHasChanged();
+    }
+
+    private IEnumerable<LocationDto> ApplySort(IEnumerable<LocationDto> src)
+    {
+        Func<LocationDto, object> key = sortField switch
+        {
+            nameof(LocationDto.Name) => x => x.Name ?? "",
+            "Note" => x => x.Note ?? "",
+            nameof(LocationDto.Latitude) => x => x.Latitude,
+            nameof(LocationDto.Longitude) => x => x.Longitude,
+            "User" => x => (x.Fullname ?? x.Username) ?? "",
+            _ => x => x.Id
+        };
+
+        return sortAsc ? src.OrderBy(key) : src.OrderByDescending(key);
+    }
+
+    private void ToggleSort(string field)
+    {
+        if (sortField == field) sortAsc = !sortAsc;
+        else { sortField = field; sortAsc = true; }
+        ApplyFilter();
+    }
+
+    private void SortByName() => ToggleSort(nameof(LocationDto.Name));
+    private void SortByNote() => ToggleSort("Note");
+    private void SortByLat() => ToggleSort(nameof(LocationDto.Latitude));
+    private void SortByLng() => ToggleSort(nameof(LocationDto.Longitude));
+    private void SortByUser() => ToggleSort("User");
+
+    private MarkupString SortIcon(string field)
+        => sortField == field
+            ? (MarkupString)$"&nbsp;<small>{(sortAsc ? "▲" : "▼")}</small>"
+            : (MarkupString)string.Empty;
+
+    private void ClearSearch()
+    {
+        QueryText = null; 
+        sortField = nameof(LocationDto.Name);
+        sortAsc = true;
+    }
+
+    private void Edit(int id) => Navigation.NavigateTo($"/LocationEdit/{id}");
+
+    private async Task ConfirmDelete(int id, string? name)
+    {
+        var safe = string.IsNullOrWhiteSpace(name) ? "(no name)" : name;
+        var ok = await JS.InvokeAsync<bool>("confirmToast",
+            $"Delete location ID: {id}\n{safe} ?", "Delete", "Cancel", "error");
+        if (!ok) return;
+
+        try
+        {
+            var client = ClientFactory.CreateClient();
+            client.BaseAddress = new Uri(ApiBaseUrl);
+
+            var token = TokenProvider.Token;
+            if (!string.IsNullOrWhiteSpace(token))
+                client.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await client.DeleteAsync($"api/Locations/{id}?username=admin");
+            if (resp.IsSuccessStatusCode)
+            {
+                allItems?.RemoveAll(x => x.Id == id);
+                ApplyFilter();
+                await JS.InvokeVoidAsync("showToast", "Deleted.", "success");
+            }
+            else
+            {
+                var msg = await resp.Content.ReadAsStringAsync();
+                await JS.InvokeVoidAsync("showToast", $"Delete failed: {msg}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Delete failed: {ex.Message}", "error");
+        }
+    }
+
+    private async Task OpenImage(string? src)
+    {
+        if (string.IsNullOrWhiteSpace(src)) return;
+        await JS.InvokeVoidAsync("showImage", src);
+    }
+
+    private string BuildImageUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+
+        if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            return url;
+
+        if (!url.StartsWith("/"))
+            url = "/images/locations/" + url;
+
+        var full = $"{ApiBaseUrl.TrimEnd('/')}{url}";
+        return $"{full}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+    }
+
+    public class LocationDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? Note { get; set; }
+        public float Latitude { get; set; }
+        public float Longitude { get; set; }
+        public int UserId { get; set; }
+        public string Username { get; set; } = "";
+        public string Fullname { get; set; } = "";
+        public List<LocationImageDto>? Images { get; set; }
+    }
+
+    public class LocationImageDto
+    {
+        public int Id { get; set; }
+        public string ImageUrl { get; set; } = "";
+    }
+}

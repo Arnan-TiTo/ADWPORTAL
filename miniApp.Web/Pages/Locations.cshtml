@@ -4,8 +4,13 @@
     ViewData["Title"] = "Location";
 }
 
-<!-- Container ที่คุมทุกอย่าง -->
-<div class="max-w-md w-full mx-auto px-4 py-4 space-y-6">
+<!-- Toast -->
+<div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 hidden z-50">
+    <div id="toastContent" class="px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium"></div>
+</div>
+
+<!-- กันชน bottom nav + layout -->
+<div class="max-w-md w-full mx-auto px-4 py-4 space-y-6 min-h-screen pb-24 md:pb-28">
 
     <!-- Header -->
     <div class="bg-yellow-200 text-center py-6 px-4 rounded-2xl relative w-full">
@@ -15,7 +20,7 @@
     </div>
 
     <!-- Location Panel -->
-    <div class="bg-white shadow-lg rounded-2xl p-4 text-center border">
+    <div class="bg-white shadow-lg rounded-2xl p-4 text-center border overflow-visible">
         <h3 class="font-semibold text-lg mb-2">Location</h3>
         <button id="getLocationBtn" class="bg-blue-800 text-white py-2 px-6 rounded-full font-medium">Get</button>
         <div class="text-sm mt-4 text-gray-600">Date : @Model.CurrentDate</div>
@@ -24,10 +29,18 @@
         <!-- Upload Images -->
         <div class="mt-6 text-left">
             <label class="block text-sm font-medium text-gray-700">Images</label>
-            <div id="imageInputs" class="space-y-4">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-4">
-                    <input type="file" name="Image" class="image-upload-input" accept="image/*" capture="environment" onchange="previewImage(this)" />
-                    <button type="button" class="remove-btn text-red-500 font-bold text-xl sm:mt-0 mt-2">−</button>
+            <div id="imageInputs" class="space-y-5 overflow-visible">
+                <div class="img-row">
+                    <input type="file" name="Image" class="image-upload-input block" accept="image/*" capture="environment" />
+                    <!-- พรีวิว + ปุ่มลบมุมขวาบน -->
+                    <div class="preview-wrap hidden mt-2 relative inline-block">
+                        <img class="preview-img w-28 h-28 md:w-32 md:h-32 object-cover rounded border" alt="preview" />
+                        <button type="button"
+                                class="remove-btn absolute -top-2 -right-2 bg-white/90 hover:bg-white text-red-600 border border-red-300 rounded-full w-7 h-7 flex items-center justify-center shadow"
+                                aria-label="ลบรูป" title="ลบรูป">
+                            ×
+                        </button>
+                    </div>
                 </div>
             </div>
             <button type="button" id="addImageBtn" class="mt-4 px-4 py-1 text-sm bg-green-500 text-white rounded-full">+ Add Image</button>
@@ -39,8 +52,12 @@
         <input id="Name" placeholder="Location name" class="w-full px-4 py-2 border rounded-md shadow-sm" />
         <span class="text-red-600 text-sm" id="nameError"></span>
 
-        <input id="Note" placeholder="Note" class="w-full px-4 py-2 border rounded-md shadow-sm" />
+        <!-- Note (multi-line) -->
+        <label for="Note" class="block text-sm font-medium text-gray-700">Note</label>
+        <textarea id="Note" class="w-full px-4 py-2 border rounded-md shadow-sm"
+          rows="4" placeholder="รายละเอียดเพิ่มเติม..."></textarea>
         <span class="text-red-600 text-sm" id="noteError"></span>
+
 
         <div>
             <label for="Latitude" class="block text-sm font-medium text-gray-700">Latitude</label>
@@ -62,117 +79,152 @@
 
 @section Scripts {
     <script>
-        function toggleSidebar() {
-            const sidebar = document.getElementById("sidebar");
-            sidebar.classList.toggle("hidden");
+        // ---------- DOM refs ----------
+        const el = (id) => document.getElementById(id);
+        const Name = el('Name');
+        const Note = el('Note');
+        const Latitude = el('Latitude');
+        const Longitude = el('Longitude');
+        const LatitudeHidden = el('LatitudeHidden');
+        const LongitudeHidden = el('LongitudeHidden');
+        const Usernames = el('Usernames');
+        const getBtn = el('getLocationBtn');
+        const imageContainer = document.getElementById('imageInputs');
+
+        // ---------- Toast ----------
+        function showToast(message, color) {
+          const toast = document.getElementById("toast");
+          const content = document.getElementById("toastContent");
+          content.textContent = message;
+          content.className = "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-" + color + "-500";
+          toast.classList.remove("hidden");
+          setTimeout(() => toast.classList.add("hidden"), 3500);
         }
 
-        document.getElementById("getLocationBtn")?.addEventListener("click", function (e) {
-            e.preventDefault();
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function (position) {
-                    document.getElementById("Latitude").value = position.coords.latitude;
-                    document.getElementById("Longitude").value = position.coords.longitude;
-                    document.getElementById("LatitudeHidden").value = position.coords.latitude;
-                    document.getElementById("LongitudeHidden").value = position.coords.longitude;
-                    showToast("Lat: " + position.coords.latitude + "\nLng: " + position.coords.longitude,"green");
-                }, function (error) {
-                    showToast("Error getting location: " + error.message,"red");
-                });
-            } else {
-                showToast("Geolocation is not supported by this browser.","red");
-            }
+        // ---------- Get Location ----------
+        getBtn?.addEventListener('click', async (e) => {
+          e.preventDefault();
+          if (!navigator.geolocation) { showToast("เบราว์เซอร์ไม่รองรับการหาพิกัด","red"); return; }
+
+          getBtn.disabled = true; const oldText = getBtn.textContent; getBtn.textContent = 'Getting...';
+
+          const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const { latitude, longitude } = pos.coords;
+              Latitude.value = latitude;  Longitude.value = longitude;
+              LatitudeHidden.value = latitude;  LongitudeHidden.value = longitude;
+              showToast(`Lat: ${latitude}\nLng: ${longitude}`, "green");
+              getBtn.disabled = false; getBtn.textContent = oldText;
+            },
+            (err) => {
+              showToast("Error getting location: " + err.message, "red");
+              getBtn.disabled = false; getBtn.textContent = oldText;
+            },
+            options
+          );
         });
 
-        function previewImage(inputElement) {
-            const file = inputElement.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    let preview = inputElement.parentElement.querySelector('img');
-                    if (!preview) {
-                        preview = document.createElement('img');
-                        preview.className = "w-24 h-24 object-cover rounded border mt-2";
-                        inputElement.parentElement.appendChild(preview);
-                    }
-                    preview.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
+        // ---------- Image preview / remove ----------
+        function createImageRow() {
+          const wrap = document.createElement('div');
+          wrap.className = 'img-row';
+          wrap.innerHTML = `
+            <input type="file" name="Image" class="image-upload-input block" accept="image/*" capture="environment" />
+            <div class="preview-wrap hidden mt-2 relative inline-block">
+              <img class="preview-img w-28 h-28 md:w-32 md:h-32 object-cover rounded border" alt="preview" />
+              <button type="button"
+                      class="remove-btn absolute -top-2 -right-2 bg-white/90 hover:bg-white text-red-600 border border-red-300 rounded-full w-7 h-7 flex items-center justify-center shadow"
+                      aria-label="ลบรูป" title="ลบรูป">×</button>
+            </div>`;
+          return wrap;
         }
+
+        function updatePreview(row, file) {
+          const wrap = row.querySelector('.preview-wrap');
+          const img = row.querySelector('.preview-img');
+          if (file) {
+            wrap.classList.remove('hidden');
+            const reader = new FileReader();
+            reader.onload = e => { img.src = e.target.result; };
+            reader.readAsDataURL(file);
+          } else {
+            img.removeAttribute('src');
+            wrap.classList.add('hidden');
+          }
+        }
+
+        imageContainer.addEventListener('change', (e) => {
+          if (!e.target.classList.contains('image-upload-input')) return;
+          const row = e.target.closest('.img-row');
+          const file = e.target.files?.[0];
+          updatePreview(row, file || null);
+        });
+
+        imageContainer.addEventListener('click', (e) => {
+          if (!e.target.classList.contains('remove-btn')) return;
+          const rows = Array.from(imageContainer.querySelectorAll('.img-row'));
+          const row = e.target.closest('.img-row');
+          const input = row.querySelector('.image-upload-input');
+
+          if (rows.length > 1) {
+            row.remove();
+          } else {
+            input.value = ''; updatePreview(row, null);
+          }
+        });
+
+        document.addEventListener('input', (e) => {
+          if (e.target.id === 'Note') {
+            e.target.style.height = 'auto';
+            e.target.style.height = (e.target.scrollHeight) + 'px';
+          }
+        });
+
 
         document.getElementById('addImageBtn').addEventListener('click', () => {
-            const container = document.getElementById('imageInputs');
-            if (container.children.length >= 5) {
-                showToast("You can only upload up to 5 images.","red");
-                return;
-            }
-
-            const newInputDiv = document.createElement('div');
-            newInputDiv.classList = 'flex flex-col sm:flex-row sm:items-center sm:space-x-4';
-            newInputDiv.innerHTML = `
-                <input type="file" name="Image" class="image-upload-input" accept="image/*" capture="environment" onchange="previewImage(this)" />
-                <button type="button" class="remove-btn text-red-500 font-bold text-xl sm:mt-0 mt-2">−</button>
-            `;
-            container.appendChild(newInputDiv);
+          if (imageContainer.children.length >= 5) { showToast("อัปโหลดได้สูงสุด 5 รูป","red"); return; }
+          imageContainer.appendChild(createImageRow());
         });
 
-        document.getElementById('imageInputs').addEventListener('click', (e) => {
-            if (e.target && e.target.classList.contains('remove-btn')) {
-                e.target.parentElement.remove();
-            }
+        // ---------- Submit (multipart + Authorization ถ้ามี) ----------
+        document.getElementById('locationForm').addEventListener('submit', async (event) => {
+          event.preventDefault();
+          if (!Name.value?.trim()) { showToast("กรุณากรอกชื่อสถานที่","red"); return; }
+          if (!LatitudeHidden.value || !LongitudeHidden.value) { showToast("กรุณากด Get เพื่อระบุตำแหน่ง","red"); return; }
+
+          const formData = new FormData();
+          formData.append('Name', Name.value);
+          formData.append('Note', Note.value);
+          formData.append('Latitude', LatitudeHidden.value);
+          formData.append('Longitude', LongitudeHidden.value);
+          formData.append('Usernames', Usernames.value);
+
+          imageContainer.querySelectorAll('.image-upload-input').forEach(input => {
+            Array.from(input.files || []).forEach(f => formData.append('Image', f));
+          });
+
+          const apiBaseUrl = '@ViewData["ApiBaseUrl"]';
+          const apiUrl = apiBaseUrl + 'api/locations';
+          const headers = {};
+          const token = '@(ViewData["ApiAuthToken"] ?? "")';
+          if (token) headers['Authorization'] = 'Bearer ' + token;
+
+          try {
+            const resp = await fetch(apiUrl, { method: 'POST', body: formData, headers });
+            const txt = await resp.text();
+            if (!resp.ok) { console.error(txt); throw new Error(txt || 'Submit failed'); }
+            showToast("บันทึกข้อมูลเรียบร้อยแล้ว","green");
+
+            // reset
+            Name.value = ""; Note.value = "";
+            Latitude.value = ""; Longitude.value = "";
+            LatitudeHidden.value = ""; LongitudeHidden.value = "";
+            imageContainer.innerHTML = ''; imageContainer.appendChild(createImageRow());
+          } catch (err) {
+            console.error(err);
+            showToast("บันทึกไม่สำเร็จ","red");
+          }
         });
-
-        document.getElementById('locationForm').addEventListener('submit', async function (event) {
-            event.preventDefault();
-
-            const formData = new FormData();
-            formData.append('Name', document.getElementById('Name').value);
-            formData.append('Note', document.getElementById('Note').value);
-            formData.append('Latitude', document.getElementById('LatitudeHidden').value);
-            formData.append('Longitude', document.getElementById('LongitudeHidden').value);
-            formData.append('Usernames', document.getElementById('Usernames').value);
-
-            const imageInputs = document.querySelectorAll('.image-upload-input');
-            imageInputs.forEach(input => {
-                const files = input.files;
-                for (let i = 0; i < files.length; i++) {
-                    formData.append('Image', files[i]);
-                }
-            });
-
-            const apiBaseUrl = '@ViewData["ApiBaseUrl"]';
-            const apiUrl = apiBaseUrl + 'api/locations';
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error("Failed:", errorText);
-                    throw new Error('Submit failed');
-                }
-
-                const result = await response.json();
-                showToast("Location saved successfully","green");
-                console.log(result);
-            } catch (error) {
-                showToast("Error submitting location!","red");
-                console.error(error);
-            }
-        });
-
-        function showToast(message, color) {
-            const toast = document.getElementById("toast");
-            const content = document.getElementById("toastContent");
-            content.textContent = message;
-            content.className =
-                "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-" + color + "-500";
-            toast.classList.remove("hidden");
-            setTimeout(() => toast.classList.add("hidden"), 5000);
-        }
     </script>
 }

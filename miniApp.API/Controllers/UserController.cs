@@ -2,6 +2,8 @@
 using Microsoft.EntityFrameworkCore;
 using miniApp.API.Data;
 using miniApp.API.Dtos;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace miniApp.API.Controllers
@@ -16,6 +18,25 @@ namespace miniApp.API.Controllers
         {
             _context = context;
         }
+        
+        [HttpGet("all")]
+        public async Task<ActionResult<IEnumerable<UserResponseDto>>> GetAll()
+        {
+            var users = await _context.Users
+                .Select(u => new UserResponseDto
+                {
+                    Id = u.Id,
+                    Username = u.Username,
+                    Fullname = u.Fullname,
+                    Email = u.Email ?? "",
+                    Phone = u.Phone ?? "",
+                    Role = u.Role.ToString()
+                })
+                .ToListAsync();
+
+            return Ok(users);
+        }
+
 
         [HttpGet("profile")]
         public async Task<ActionResult<UserResponseDto>> GetUserProfile([FromQuery] string username)
@@ -44,7 +65,7 @@ namespace miniApp.API.Controllers
         public async Task<ActionResult<UserResponseDto>> GetUserProfile([FromQuery] int userid)
         {
             if (string.IsNullOrEmpty(userid.ToString()))
-                return BadRequest("Userid is required");
+                return BadRequest("UserId is required");
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userid);
             if (user == null)

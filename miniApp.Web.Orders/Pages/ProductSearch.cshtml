@@ -8,6 +8,27 @@
     var toastMsg = TempData["ShowToast"] as string;
 }
 
+@functions {
+    string Img(string? url, string folder = "products")
+    {
+        if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
+
+        var u = url.Replace("\\", "/").Trim();
+
+        if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return u;
+
+        while (u.StartsWith("/")) u = u[1..];
+
+        if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
+
+        if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
+
+        return $"/images/{folder}/{u}";
+    }
+}
+
 @if (!string.IsNullOrEmpty(toastMsg))
 {
     <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded shadow-lg z-50">
@@ -16,9 +37,7 @@
     <script>
         setTimeout(function() {
             var toastElement = document.getElementById("toast");
-            if (toastElement) {
-                toastElement.remove();
-            }
+            if (toastElement) toastElement.remove();
         }, 2500);
     </script>
 }
@@ -59,8 +78,7 @@
                 <form method="get">
                     <input type="hidden" name="categoryId" value="@cat.Id" />
                     <button type="submit" class="flex flex-col items-center min-w-[80px] focus:outline-none">
-                        <img src="/images/products/@cat.ImageUrl" alt="@cat.Name"
-                             class="w-14 h-14 rounded-full border" />
+                        <img src="@Img(cat.ImageUrl)" alt="@cat.Name" class="w-14 h-14 rounded-full border" />
                         <span class="text-xs mt-1 text-center">@cat.Name</span>
                     </button>
                 </form>
@@ -77,7 +95,7 @@
             @foreach (var p in Model.Products)
             {
                 <div class="border rounded-xl p-2 text-center shadow-sm min-w-[40%]">
-                    <img src="/images/products/@p.ImageUrl" class="w-full aspect-square rounded mb-2 object-cover" />
+                    <img src="@Img(p.ImageUrl)" class="w-full aspect-square rounded mb-2 object-cover" />
                     <div class="text-xs text-gray-500">@p.BrandName</div>
                     <div class="font-semibold text-sm">@p.Name</div>
                     <div class="text-sm text-black font-bold">@p.Price.ToString("N0") Baht</div>
@@ -102,75 +120,84 @@
 @section Scripts {
     <script>
         const APIBASEURL = '@apiBase';
-        const AUTHTOKEN = '@token';
+        const AUTHTOKEN  = '@token';
 
         function scrollCategory(dir) {
-            document.getElementById("categoryScroll").scrollLeft += dir * 120;
+          document.getElementById("categoryScroll").scrollLeft += dir * 120;
+        }
+        function scrollProduct(dir) {
+          document.getElementById("productScroll").scrollLeft += dir * 300;
         }
 
-        function scrollProduct(dir) {
-            document.getElementById("productScroll").scrollLeft += dir * 300;
+        function resolveImg(url, folder = 'products') {
+          if (!url) return `/images/${folder}/default.png`;
+          url = String(url).replace(/\\/g, '/').trim();
+
+          if (/^https?:\/\//i.test(url)) return url;
+
+          url = url.replace(/^\/+/, '');
+
+          if (/^images\//i.test(url))        return '/' + url;
+          if (new RegExp(`^${folder}/`, 'i').test(url)) return `/images/${url}`;
+          return `/images/${folder}/${url}`;
         }
 
         async function doSearch(event) {
-            event.preventDefault();
+          event.preventDefault();
 
-            const keyword = document.getElementById("searchInput").value.trim();
-            const container = document.getElementById("productScroll");
-            container.innerHTML = "";
+          const keyword = document.getElementById("searchInput").value.trim();
+          const container = document.getElementById("productScroll");
+          container.innerHTML = "";
 
-            if (!keyword) {
-                container.innerHTML = `<p class="text-sm text-gray-400">Please enter keyword.</p>`;
-                return;
+          if (!keyword) {
+            container.innerHTML = `<p class="text-sm text-gray-400">Please enter keyword.</p>`;
+            return;
+          }
+
+          const url = `${APIBASEURL}api/product/ProductSearch?query=${encodeURIComponent(keyword)}`;
+
+          try {
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${AUTHTOKEN}` } });
+            if (!res.ok) {
+              container.innerHTML = `<p class="text-sm text-red-500">Search failed (${res.status})</p>`;
+              return;
             }
 
-            const url = `${APIBASEURL}api/product/ProductSearch?query=${encodeURIComponent(keyword)}`;
-
-            try {
-                const res = await fetch(url, {
-                    headers: { 'Authorization': `Bearer ${AUTHTOKEN}` }
-                });
-
-                if (!res.ok) {
-                    container.innerHTML = `<p class="text-sm text-red-500">Search failed (${res.status})</p>`;
-                    return;
-                }
-
-                const products = await res.json();
-
-                if (!products.length) {
-                    container.innerHTML = `<p class="text-sm text-gray-400">No products found.</p>`;
-                    return;
-                }
-
-                products.forEach(p => {
-                    const el = document.createElement("div");
-                    el.className = "border rounded-xl p-2 text-center shadow-sm min-w-[40%]";
-                    el.innerHTML = `
-                        <img src="/images/products/${p.imageUrl || 'default.png'}"
-                             class="w-full aspect-square rounded mb-2 object-cover" />
-                        <div class="text-xs text-gray-500">${p.brandName || ''}</div>
-                        <div class="font-semibold text-sm">${p.name}</div>
-                        <div class="text-sm text-black font-bold">
-                            ${p.price ? Number(p.price).toLocaleString() + ' Baht' : ''}
-                        </div>
-                        <form method="post" action="?handler=AddToCart">
-                            <input type="hidden" name="ProductId" value="${p.id}" />
-                            <input type="hidden" name="ProductName" value="${p.name}" />
-                            <input type="hidden" name="Price" value="${p.price}" />
-                            <input type="hidden" name="ImageUrl" value="${p.imageUrl}" />
-                            <button type="submit"
-                                    class="mt-2 w-full bg-yellow-500 text-white text-sm rounded-lg py-1 hover:bg-yellow-600">
-                                ➕ เพิ่มลงตะกร้า
-                            </button>
-                        </form>
-                    `;
-                    container.appendChild(el);
-                });
-            } catch (err) {
-                console.error(err);
-                container.innerHTML = `<p class="text-sm text-red-500">Something went wrong.</p>`;
+            const products = await res.json();
+            if (!products.length) {
+              container.innerHTML = `<p class="text-sm text-gray-400">No products found.</p>`;
+              return;
             }
+
+            products.forEach(p => {
+              const el = document.createElement("div");
+              el.className = "border rounded-xl p-2 text-center shadow-sm min-w-[40%]";
+              const imgSrc = resolveImg(p.imageUrl);
+
+              el.innerHTML = `
+                <img src="${imgSrc}" class="w-full aspect-square rounded mb-2 object-cover" />
+                <div class="text-xs text-gray-500">${p.brandName || ''}</div>
+                <div class="font-semibold text-sm">${p.name}</div>
+                <div class="text-sm text-black font-bold">
+                  ${p.price ? Number(p.price).toLocaleString() + ' Baht' : ''}
+                </div>
+                <form method="post" action="?handler=AddToCart">
+                  <input type="hidden" name="ProductId" value="${p.id}" />
+                  <input type="hidden" name="ProductName" value="${p.name}" />
+                  <input type="hidden" name="Price" value="${p.price}" />
+                  <input type="hidden" name="ImageUrl" value="${p.imageUrl || ''}" />
+                  <button type="submit"
+                          class="mt-2 w-full bg-yellow-500 text-white text-sm rounded-lg py-1 hover:bg-yellow-600">
+                    ➕ เพิ่มลงตะกร้า
+                  </button>
+                </form>
+              `;
+              container.appendChild(el);
+            });
+          } catch (err) {
+            console.error(err);
+            container.innerHTML = `<p class="text-sm text-red-500">Something went wrong.</p>`;
+          }
         }
     </script>
 }
