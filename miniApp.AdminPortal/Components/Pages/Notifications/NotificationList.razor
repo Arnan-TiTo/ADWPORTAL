@@ -209,14 +209,14 @@ else
         loading = false;
     }
 
-    private async Task<HttpClient> CreateClient()
+    private  Task<HttpClient> CreateClient()
     {
-        var c = ClientFactory.CreateClient();
-        c.BaseAddress = new Uri(ApiBaseUrl);
-        var token = TokenProvider.Token;
+    var c = ClientFactory.CreateClient();
+    c.BaseAddress = new Uri(ApiBaseUrl);
+    var token = TokenProvider.Token;
         if (!string.IsNullOrWhiteSpace(token))
             c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return c;
+        return Task.FromResult(c);
     }
 
     private async Task LoadUsers()
