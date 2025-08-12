@@ -33,5 +33,6 @@ namespace miniApp.API.Models
         
         [Required]
         public string QrLogin { get; set; } = string.Empty;
+        public int isApproveQr { get; set; } = 0; // 0: not approved, 1: approved
     }
 }

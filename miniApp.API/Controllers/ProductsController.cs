@@ -72,7 +72,7 @@ namespace miniApp.API.Controllers
                     Sku = p.Sku,
                     Quantity = p.Quantity,
                     Note = p.Note,
-                    ImageUrl = p.ImageUrl,     // ควรเก็บเป็น /images/products/xxx.jpg
+                    ImageUrl = p.ImageUrl,
                     UserId = p.UserId,
                     LocationId = p.LocationId,
                     CreatedAt = p.CreatedAt,

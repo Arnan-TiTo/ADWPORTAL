@@ -1,0 +1,215 @@
+﻿@page "/UserEdit/{id:int}"
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@inject IHttpClientFactory ClientFactory
+@inject IOptions<ApiSettings> Options
+@inject AuthTokenProvider TokenProvider
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<h3>@(id == 0 ? "Create User" : $"Edit User #{id}")</h3>
+
+<div class="card">
+    <div class="card-body">
+        <EditForm Model="model" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Username</label>
+                    <InputText class="form-control" @bind-Value="model.Username" disabled="@isExisting" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Password @(isExisting ? "(leave blank to keep)" : "")</label>
+                    <InputText type="password" class="form-control" @bind-Value="password" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Role</label>
+                    <InputSelect class="form-select" @bind-Value="model.Role">
+                        <option value="staff">staff</option>
+                        <option value="admin">admin</option>
+                    </InputSelect>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Fullname</label>
+                    <InputText class="form-control" @bind-Value="model.Fullname" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Email</label>
+                    <InputText class="form-control" @bind-Value="model.Email" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Phone</label>
+                    <InputText class="form-control" @bind-Value="model.Phone" />
+                </div>
+
+                <div class="col-md-12">
+                    <label class="form-label">QR Content (read-only)</label>
+                    <input class="form-control" value="@model.QrLogin" disabled />
+                </div>
+
+                <div class="col-12 d-flex gap-2">
+                    <button class="btn btn-primary" type="submit">Save</button>
+                    <button class="btn btn-outline-secondary" type="button" @onclick="Back">Back</button>
+                    <span class="ms-auto"></span>
+                    <button class="btn btn-outline-info" type="button" title="Generate new QR and send email to user" @onclick="GenerateQr">Gen QR</button>
+                    @if (model.IsApproveQr == 1)
+                    {
+                        <button class="btn btn-outline-warning" type="button" @onclick="Revoke">Revoke QR</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-success" type="button" @onclick="Approve">Approve QR</button>
+                    }
+                </div>
+
+                <div class="col-12">
+                    <span>QR Status: </span>
+                    @if (model.IsApproveQr == 1)
+                    {
+                        <span class="badge bg-success">Approved</span>
+                        ;
+                    }
+                    else
+                    {
+
+                        <span class="badge bg-warning text-dark">Pending</span>
+                        ;
+                    }
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int id { get; set; }
+    private UserEditModel model = new();
+    private bool isExisting => id != 0;
+    private string? password;
+
+    private string ApiBase => Options.Value.ApiBaseUrl;
+    private HttpClient MakeClient()
+    {
+        var c = ClientFactory.CreateClient();
+        c.BaseAddress = new Uri(ApiBase);
+        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenProvider.Token);
+        return c;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (id != 0)
+        {
+            var res = await MakeClient().GetFromJsonAsync<UserEditModel>($"api/Users/{id}");
+            if (res != null)
+            {
+                model = res;
+                NormalizeRole();
+            }
+        }
+    }
+
+    private void NormalizeRole()
+    {
+        var r = (model.Role ?? "").Trim();
+        model.Role = string.IsNullOrEmpty(r) ? "staff" : r.ToLowerInvariant(); // ให้ตรงกับ option
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            var client = MakeClient();
+            HttpResponseMessage resp;
+            var payload = new SaveUserDto
+            {
+                Username = model.Username ?? string.Empty,
+                Password = password ?? string.Empty,
+                Fullname = model.Fullname ?? string.Empty,
+                Phone = model.Phone ?? string.Empty,
+                Email = model.Email ?? string.Empty,
+                Role = model.Role ?? "staff"
+            };
+            if (id == 0)
+                resp = await client.PostAsJsonAsync("api/Users", payload);
+            else
+                resp = await client.PutAsJsonAsync($"api/Users/{id}", payload);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                await JS.InvokeVoidAsync("showToast", "Saved.", "success");
+                if (id == 0)
+                {
+                    var created = await resp.Content.ReadFromJsonAsync<UserIdResponse>();
+                    if (created != null) Nav.NavigateTo($"/UserEdit/{created.Id}");
+                }
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("showToast", $"Save failed: {await resp.Content.ReadAsStringAsync()}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Save error: {ex.Message}", "error");
+        }
+    }
+
+    private void Back() => Nav.NavigateTo("/UserList");
+
+    private async Task Approve()
+    {
+        var resp = await MakeClient().PutAsync($"api/Users/{id}/approve-qr", null);
+        if (resp.IsSuccessStatusCode) { model.IsApproveQr = 1; await JS.InvokeVoidAsync("showToast", "QR approved.", "success"); }
+        else await JS.InvokeVoidAsync("showToast", $"Approve failed: {await resp.Content.ReadAsStringAsync()}", "error");
+    }
+
+    private async Task Revoke()
+    {
+        var resp = await MakeClient().PutAsync($"api/Users/{id}/revoke-qr", null);
+        if (resp.IsSuccessStatusCode) { model.IsApproveQr = 0; await JS.InvokeVoidAsync("showToast", "QR revoked.", "success"); }
+        else await JS.InvokeVoidAsync("showToast", $"Revoke failed: {await resp.Content.ReadAsStringAsync()}", "error");
+    }
+
+    private async Task GenerateQr()
+    {
+        var ok = await JS.InvokeAsync<bool>("confirmToast", "Generate new QR and email this user?", "Generate", "Cancel", "info");
+        if (!ok) return;
+        var resp = await MakeClient().PostAsync($"api/Users/{id}/generate-qr", null);
+        if (resp.IsSuccessStatusCode)
+        {
+            var x = await resp.Content.ReadFromJsonAsync<GenQrResponse>();
+            model.QrLogin = x?.Qr ?? model.QrLogin;
+            model.IsApproveQr = 0; // pending after regeneration
+            await JS.InvokeVoidAsync("showToast", "QR generated & emailed.", "success");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("showToast", $"Generate failed: {await resp.Content.ReadAsStringAsync()}", "error");
+        }
+    }
+
+    public class UserEditModel
+    {
+        public int Id { get; set; }
+        public string? Username { get; set; }
+        public string? Fullname { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Role { get; set; }
+        public string? QrLogin { get; set; }
+        public int IsApproveQr { get; set; }
+    }
+    public class SaveUserDto
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty; // blank = no change on edit
+        public string Fullname { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Role { get; set; } = "staff";
+    }
+    public class UserIdResponse { public int Id { get; set; } }
+    public class GenQrResponse { public string Qr { get; set; } = string.Empty; }
+}

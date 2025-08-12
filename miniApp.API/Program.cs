@@ -1,13 +1,16 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using miniApp.API.Auth;
 using miniApp.API.Data;
+using miniApp.API.Services;
 using System;
 using System.IO;
 using System.Text;
@@ -16,7 +19,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ========== CONFIG DATABASE ========== //
 builder.Services.AddDbContext<AppDbContext>(options =>
-    //options.UseSqlite("Data Source=miniApp.db"));
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 
@@ -46,7 +48,8 @@ builder.Services.AddScoped<JwtService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddMemoryCache();
-
+builder.Services.AddSingleton<EmailService>();
+builder.Services.AddSingleton<QrService>();
 
 // ========== SWAGGER CONFIG ========== //
 if (builder.Configuration.GetValue<bool>("SwaggerEnabled"))
@@ -97,12 +100,25 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-//var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
-//Directory.CreateDirectory(uploadsPath);
-
-
-
 // ========== MIDDLEWARE ========== //
+app.Use(async (ctx, next) =>
+{
+    try { await next(); }
+    catch (Exception ex)
+    {
+        var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>()
+                                       .CreateLogger("GlobalException");
+        logger.LogError(ex, "Unhandled error");
+
+        if (!ctx.Response.HasStarted)
+        {
+            ctx.Response.StatusCode = 500;
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsJsonAsync(new { error = "Internal Server Error" });
+        }
+    }
+});
+
 app.UseStaticFiles();
 if (builder.Configuration.GetValue<bool>("SwaggerEnabled"))
 {
@@ -116,18 +132,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseStaticFiles();
-
-//var imagesRoot = builder.Configuration["ImageRootPath"];
-//if (!string.IsNullOrWhiteSpace(imagesRoot))
-//{
-//    Directory.CreateDirectory(Path.Combine(imagesRoot, "products"));
-//    Directory.CreateDirectory(Path.Combine(imagesRoot, "uploads"));
-//    app.UseStaticFiles(new StaticFileOptions
-//    {
-//        FileProvider = new PhysicalFileProvider(imagesRoot),
-//        RequestPath = "/images"
-//    });
-//}
 
 var imagesRoot = builder.Configuration["ImageRootPath"];
 if (Directory.Exists(imagesRoot))

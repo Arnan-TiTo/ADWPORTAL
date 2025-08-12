@@ -1,4 +1,3 @@
-using BCrypt.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using miniApp.API.Auth;
@@ -6,9 +5,7 @@ using miniApp.API.Data;
 using miniApp.API.Dtos;
 using miniApp.API.Models;
 using System;
-using System.Data;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace miniApp.API.Controllers
@@ -60,8 +57,6 @@ namespace miniApp.API.Controllers
 
             return Ok(user);
         }
-
-
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto login)

@@ -7,7 +7,9 @@
         public string Fullname { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
-        public string? Role { get; set; }  // optional, default จะกำหนดที่ controller เป็น "staff"
+        public string? Role { get; set; }  // optional, default "staff"
+        public string QrLogin { get; set; } = string.Empty;
+        public int IsApproveQr { get; set; } = 0; // 0: not approved, 1: approved
     }
 
     public class LoginDto
@@ -23,6 +25,8 @@
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
+        public string QrLogin { get; set; } = string.Empty;
+        public int IsApproveQr { get; set; } = 0; // 0: not approved, 1: approved
     }
 
     public class LoginRequest

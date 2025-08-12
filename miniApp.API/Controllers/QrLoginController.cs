@@ -1,17 +1,10 @@
-﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using miniApp.API.Auth;
 using miniApp.API.Data;
-using miniApp.API.Models;
 using System;
-using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
 
@@ -50,12 +43,12 @@ namespace miniApp.API.Controllers
             if (dto == null || string.IsNullOrWhiteSpace(dto.Qr))
                 return BadRequest("QR content is required.");
 
-            // เทียบตรงๆ กับคอลัมน์ users.qrlogin
             var user = await _db.Users.FirstOrDefaultAsync(u => u.QrLogin == dto.Qr);
             if (user == null)
                 return Unauthorized("QR not found.");
 
-            // (ถ้าต้องการ) ตรวจสอบสถานะ user เพิ่มเติม เช่น Disabled/Locked ฯลฯ
+            if (user.isApproveQr != 1)
+                return Unauthorized("QR not approved.");
 
             var jwt = _jwtService.GenerateToken(user);
             return Ok(new
