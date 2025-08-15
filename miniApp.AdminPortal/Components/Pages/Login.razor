@@ -9,12 +9,10 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<!-- แถวนี้คือ wrapper ให้กึ่งกลางจอ -->
 <div class="min-vh-100 d-flex align-items-center justify-content-center bg-body-tertiary">
     <div class="card shadow rounded-4" style="width:100%;max-width:460px">
         <div class="card-body p-4">
 
-            <!-- โลโก้ + หัวข้อ -->
             <div class="text-center mb-4">
                 <img src="/images/logo.png" alt="Logo" class="mb-2" style="height:56px" />
                 <h4 class="fw-semibold mb-1">Admin Portal</h4>
@@ -103,7 +101,6 @@
 
         try
         {
-            // 1) เรียก API login
             var api = HttpClientFactory.CreateClient("ApiClient");
             var resp = await api.PostAsJsonAsync("api/Auth/login",
                            new { username = _model.Username, password = _model.Password });
@@ -119,7 +116,6 @@
             if (data is null || string.IsNullOrWhiteSpace(data.token))
             { _error = "No token returned."; return; }
 
-            // 2) ตั้ง session/cookie ผ่าน fetch (ที่ฝั่งเบราว์เซอร์)
             var ok = await JS.InvokeAsync<bool>("miniapp.setSession", new
             {
                 token = data.token,
@@ -129,7 +125,6 @@
             });
             if (!ok) { _error = "Failed to set session."; return; }
 
-            // 3) reload หน้าแรกให้คุกกี้มีผล
             Nav.NavigateTo("/", forceLoad: true, replace: true);
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -149,7 +144,7 @@
     private Task OpenQrScanner()
     {
         showQr = true; qrStatus = "Initializing camera...";
-        _openQrPending = true;            // รอเรนเดอร์ก่อนค่อยเปิดกล้อง
+        _openQrPending = true;
         StateHasChanged();
         return Task.CompletedTask;
     }
@@ -159,7 +154,7 @@
         if (_openQrPending && showQr)
         {
             _dotNetRef ??= DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("miniqr.open", _dotNetRef, _videoRef); // ส่ง ElementReference
+            await JS.InvokeVoidAsync("miniqr.open", _dotNetRef, _videoRef);
             _openQrPending = false;
         }
     }
