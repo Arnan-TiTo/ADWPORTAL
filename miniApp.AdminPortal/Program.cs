@@ -8,7 +8,7 @@ using miniApp.AdminPortal.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// === Fixed API token สำหรับเรียก API ภายนอก (ถ้ามี) ===
+// === Fixed API token ===
 var fixedToken = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
 builder.Services.AddSingleton(new AuthTokenProvider(fixedToken ?? ""));
 
@@ -32,7 +32,7 @@ builder.Services.AddAuthentication(o =>
 });
 builder.Services.AddAuthorization();
 
-// === Session (ใช้ชื่อนี้ตามที่ขอ) ===
+// === Session ===
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(o =>
 {
@@ -74,7 +74,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery(); 
 
-// เส้นทางช่วยสำหรับตั้ง session / ออกจากระบบ
+//session / ออกจากระบบ
 app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDto dto) =>
 {
     if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
@@ -100,42 +100,37 @@ app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDto dto) =>
     return Results.Ok(new { success = true });
 })
 .AllowAnonymous()
-.DisableAntiforgery();     // post จาก component/JS สบายใจ
+.DisableAntiforgery();
 
 app.MapPost("/auth/logout", async (HttpContext ctx) =>
 {
-    // ลงชื่อออกจาก CookieAuth (จะส่ง Set-Cookie เพื่อลบ Miniapp.AdminPortal.AuthCookie)
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-    // ล้าง session + บังคับ commit header
     ctx.Session.Clear();
     await ctx.Session.CommitAsync();
 
-    // ลบคุกกี้ Session ด้วยพารามิเตอร์ที่ตรงกับตอนตั้งค่า
     var opts = new CookieOptions
     {
-        Path = "/",                              // สำคัญ: ต้องตรงกับคุกกี้เดิม
-        Secure = ctx.Request.IsHttps,            // localhost: https => true
+        Path = "/",
+        Secure = ctx.Request.IsHttps,
         HttpOnly = true,
         SameSite = SameSiteMode.Lax
     };
 
-    ctx.Response.Cookies.Delete("Miniapp.AdminPortal.Auth", opts);  // session cookie
-    ctx.Response.Cookies.Delete("Miniapp.AdminPortal.AuthCookie", opts); // เผื่อกรณีผู้ให้บริการ auth ไม่ลบ
+    ctx.Response.Cookies.Delete("Miniapp.AdminPortal.Auth", opts);
+    ctx.Response.Cookies.Delete("Miniapp.AdminPortal.AuthCookie", opts);
 
     return Results.Ok(new { success = true });
 })
 .AllowAnonymous()
 .DisableAntiforgery();
 
-// Razor Components ทั้งหมดบังคับต้องล็อกอิน
 app.MapRazorComponents<App>()
    .AddInteractiveServerRenderMode();
 
-// (ถ้ามีโฟลเดอร์รูปภายนอกก็วางไว้ข้างบนได้เหมือนเดิม)
 app.Run();
 
-// DTO สำหรับ set-session
+// DTO set-session
 public record SetSessionDto(string Token, int UserId, string? Fullname, string? Username);
 
 public class AuthTokenProvider { public string Token { get; } public AuthTokenProvider(string t) => Token = t; }
