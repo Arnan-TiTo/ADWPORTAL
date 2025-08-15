@@ -36,7 +36,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(o =>
 {
-    o.Cookie.Name = "Miniapp.AdminPortal.Auth";         // << ชื่อ session cookie
+    o.Cookie.Name = "Miniapp.AdminPortal.Auth";
     o.IdleTimeout = TimeSpan.FromHours(8);
     o.Cookie.HttpOnly = true;
     o.Cookie.IsEssential = true;
@@ -44,7 +44,6 @@ builder.Services.AddSession(o =>
 
 builder.Services.AddHttpContextAccessor();
 
-// === HttpClient ไปยัง API (แนบ JWT จาก Session + Fixed token อัตโนมัติ) ===
 builder.Services.AddTransient<AuthMessageHandler>();
 builder.Services.AddHttpClient("ApiClient", (sp, http) =>
 {
@@ -70,11 +69,10 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
-// ลำดับสำคัญ
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseAntiforgery(); // << ต้องมี
+app.UseAntiforgery(); 
 
 // เส้นทางช่วยสำหรับตั้ง session / ออกจากระบบ
 app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDto dto) =>
