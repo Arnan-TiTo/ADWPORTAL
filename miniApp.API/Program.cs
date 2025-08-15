@@ -78,6 +78,7 @@ if (builder.Configuration.GetValue<bool>("SwaggerEnabled"))
         });
     });
 }
+
 // ========== CORS ========== //
 builder.Services.AddCors(options =>
 {
