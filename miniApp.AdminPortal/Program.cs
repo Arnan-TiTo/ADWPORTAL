@@ -24,7 +24,7 @@ builder.Services.AddAuthentication(o =>
 })
 .AddCookie(o =>
 {
-    o.Cookie.Name = "Miniapp.AdminPortal.AuthCookie";   // คุกกี้ auth
+    o.Cookie.Name = "Miniapp.AdminPortal.AuthCookie";
     o.LoginPath = "/login";
     o.LogoutPath = "/logout";
     o.ExpireTimeSpan = TimeSpan.FromHours(8);
@@ -74,7 +74,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery(); 
 
-//session / ออกจากระบบ
+//session logout
 app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDto dto) =>
 {
     if (dto is null || string.IsNullOrWhiteSpace(dto.Token))

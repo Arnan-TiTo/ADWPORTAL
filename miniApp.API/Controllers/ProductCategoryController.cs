@@ -59,7 +59,6 @@ namespace miniApp.API.Controllers
             if (string.IsNullOrWhiteSpace(dto.Name))
                 return BadRequest("Category name is required.");
 
-            // dto.ImageUrl ควรเป็น "/images/categories/xxx.jpg" หรือเป็น URL เต็มจากฝั่งอัปโหลด
             var category = new ProductCategory
             {
                 Name = dto.Name,
@@ -109,17 +108,14 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== อัปโหลดรูป (ตอนยังไม่รู้ id) ======
-        // ส่งไฟล์ขึ้นมาก่อน -> API คืน url เช่น /images/categories/<guid>.jpg
-        // แล้วฝั่ง UI ค่อยเอา url นี้ไปใส่ใน Create/Update JSON
         [HttpPost("UploadImage")]
         public async Task<IActionResult> UploadImage([FromForm] IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("No file uploaded.");
 
-            var imagesRoot = GetImagesPhysicalRoot();        // .../images
-            var dir = Path.Combine(imagesRoot, "categories"); // .../images/categories
+            var imagesRoot = GetImagesPhysicalRoot();
+            var dir = Path.Combine(imagesRoot, "categories");
             Directory.CreateDirectory(dir);
 
             var ext = Path.GetExtension(file.FileName);
@@ -133,7 +129,6 @@ namespace miniApp.API.Controllers
             return Ok(new { imageUrl = url });
         }
 
-        // ====== อัปโหลดรูปพร้อมระบุ category id (เช่น กรณีแก้ไขแล้วอยากอัปใหม่ทันที) ======
         [HttpPost("UploadImage/{id:int}")]
         public async Task<IActionResult> UploadImageForCategory(int id, [FromForm] IFormFile file)
         {

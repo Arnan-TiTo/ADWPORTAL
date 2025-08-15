@@ -17,3 +17,6 @@ bash
 Copy
 Edit
 dotnet ef database update
+
+dotnet ef migrations add AddLocationDetailtoLocation --context AppDbContext
+dotnet ef database update --context AppDbContext

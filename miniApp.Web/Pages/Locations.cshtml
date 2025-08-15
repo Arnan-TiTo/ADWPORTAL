@@ -19,12 +19,85 @@
         <p class="text-sm text-gray-700">@Model.RoleDescription</p>
     </div>
 
-    <!-- Location Panel -->
-    <div class="bg-white shadow-lg rounded-2xl p-4 text-center border overflow-visible">
-        <h3 class="font-semibold text-lg mb-2">Location</h3>
-        <button id="getLocationBtn" class="bg-blue-800 text-white py-2 px-6 rounded-full font-medium">Get</button>
-        <div class="text-sm mt-4 text-gray-600">Date : @Model.CurrentDate</div>
-        <div class="text-sm font-semibold text-blue-700">Time : @Model.CurrentTime</div>
+    <!-- Form -->
+    <form id="locationForm" class="space-y-4" autocomplete="off">
+        <!-- Basic -->
+        <input id="Name" placeholder="Location name" class="w-full px-4 py-2 border rounded-md shadow-sm" />
+        <span class="text-red-600 text-sm" id="nameError"></span>
+
+        <!-- Note (multi-line) -->
+        <label for="Note" class="block text-sm font-medium text-gray-700">Note</label>
+        <textarea id="Note" class="w-full px-4 py-2 border rounded-md shadow-sm"
+                  rows="4" placeholder="รายละเอียดเพิ่มเติม..."></textarea>
+        <span class="text-red-600 text-sm" id="noteError"></span>
+
+        <!-- Address & Contact -->
+        <div class="bg-white shadow rounded-2xl p-4 border space-y-3">
+            <h3 class="font-semibold text-lg">Address & Contact</h3>
+
+            <div>
+                <label for="PlaceName" class="block text-sm font-medium text-gray-700">Place name</label>
+                <input id="PlaceName" maxlength="255" placeholder="เช่น ตลาดนัด, โรงงาน, ห้าง ฯลฯ"
+                       class="w-full px-4 py-2 border rounded-md shadow-sm" />
+            </div>
+
+            <div>
+                <label for="Building" class="block text-sm font-medium text-gray-700">Building</label>
+                <input id="Building" maxlength="255" placeholder="อาคาร / ชั้น / ห้อง"
+                       class="w-full px-4 py-2 border rounded-md shadow-sm" />
+            </div>
+
+            <div>
+                <label for="Address" class="block text-sm font-medium text-gray-700">Address</label>
+                <input id="Address" maxlength="255" placeholder="บ้านเลขที่ / หมู่บ้าน / ซอย / ถนน"
+                       class="w-full px-4 py-2 border rounded-md shadow-sm" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label for="District" class="block text-sm font-medium text-gray-700">District (เขต/อำเภอ)</label>
+                    <input id="District" maxlength="255" class="w-full px-4 py-2 border rounded-md shadow-sm" />
+                </div>
+                <div>
+                    <label for="Province" class="block text-sm font-medium text-gray-700">Province</label>
+                    <input id="Province" maxlength="255" class="w-full px-4 py-2 border rounded-md shadow-sm" />
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label for="Postcode" class="block text-sm font-medium text-gray-700">Postcode</label>
+                    <input id="Postcode" maxlength="255" inputmode="numeric" class="w-full px-4 py-2 border rounded-md shadow-sm" />
+                </div>
+                <div>
+                    <label for="ContractPhone" class="block text-sm font-medium text-gray-700">Contact phone</label>
+                    <input id="ContractPhone" maxlength="255" inputmode="tel" class="w-full px-4 py-2 border rounded-md shadow-sm" />
+                </div>
+            </div>
+
+            <div>
+                <label for="ContractPerson" class="block text-sm font-medium text-gray-700">Contact person</label>
+                <input id="ContractPerson" maxlength="255" class="w-full px-4 py-2 border rounded-md shadow-sm" />
+            </div>
+        </div>
+
+        <!-- Location Panel -->
+        <div class="bg-white shadow-lg rounded-2xl p-4 text-center border overflow-visible">
+            <h3 class="font-semibold text-lg mb-2">Location</h3>
+            <button id="getLocationBtn" class="bg-blue-800 text-white py-2 px-6 rounded-full font-medium">Get</button>
+            <div class="text-sm mt-4 text-gray-600">Date : @Model.CurrentDate</div>
+            <div class="text-sm font-semibold text-blue-700">Time : @Model.CurrentTime</div>
+        </div>
+
+        <div>
+            <label for="Latitude" class="block text-sm font-medium text-gray-700">Latitude</label>
+            <input id="Latitude" type="text" class="w-full px-4 py-2 border rounded-md shadow-sm bg-gray-100" readonly />
+        </div>
+
+        <div>
+            <label for="Longitude" class="block text-sm font-medium text-gray-700">Longitude</label>
+            <input id="Longitude" type="text" class="w-full px-4 py-2 border rounded-md shadow-sm bg-gray-100" readonly />
+        </div>
 
         <!-- Upload Images -->
         <div class="mt-6 text-left">
@@ -45,30 +118,8 @@
             </div>
             <button type="button" id="addImageBtn" class="mt-4 px-4 py-1 text-sm bg-green-500 text-white rounded-full">+ Add Image</button>
         </div>
-    </div>
 
-    <!-- Form -->
-    <form id="locationForm" class="space-y-4">
-        <input id="Name" placeholder="Location name" class="w-full px-4 py-2 border rounded-md shadow-sm" />
-        <span class="text-red-600 text-sm" id="nameError"></span>
-
-        <!-- Note (multi-line) -->
-        <label for="Note" class="block text-sm font-medium text-gray-700">Note</label>
-        <textarea id="Note" class="w-full px-4 py-2 border rounded-md shadow-sm"
-          rows="4" placeholder="รายละเอียดเพิ่มเติม..."></textarea>
-        <span class="text-red-600 text-sm" id="noteError"></span>
-
-
-        <div>
-            <label for="Latitude" class="block text-sm font-medium text-gray-700">Latitude</label>
-            <input id="Latitude" type="text" class="w-full px-4 py-2 border rounded-md shadow-sm bg-gray-100" readonly />
-        </div>
-
-        <div>
-            <label for="Longitude" class="block text-sm font-medium text-gray-700">Longitude</label>
-            <input id="Longitude" type="text" class="w-full px-4 py-2 border rounded-md shadow-sm bg-gray-100" readonly />
-        </div>
-
+        <!-- Hidden -->
         <input type="hidden" id="LatitudeHidden" />
         <input type="hidden" id="LongitudeHidden" />
         <input type="hidden" id="Usernames" value="@Model.Usernames" />
@@ -81,8 +132,22 @@
     <script>
         // ---------- DOM refs ----------
         const el = (id) => document.getElementById(id);
+
+        // basic
         const Name = el('Name');
         const Note = el('Note');
+
+        // new fields
+        const PlaceName = el('PlaceName');
+        const Building = el('Building');
+        const Address = el('Address');
+        const District = el('District');
+        const Province = el('Province');
+        const Postcode = el('Postcode');
+        const ContractPerson = el('ContractPerson');
+        const ContractPhone = el('ContractPhone');
+
+        // geo
         const Latitude = el('Latitude');
         const Longitude = el('Longitude');
         const LatitudeHidden = el('LatitudeHidden');
@@ -181,17 +246,35 @@
           }
         });
 
-
         document.getElementById('addImageBtn').addEventListener('click', () => {
           if (imageContainer.children.length >= 5) { showToast("อัปโหลดได้สูงสุด 5 รูป","red"); return; }
           imageContainer.appendChild(createImageRow());
         });
+
+        // ---------- Simple validations for <=255 ----------
+        function tooLong255(v) { return v && v.length > 255; }
+        function validate255() {
+          const fields = [
+            ['PlaceName', PlaceName.value],
+            ['Building', Building.value],
+            ['Address', Address.value],
+            ['District', District.value],
+            ['Province', Province.value],
+            ['Postcode', Postcode.value],
+            ['ContractPerson', ContractPerson.value],
+            ['ContractPhone', ContractPhone.value]
+          ];
+          const long = fields.find(([k, v]) => tooLong255(v));
+          if (long) { showToast(`${long[0]} เกิน 255 ตัวอักษร`, "red"); return false; }
+          return true;
+        }
 
         // ---------- Submit (multipart + Authorization ถ้ามี) ----------
         document.getElementById('locationForm').addEventListener('submit', async (event) => {
           event.preventDefault();
           if (!Name.value?.trim()) { showToast("กรุณากรอกชื่อสถานที่","red"); return; }
           if (!LatitudeHidden.value || !LongitudeHidden.value) { showToast("กรุณากด Get เพื่อระบุตำแหน่ง","red"); return; }
+          if (!validate255()) return;
 
           const formData = new FormData();
           formData.append('Name', Name.value);
@@ -199,7 +282,16 @@
           formData.append('Latitude', LatitudeHidden.value);
           formData.append('Longitude', LongitudeHidden.value);
           formData.append('Usernames', Usernames.value);
+          formData.append('PlaceName', PlaceName.value);
+          formData.append('Building', Building.value);
+          formData.append('Address', Address.value);
+          formData.append('District', District.value);
+          formData.append('Province', Province.value);
+          formData.append('Postcode', Postcode.value);
+          formData.append('ContractPerson', ContractPerson.value);
+          formData.append('ContractPhone', ContractPhone.value);
 
+          // รูปภาพ
           imageContainer.querySelectorAll('.image-upload-input').forEach(input => {
             Array.from(input.files || []).forEach(f => formData.append('Image', f));
           });
@@ -218,6 +310,10 @@
 
             // reset
             Name.value = ""; Note.value = "";
+            PlaceName.value = ""; Building.value = ""; Address.value = "";
+            District.value = ""; Province.value = ""; Postcode.value = "";
+            ContractPerson.value = ""; ContractPhone.value = "";
+
             Latitude.value = ""; Longitude.value = "";
             LatitudeHidden.value = ""; LongitudeHidden.value = "";
             imageContainer.innerHTML = ''; imageContainer.appendChild(createImageRow());

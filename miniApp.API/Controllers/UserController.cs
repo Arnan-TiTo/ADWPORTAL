@@ -180,7 +180,6 @@ namespace miniApp.API.Controllers
             if (string.IsNullOrWhiteSpace(u.QrLogin)) return BadRequest("User has no QR.");
 
             u.isApproveQr = 1; // approve
-            // Create in-app notification
             _context.Notifications.Add(new Notification
             {
                 UserId = u.Id,

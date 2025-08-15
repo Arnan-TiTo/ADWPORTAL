@@ -54,6 +54,15 @@ namespace miniApp.API.Controllers
             [FromForm] string? Note,
             [FromForm] float Latitude,
             [FromForm] float Longitude,
+            [FromForm] string? PlaceName,
+            [FromForm] string? Building,
+            [FromForm] string? Address,
+            [FromForm] string? District,
+            [FromForm] string? Province,
+            [FromForm] string? Postcode,
+            [FromForm] string? ContractPerson,
+            [FromForm] string? ContractPhone,
+
             [FromForm] List<IFormFile>? Image,
             [FromForm] string Usernames)
         {
@@ -70,13 +79,22 @@ namespace miniApp.API.Controllers
                 Note = Note,
                 Latitude = Latitude,
                 Longitude = Longitude,
+                PlaceName = PlaceName,
+                Building = Building,
+                Address = Address,
+                District = District,
+                Province = Province,
+                Postcode = Postcode,
+                ContractPerson = ContractPerson,
+                ContractPhone = ContractPhone,
+
                 CreatedAt = DateTime.UtcNow
             };
 
             _context.Locations.Add(location);
             await _context.SaveChangesAsync();
 
-            if (Image != null && Image.Count > 0)
+            if (Image is { Count: > 0 })
             {
                 var imagesRoot = GetImagesPhysicalRoot();
                 var dir = Path.Combine(imagesRoot, "locations");
@@ -87,7 +105,6 @@ namespace miniApp.API.Controllers
                     var ext = Path.GetExtension(file.FileName);
                     var fileName = $"{Guid.NewGuid()}{ext}";
                     var fullPath = Path.Combine(dir, fileName);
-
                     using var stream = new FileStream(fullPath, FileMode.Create);
                     await file.CopyToAsync(stream);
 
@@ -97,7 +114,6 @@ namespace miniApp.API.Controllers
                         ImageUrl = $"/images/locations/{fileName}"
                     });
                 }
-
                 await _context.SaveChangesAsync();
             }
 
@@ -111,6 +127,15 @@ namespace miniApp.API.Controllers
             [FromForm] string? Note,
             [FromForm] float Latitude,
             [FromForm] float Longitude,
+            [FromForm] string? PlaceName,
+            [FromForm] string? Building,
+            [FromForm] string? Address,
+            [FromForm] string? District,
+            [FromForm] string? Province,
+            [FromForm] string? Postcode,
+            [FromForm] string? ContractPerson,
+            [FromForm] string? ContractPhone,
+
             [FromForm] List<IFormFile>? Image,
             [FromForm] string Usernames)
         {
@@ -128,8 +153,16 @@ namespace miniApp.API.Controllers
             location.Latitude = Latitude;
             location.Longitude = Longitude;
             location.UserId = newOwner.Id;
+            location.PlaceName = PlaceName;
+            location.Building = Building;
+            location.Address = Address;
+            location.District = District;
+            location.Province = Province;
+            location.Postcode = Postcode;
+            location.ContractPerson = ContractPerson;
+            location.ContractPhone = ContractPhone;
 
-            if (Image != null && Image.Count > 0)
+            if (Image is { Count: > 0 })
             {
                 var imagesRoot = GetImagesPhysicalRoot();
                 var dir = Path.Combine(imagesRoot, "locations");
@@ -139,7 +172,6 @@ namespace miniApp.API.Controllers
                 {
                     var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
                     var fullPath = Path.Combine(dir, fileName);
-
                     using var stream = new FileStream(fullPath, FileMode.Create);
                     await file.CopyToAsync(stream);
 
@@ -154,24 +186,6 @@ namespace miniApp.API.Controllers
             await _context.SaveChangesAsync();
             return Ok(new { message = "Location updated" });
         }
-
-        [HttpDelete("{id:int}")]
-        public async Task<IActionResult> DeleteLocation(int id, [FromQuery] string username)
-        {
-            if (!IsAuthorized()) return Unauthorized();
-
-            if (string.IsNullOrEmpty(username)) return Unauthorized();
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return Unauthorized();
-
-            var location = await _context.Locations.FirstOrDefaultAsync(l => l.Id == id && l.UserId == user.Id);
-            if (location == null) return NotFound();
-
-            _context.Locations.Remove(location);
-            await _context.SaveChangesAsync();
-            return NoContent();
-        }
-
 
         [HttpGet("all")]
         public async Task<IActionResult> GetAll()
@@ -192,6 +206,15 @@ namespace miniApp.API.Controllers
                     UserId = l.UserId,
                     Username = l.User != null ? l.User.Username : "",
                     Fullname = l.User != null ? l.User.Fullname : "",
+                    PlaceName = l.PlaceName,
+                    Building = l.Building,
+                    Address = l.Address,
+                    District = l.District,
+                    Province = l.Province,
+                    Postcode = l.Postcode,
+                    ContractPerson = l.ContractPerson,
+                    ContractPhone = l.ContractPhone,
+
                     Images = l.Images.Select(img => new LocationImageDto
                     {
                         Id = img.Id,
@@ -225,6 +248,15 @@ namespace miniApp.API.Controllers
                 UserId = l.UserId,
                 Username = l.User?.Username ?? "",
                 Fullname = l.User?.Fullname ?? "",
+                PlaceName = l.PlaceName,
+                Building = l.Building,
+                Address = l.Address,
+                District = l.District,
+                Province = l.Province,
+                Postcode = l.Postcode,
+                ContractPerson = l.ContractPerson,
+                ContractPhone = l.ContractPhone,
+
                 Images = l.Images.Select(img => new LocationImageDto
                 {
                     Id = img.Id,
@@ -233,6 +265,7 @@ namespace miniApp.API.Controllers
             };
             return Ok(dto);
         }
+
 
         [HttpGet("dropdown")]
         public async Task<IActionResult> GetLocationDropdown()

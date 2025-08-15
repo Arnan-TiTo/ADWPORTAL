@@ -20,5 +20,14 @@ namespace miniApp.API.Models
         public float Longitude { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public ICollection<LocationImage> Images { get; set; } = new List<LocationImage>();
+        public string? PlaceName { get; set; } = string.Empty;
+        public string? Building { get; set; } = string.Empty;
+        public string? Address { get; set; } = string.Empty;
+        public string? District { get; set; } = string.Empty;
+        public string? Province { get; set; } = string.Empty;
+        public string? Postcode { get; set; } = string.Empty;
+        public string? ContractPerson { get; set; } = string.Empty;
+        public string? ContractPhone { get; set; } = string.Empty;
+
     }
 }

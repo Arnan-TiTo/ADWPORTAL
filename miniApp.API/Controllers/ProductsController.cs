@@ -29,7 +29,6 @@ namespace miniApp.API.Controllers
             _config = config;
         }
 
-        // ===== Helper =====
         private bool IsAuthorized()
         {
             var expectedToken = _config["AUTH_TOKEN"];
@@ -42,19 +41,16 @@ namespace miniApp.API.Controllers
             return token == expectedToken;
         }
 
-        /// <summary>คืน path โฟลเดอร์รูปจริง (ImageRootPath หรือ wwwroot/images)</summary>
         private string GetImagesPhysicalRoot()
         {
             var configuredRoot = _config["ImageRootPath"];
             if (!string.IsNullOrWhiteSpace(configuredRoot))
                 return configuredRoot;
 
-            // fallback -> {contentRoot}/wwwroot/images
             var webRoot = _env.WebRootPath ?? Path.Combine(AppContext.BaseDirectory, "wwwroot");
             return Path.Combine(webRoot, "images");
         }
 
-        // ===== Queries =====
 
         [HttpGet]
         public async Task<IActionResult> GetAll()
@@ -128,8 +124,7 @@ namespace miniApp.API.Controllers
         [HttpGet("ByCategory")]
         public async Task<IActionResult> GetByCategory([FromQuery] int categoryId)
         {
-            // ถ้าต้องการ protect ด้วย token ให้เปิดบรรทัดนี้
-            // if (!IsAuthorized()) return Unauthorized();
+             if (!IsAuthorized()) return Unauthorized();
 
             var products = await _context.Products
                 .Include(p => p.Category)
@@ -207,7 +202,6 @@ namespace miniApp.API.Controllers
 
         // ===== Commands =====
 
-        // Create แบบ JSON (ไม่รับไฟล์) — อัปโหลดรูปทีหลังด้วย /UploadImage/{id}
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] ProductDto dto)
         {
@@ -228,7 +222,7 @@ namespace miniApp.API.Controllers
                 Note = dto.Note,
                 UserId = dto.UserId,
                 LocationId = dto.LocationId,
-                ImageUrl = null, // จะถูกอัปเดตหลังอัปโหลดรูป
+                ImageUrl = null,
                 CreatedAt = dto.CreatedAt,
                 Price = dto.Price,
                 BrandId = dto.BrandId,
@@ -267,7 +261,6 @@ namespace miniApp.API.Controllers
             return Ok(new { id = product.Id });
         }
 
-        // อัปโหลดรูปหลังจากบันทึกข้อมูลแล้ว
         [HttpPost("UploadImage/{id:int}")]
         public async Task<IActionResult> UploadImage(int id, IFormFile file)
         {
@@ -277,19 +270,17 @@ namespace miniApp.API.Controllers
             if (product == null) return NotFound();
             if (file == null || file.Length == 0) return BadRequest("No file uploaded.");
 
-            var imagesRoot = GetImagesPhysicalRoot();               // C:\inetpub\wwwroot\images (หรือ wwwroot/images)
-            var dir = Path.Combine(imagesRoot, "products");  // โฟลเดอร์เก็บรูปสินค้า
+            var imagesRoot = GetImagesPhysicalRoot();
+            var dir = Path.Combine(imagesRoot, "products");
             Directory.CreateDirectory(dir);
 
             var ext = Path.GetExtension(file.FileName);
             var fileName = $"{Guid.NewGuid()}{ext}";
             var fullPath = Path.Combine(dir, fileName);
 
-            // เขียนไฟล์ครั้งเดียวให้ถูกตำแหน่ง
             using (var fs = new FileStream(fullPath, FileMode.Create))
                 await file.CopyToAsync(fs);
 
-            // เก็บเป็น URL สำหรับเสิร์ฟผ่าน StaticFiles (RequestPath = /images)
             product.ImageUrl = $"/images/products/{fileName}";
             await _context.SaveChangesAsync();
 

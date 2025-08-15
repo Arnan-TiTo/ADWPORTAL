@@ -12,29 +12,28 @@
 }
 
 @functions {
-    // ทำให้ path รูปเป็นรูปแบบที่ถูกต้องเสมอ
-    // รองรับ: ไฟล์เนมล้วน, "products/xxx.jpg", "/images/products/xxx.jpg", หรือ URL เต็ม (http/https)
+    // รองรับ: "products/xxx.jpg", "/images/products/xxx.jpg", URL เต็ม http/https)
     string Img(string? url, string folder = "products")
     {
         if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
 
         var u = url.Replace("\\", "/").Trim();
 
-        // กรณีเป็น URL เต็ม
+        //URL
         if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             return u;
 
-        // ตัด / นำหน้าออก
+        //ตัด /
         while (u.StartsWith("/")) u = u[1..];
 
-        // ถ้าเริ่มด้วย images/ แล้ว ให้คืน /images/...
+        //images/ -> /images/...
         if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
 
-        // ถ้าเริ่มด้วย products/... ให้คืน /images/products/...
+        //products/... -> /images/products/...
         if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
 
-        // เคสไฟล์เนมล้วน
+        //filename
         return $"/images/{folder}/{u}";
     }
 }

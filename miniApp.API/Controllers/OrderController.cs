@@ -8,6 +8,7 @@ using miniApp.API.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace miniApp.API.Controllers
@@ -39,6 +40,20 @@ namespace miniApp.API.Controllers
             return token == expectedToken;
         }
 
+        private static bool IsValidJsonOrNull(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return true;
+            try
+            {
+                using var _ = JsonDocument.Parse(value);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         [HttpGet]
         public async Task<ActionResult<IEnumerable<OrderViewDto>>> GetAll()
         {
@@ -68,6 +83,7 @@ namespace miniApp.API.Controllers
                 MayIAsk = h.MayIAsk,
                 PaymentMethod = h.PaymentMethod,
                 SlipImage = h.SlipImage,
+                Social = h.Social,
                 Items = h.OrderDts.Select(d => new OrderItemDto
                 {
                     ProductId = d.ProductId,
@@ -101,12 +117,13 @@ namespace miniApp.API.Controllers
                 OrderDate = h.OrderDate,
                 CustomerName = h.CustomerName,
                 AddressLine = h.AddressLine,
-                SubDistrict = h.SubDistrict,    
-                District = h.District,  
-                Province = h.Province,  
-                ZipCode = h.ZipCode,    
-                CustomerPhone = h.CustomerPhone,    
-                CustomerEmail = h.CustomerEmail,    
+                SubDistrict = h.SubDistrict,
+                District = h.District,
+                Province = h.Province,
+                ZipCode = h.ZipCode,
+                CustomerPhone = h.CustomerPhone,
+                CustomerEmail = h.CustomerEmail,
+                Social = h.Social,
 
                 Items = h.OrderDts.Select(d =>
                 {
@@ -126,11 +143,13 @@ namespace miniApp.API.Controllers
             return Ok(result);
         }
 
-
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
         {
             if (!IsAuthorized()) return Unauthorized();
+
+            if (!IsValidJsonOrNull(dto.Social))
+                return BadRequest("Social must be a valid JSON string or null.");
 
             var order = new OrderHd
             {
@@ -151,6 +170,7 @@ namespace miniApp.API.Controllers
                 MayIAsk = dto.MayIAsk,
                 PaymentMethod = dto.PaymentMethod,
                 SlipImage = dto.SlipImage,
+                Social = dto.Social,
                 OrderDts = dto.Items.Select(i => new OrderDt
                 {
                     ProductId = i.ProductId,
@@ -171,6 +191,9 @@ namespace miniApp.API.Controllers
         public async Task<IActionResult> Update([FromBody] OrderUpdateDto dto)
         {
             if (!IsAuthorized()) return Unauthorized();
+
+            if (!IsValidJsonOrNull(dto.Social))
+                return BadRequest("Social must be a valid JSON string or null.");
 
             var order = await _context.OrderHd
                 .Include(h => h.OrderDts)
@@ -193,6 +216,7 @@ namespace miniApp.API.Controllers
             order.MayIAsk = dto.MayIAsk;
             order.PaymentMethod = dto.PaymentMethod;
             order.SlipImage = dto.SlipImage;
+            order.Social = dto.Social;
 
             _context.OrderDt.RemoveRange(order.OrderDts);
 
@@ -253,6 +277,7 @@ namespace miniApp.API.Controllers
                 MayIAsk = order.MayIAsk,
                 PaymentMethod = order.PaymentMethod,
                 SlipImage = order.SlipImage,
+                Social = order.Social,
                 Items = order.OrderDts.Select(d => new OrderItemDto
                 {
                     ProductId = d.ProductId,

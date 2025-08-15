@@ -2,7 +2,6 @@
 @model miniApp.WebOrders.Pages.Orders.PaymentModel
 @{
     ViewData["Title"] = "Add Order - Payment";
-    var cart = Model.Cart;
     var toastMsg = TempData["ShowToast"] as string;
 }
 
@@ -16,31 +15,22 @@
     </script>
 }
 
+<style>
+    .r05 {
+        border-radius: 4px !important
+    }
+
+    .ctl {
+        padding: .5rem .75rem;
+        line-height: 1.25rem
+    }
+</style>
+
 <div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
         <a asp-page="/Orders/Customer" class="text-xl">←</a>
         <h1 class="text-lg font-semibold text-center flex-1">Add Order</h1>
-    </div>
-
-    <!-- Search -->
-    <form method="get" class="relative">
-        <input type="text" name="query" placeholder="Search"
-               class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm border border-gray-300" />
-        <button type="submit"
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
-            🔍
-        </button>
-    </form>
-
-    <!-- Favorite / History -->
-    <div class="flex justify-start space-x-2">
-        <button type="button" class="flex items-center space-x-1 px-3 py-1 border border-gray-300 rounded-full text-sm">
-            <span>♥</span><span>Favorites</span>
-        </button>
-        <button type="button" class="flex items-center space-x-1 px-3 py-1 border border-gray-300 rounded-full text-sm">
-            <span>⏲</span><span>History</span>
-        </button>
     </div>
 
     <!-- Step Indicator -->
@@ -62,9 +52,9 @@
     </div>
 
     <!-- Order Summary -->
-    <div>
+    <div class="bg-white border rounded-2xl shadow p-4">
         <div class="font-semibold text-lg mb-2">Order Summary</div>
-        <div class="text-sm p-2">
+        <div class="text-sm">
             <div class="flex justify-between py-1">
                 <span>Items</span><span>@Model.TotalItems</span>
             </div>
@@ -81,66 +71,75 @@
         </div>
     </div>
 
-    <!-- Choose payment method -->
-    <form method="post" enctype="multipart/form-data" class="space-y-4">
-        <div class="font-semibold text-base mb-1">Choose payment method</div>
-        <div class="space-y-2">
+    <!-- Payment form -->
+    <form method="post" asp-antiforgery="true" enctype="multipart/form-data" class="space-y-4" id="paymentForm">
+        <div asp-validation-summary="All" class="text-red-600 text-sm"></div>
+
+        <!-- Choose payment method -->
+        <div class="bg-white border rounded-2xl shadow p-4 space-y-2">
+            <div class="font-semibold text-base">Choose payment method</div>
+
             <label class="flex items-center cursor-pointer">
-                <input type="radio" name="PaymentMethod" value="transfer"
-                       class="accent-yellow-400 mr-2" @(Model.PaymentMethod == "transfer" ? "checked" : "") />
+                <input asp-for="PaymentMethod" type="radio" value="transfer" class="accent-yellow-400 mr-2" />
                 <span class="flex items-center">
-                    <span class="mr-1">💳</span>
-                    Transfer money
-                </span>
-                <span class="ml-auto">
-                    @if (Model.PaymentMethod == "transfer")
-                    {
-                        <span class="text-yellow-500">✔</span>
-                    }
+                    <span class="mr-1">💳</span> Transfer money
                 </span>
             </label>
+
             <label class="flex items-center cursor-pointer opacity-80">
-                <input type="radio" name="PaymentMethod" value="cash"
-                       class="accent-yellow-400 mr-2" @(Model.PaymentMethod == "cash" ? "checked" : "") />
+                <input asp-for="PaymentMethod" type="radio" value="cash" class="accent-yellow-400 mr-2" />
                 <span class="flex items-center">
-                    <span class="mr-1">🪙</span>
-                    Cash
+                    <span class="mr-1">🪙</span> Cash
                 </span>
             </label>
         </div>
 
         <!-- Add payment slip -->
-        <div>
-            <div class="font-medium text-base mb-1">Add Payment slip</div>
+        <div class="bg-white border rounded-2xl shadow p-4">
+            <div class="font-medium text-base mb-2">Add Payment slip</div>
+
             <label class="flex items-center cursor-pointer space-x-2 py-2">
-                <input type="file" name="Slip" id="slipInput" accept="image/*" class="hidden" onchange="previewSlip(this)" />
-                <span class="flex items-center justify-center w-8 h-8 rounded-full border border-gray-400 text-2xl bg-gray-50 cursor-pointer">+</span>
+                <input asp-for="Slip" type="file" accept="image/*" class="hidden" onchange="previewSlip(this)" />
+                <span class="flex items-center justify-center w-8 h-8 r05 border border-gray-400 text-2xl bg-gray-50 cursor-pointer">+</span>
                 <span class="text-gray-500 text-sm" id="slipFilename"></span>
             </label>
+
             <div class="mt-2">
-                <img id="slipPreview" src="#" alt="Slip Preview" style="display:none; max-width:220px; max-height:220px; border-radius: 1rem; border:1px solid #ddd;" />
+                <img id="slipPreview" src="#" alt="Slip Preview"
+                     style="display:none; max-width:220px; max-height:220px; border-radius:.5px; border:1px solid #ddd;" />
             </div>
         </div>
 
-        <script>
-            function previewSlip(input) {
-                if (input.files && input.files[0]) {
-                    const reader = new FileReader();
-                    reader.onload = function (e) {
-                        const img = document.getElementById('slipPreview');
-                        img.src = e.target.result;
-                        img.style.display = 'block';
-                        document.getElementById('slipFilename').textContent = input.files[0].name;
-                    };
-                    reader.readAsDataURL(input.files[0]);
-                }
-            }
-        </script>
-
         <!-- SAVE Button -->
         <button type="submit"
-                class="w-full py-3 bg-black text-white rounded-xl text-base font-bold mt-4 shadow-md">
+                id="saveBtn"
+                class="w-full py-3 bg-black text-white r05 text-base font-bold mt-2 shadow-md">
             SAVE
         </button>
     </form>
 </div>
+
+@section Scripts {
+    <script>
+        function previewSlip(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = document.getElementById('slipPreview');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('slipFilename').textContent = input.files[0].name;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // กันกดซ้ำ
+        const form = document.getElementById('paymentForm');
+        const saveBtn = document.getElementById('saveBtn');
+        form.addEventListener('submit', () => {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+        });
+    </script>
+}

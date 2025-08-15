@@ -24,6 +24,7 @@ namespace miniApp.API.Models
         public string District { get; set; } = string.Empty;
         public string Province { get; set; } = string.Empty;
         public string ZipCode { get; set; } = string.Empty;
+        public string? Social { get; set; }
 
         // Consent Checkbox
         public bool MayIAsk { get; set; } = false;

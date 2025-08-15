@@ -45,6 +45,7 @@ namespace miniApp.WebOrders.Models
         public string District { get; set; } = "";
         public string Province { get; set; } = "";
         public string ZipCode { get; set; } = "";
+        public string Social { get; set; } = "";
         public bool MayIAsk { get; set; }
         public string PaymentMethod { get; set; } = "";
         public string? SlipImage { get; set; }

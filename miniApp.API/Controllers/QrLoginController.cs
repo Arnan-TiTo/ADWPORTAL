@@ -21,7 +21,6 @@ namespace miniApp.API.Controllers
         private readonly JwtService _jwtService;
         private readonly AppDbContext _db;
 
-
         public QrLoginController(IMemoryCache cache, JwtService jwtService, AppDbContext db)
         {
             _cache = cache;

@@ -12,20 +12,17 @@ namespace miniApp.WebOrders.Pages.Orders
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _config;
 
-        [BindProperty]
-        public List<CartItemDto> Cart { get; set; } = new();
-        [BindProperty]
-        public string PaymentMethod { get; set; } = string.Empty; 
-        [BindProperty]
-        public IFormFile? Slip { get; set; } 
+        [BindProperty] public List<CartItemDto> Cart { get; set; } = new();
+        [BindProperty] public string PaymentMethod { get; set; } = string.Empty;
+        [BindProperty] public IFormFile? Slip { get; set; }
 
         public int TotalItems => Cart.Sum(p => p.Quantity);
         public decimal Subtotal => Cart.Sum(p => p.Price * p.Quantity);
         public decimal DiscountTotal => Cart.Sum(p => p.Discount);
         public decimal Total => Subtotal - DiscountTotal;
 
-        public PaymentModel(IHttpClientFactory httpClientFactory, IConfiguration config) =>
-            (_httpClientFactory, _config) = (httpClientFactory, config); 
+        public PaymentModel(IHttpClientFactory httpClientFactory, IConfiguration config)
+            => (_httpClientFactory, _config) = (httpClientFactory, config);
 
         public void OnGet()
         {
@@ -35,9 +32,6 @@ namespace miniApp.WebOrders.Pages.Orders
         public async Task<IActionResult> OnPostAsync()
         {
             Cart = GetCart();
-
-            var baseUrl = _config["APIBASEURL"] ?? "";
-            var token = _config["AUTHTOKEN"] ?? "";
 
             var customerJson = HttpContext.Session.GetString("ORDER_CUSTOMER");
             if (string.IsNullOrEmpty(customerJson))
@@ -50,35 +44,43 @@ namespace miniApp.WebOrders.Pages.Orders
             string? slipImageFileName = null;
             if (Slip != null && Slip.Length > 0)
             {
-                var saveDir = Path.Combine(_config["ImageRootPath"]!, "slips");
-                if (!Directory.Exists(saveDir))
-                    Directory.CreateDirectory(saveDir);
-
-                var fileName = $"{DateTime.Now:yyyyMMddHHmmssfff}_{Path.GetFileName(Slip.FileName)}";
-                var savePath = Path.Combine(saveDir, fileName);
-                using (var stream = new FileStream(savePath, FileMode.Create))
+                var root = _config["ImageRootPath"];
+                if (string.IsNullOrWhiteSpace(root))
                 {
-                    await Slip.CopyToAsync(stream);
+                    ModelState.AddModelError(string.Empty, "ImageRootPath is not configured.");
+                    return Page();
                 }
+
+                var saveDir = Path.Combine(root, "slips");
+                Directory.CreateDirectory(saveDir);
+
+                var safeName = Path.GetFileName(Slip.FileName);
+                var fileName = $"{DateTime.Now:yyyyMMddHHmmssfff}_{safeName}";
+                var savePath = Path.Combine(saveDir, fileName);
+                using var fs = new FileStream(savePath, FileMode.Create);
+                await Slip.CopyToAsync(fs);
+
                 slipImageFileName = fileName;
             }
 
+            // --- DTO ส่งเข้า API ---
             var orderDto = new OrderCreateDto
             {
-                CustomerName = customer.CustomerName,
-                Gender = customer.Gender,
+                CustomerName = customer.CustomerName ?? "",
+                Gender = customer.Gender ?? "",
                 BirthDate = customer.BirthDate,
-                Occupation = customer.Occupation,
-                Nationality = customer.Nationality,
-                CustomerPhone = customer.CustomerPhone,
-                CustomerEmail = customer.CustomerEmail,
-                AddressLine = customer.AddressLine,
-                SubDistrict = customer.SubDistrict,
-                District = customer.District,
-                Province = customer.Province,
-                ZipCode = customer.ZipCode,
+                Occupation = customer.Occupation ?? "",
+                Nationality = customer.Nationality ?? "",
+                CustomerPhone = customer.CustomerPhone ?? "",
+                CustomerEmail = customer.CustomerEmail ?? "",
+                AddressLine = customer.AddressLine ?? "",
+                SubDistrict = customer.SubDistrict ?? "",
+                District = customer.District ?? "",
+                Province = customer.Province ?? "",
+                ZipCode = customer.ZipCode ?? "",
+                Social = customer.Social,  //JSON string
                 MayIAsk = customer.MayIAsk,
-                PaymentMethod = PaymentMethod,
+                PaymentMethod = PaymentMethod ?? "",
                 SlipImage = slipImageFileName,
                 Items = Cart.Select(c => new OrderItemDto
                 {
@@ -90,27 +92,31 @@ namespace miniApp.WebOrders.Pages.Orders
                 }).ToList()
             };
 
+            var baseUrl = _config["APIBASEURL"]?.TrimEnd('/') + "/";
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                ModelState.AddModelError(string.Empty, "APIBASEURL is not configured.");
+                return Page();
+            }
+
+            var token = _config["AUTHTOKEN"] ?? "";
             var client = _httpClientFactory.CreateClient();
             if (!string.IsNullOrEmpty(token))
-            {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            }
 
-            var response = await client.PostAsJsonAsync($"{baseUrl}api/Order", orderDto);
-            if (response.IsSuccessStatusCode)
+            var resp = await client.PostAsJsonAsync($"{baseUrl}api/Order", orderDto);
+            if (!resp.IsSuccessStatusCode)
             {
-                HttpContext.Session.Remove("Cart");
-                HttpContext.Session.Remove("ORDER_CUSTOMER");
-
-                TempData["ShowToast"] = "บันทึกข้อมูลเรียบร้อยแล้ว";
-
+                var err = await resp.Content.ReadAsStringAsync();
+                ModelState.AddModelError(string.Empty, $"บันทึกออเดอร์ไม่สำเร็จ: {err}");
                 return Page();
             }
-            else
-            {
-                ModelState.AddModelError("", "บันทึกออเดอร์ไม่สำเร็จ");
-                return Page();
-            }
+
+            HttpContext.Session.Remove("Cart");
+            HttpContext.Session.Remove("ORDER_CUSTOMER");
+            TempData["ShowToast"] = "บันทึกข้อมูลเรียบร้อยแล้ว";
+
+            return RedirectToPage("Payment");
         }
 
         private List<CartItemDto> GetCart()

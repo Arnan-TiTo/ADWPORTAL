@@ -12,7 +12,7 @@ namespace miniApp.API.Models
         [ForeignKey("ProductId")]
         public Product? Product { get; set; }
 
-        public string Type { get; set; } = "in"; // 'in', 'adjust', 'count'
+        public string Type { get; set; } = "in";
 
         public int Quantity { get; set; }
         public string? Note { get; set; }

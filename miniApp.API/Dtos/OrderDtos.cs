@@ -16,6 +16,7 @@ namespace miniApp.API.Dtos
         public string District { get; set; } = string.Empty;
         public string Province { get; set; } = string.Empty;
         public string ZipCode { get; set; } = string.Empty;
+        public string? Social { get; set; }
         public string? Gender { get; set; }
         public DateTime? BirthDate { get; set; }
         public string? Occupation { get; set; }
@@ -31,6 +32,7 @@ namespace miniApp.API.Dtos
     {
         [Required]
         public int Id { get; set; }
+
     }
 
     public class OrderItemDto
@@ -58,6 +60,7 @@ namespace miniApp.API.Dtos
         public string District { get; set; } = "";
         public string Province { get; set; } = "";
         public string ZipCode { get; set; } = "";
+        public string? Social { get; set; }
 
         public string? Gender { get; set; }
         public DateTime? BirthDate { get; set; }
