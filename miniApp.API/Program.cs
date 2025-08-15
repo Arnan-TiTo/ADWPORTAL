@@ -78,6 +78,7 @@ if (builder.Configuration.GetValue<bool>("SwaggerEnabled"))
         });
     });
 }
+
 // ========== CORS ========== //
 builder.Services.AddCors(options =>
 {
@@ -88,6 +89,7 @@ builder.Services.AddCors(options =>
             "https://localhost:5056",
             "http://localhost:5067",
             "https://localhost:7079",
+            "https://adminportal.vibeandchic.com",
             "https://salereport.vibeandchic.com",
             "https://frontline.vibeandchic.com"
         )
