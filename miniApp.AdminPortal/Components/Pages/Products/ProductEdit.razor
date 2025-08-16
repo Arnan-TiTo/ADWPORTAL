@@ -145,7 +145,7 @@ else
 
             brands = await client.GetFromJsonAsync<List<BrandDto>>("api/ProductBrand");
             categories = await client.GetFromJsonAsync<List<CategoryDto>>("api/ProductCategory");
-            users = await client.GetFromJsonAsync<List<UserItem>>("api/Users/all");
+            users = await client.GetFromJsonAsync<List<UserItem>>("api/Users");
             locations = await client.GetFromJsonAsync<List<LocationItem>>("api/Locations/dropdown");
 
             if (IsCreate)

@@ -1,6 +1,7 @@
-﻿@page "/LocationEdit/{Id:int}"  
+﻿@page "/LocationEdit/{Id:int}"
 @using System.Net.Http.Headers
 @using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.Extensions.Options
 @using Microsoft.JSInterop
 @using miniApp.AdminPortal.Components.Pages
@@ -9,8 +10,8 @@
 @inject IOptions<ApiSettings> Options
 @inject AuthTokenProvider TokenProvider
 @inject IJSRuntime JS
-@inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <h3>Edit Location</h3>
 
@@ -25,6 +26,7 @@ else
         <ValidationSummary />
 
         <div class="row g-3">
+            <!-- Basic -->
             <div class="col-md-6">
                 <label class="form-label">Name</label>
                 <InputText class="form-control" @bind-Value="model.Name" />
@@ -34,6 +36,44 @@ else
                 <InputText class="form-control" @bind-Value="model.Note" />
             </div>
 
+            <!-- New address fields -->
+            <div class="col-md-6">
+                <label class="form-label">Place Name</label>
+                <InputText class="form-control" @bind-Value="model.PlaceName" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Building</label>
+                <InputText class="form-control" @bind-Value="model.Building" />
+            </div>
+
+            <div class="col-12">
+                <label class="form-label">Address</label>
+                <InputText class="form-control" @bind-Value="model.Address" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">District</label>
+                <InputText class="form-control" @bind-Value="model.District" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Province</label>
+                <InputText class="form-control" @bind-Value="model.Province" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Postcode</label>
+                <InputText class="form-control" @bind-Value="model.Postcode" />
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Contact Person</label>
+                <InputText class="form-control" @bind-Value="model.ContractPerson" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Contact Phone</label>
+                <InputText class="form-control" @bind-Value="model.ContractPhone" />
+            </div>
+
+            <!-- Geo + User -->
             <div class="col-md-4">
                 <label class="form-label">Latitude</label>
                 <InputNumber class="form-control" @bind-Value="model.Latitude" />
@@ -42,7 +82,6 @@ else
                 <label class="form-label">Longitude</label>
                 <InputNumber class="form-control" @bind-Value="model.Longitude" />
             </div>
-
             <div class="col-md-4">
                 <label class="form-label">User</label>
                 <InputSelect class="form-select" @bind-Value="model.UserId">
@@ -56,6 +95,7 @@ else
                 </InputSelect>
             </div>
 
+            <!-- Images -->
             <div class="col-12">
                 <label class="form-label">Current Images</label>
                 <div class="d-flex flex-wrap gap-2">
@@ -65,24 +105,18 @@ else
                         {
                             @if (!string.IsNullOrWhiteSpace(src))
                             {
-                                var fullImageUrl = BuildImageUrl(src);
-                                <div class="position-relative d-inline-block">
-                                    <img src="@fullImageUrl"
-                                         width="50" height="50"
-                                         class="rounded border"
-                                         style="cursor: zoom-in"
-                                         @onclick="() => OpenImage(fullImageUrl)" />
-                                </div>
-                            }
-                            else
-                            {
-                                <span>-</span>
+                                <img src="@src"
+                                     width="50" height="50"
+                                     class="rounded border"
+                                     style="cursor: zoom-in; object-fit: cover"
+                                     @onclick="() => OpenImage(src)" />
                             }
                         }
-
-
                     }
-                    else { <span>-</span> }
+                    else
+                    {
+                        <span>-</span>
+                    }
                 </div>
             </div>
 
@@ -92,7 +126,7 @@ else
                 <div class="d-flex flex-wrap gap-2 mt-2">
                     @foreach (var p in newPreviews)
                     {
-                        <img src="@p" width="96" height="96" class="rounded border" />
+                        <img src="@p" width="96" height="96" class="rounded border" style="object-fit:cover" />
                     }
                 </div>
             </div>
@@ -109,21 +143,15 @@ else
     [Parameter] public int Id { get; set; }
 
     private LocationEditVm? model;
+    private List<UserItem>? users;
     private List<IBrowserFile> newFiles = new();
     private List<string> newPreviews = new();
     private List<string>? existingThumbs;
-    private List<UserItem>? users;
 
     private string ApiBaseUrl => Options.Value.ApiBaseUrl;
 
     private (string msg, string type)? _pendingToast;
     private bool _navigateToList;
-
-    private async Task OpenImage(string? src)
-    {
-        if (string.IsNullOrWhiteSpace(src)) return;
-        await JS.InvokeVoidAsync("showImage", src);
-    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -131,11 +159,12 @@ else
         {
             var client = ClientFactory.CreateClient();
             client.BaseAddress = new Uri(ApiBaseUrl);
+
             var token = TokenProvider.Token;
             if (!string.IsNullOrWhiteSpace(token))
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            users = await client.GetFromJsonAsync<List<UserItem>>("api/Users/all");
+            users = await client.GetFromJsonAsync<List<UserItem>>("api/Users");
 
             var loc = await client.GetFromJsonAsync<LocationDto>($"api/Locations/{Id}");
             if (loc == null)
@@ -152,7 +181,17 @@ else
                 Note = loc.Note ?? "",
                 Latitude = loc.Latitude,
                 Longitude = loc.Longitude,
-                UserId = loc.UserId
+                UserId = loc.UserId,
+
+                // map new fields
+                PlaceName = loc.PlaceName,
+                Building = loc.Building,
+                Address = loc.Address,
+                District = loc.District,
+                Province = loc.Province,
+                Postcode = loc.Postcode,
+                ContractPerson = loc.ContractPerson,
+                ContractPhone = loc.ContractPhone
             };
 
             existingThumbs = loc.Images?.Select(i => BuildImageUrl(i.ImageUrl)).ToList();
@@ -202,6 +241,7 @@ else
         {
             var client = ClientFactory.CreateClient();
             client.BaseAddress = new Uri(ApiBaseUrl);
+
             var token = TokenProvider.Token;
             if (!string.IsNullOrWhiteSpace(token))
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -209,12 +249,25 @@ else
             var selectedUsername = users?.FirstOrDefault(u => u.Id == model.UserId)?.Username ?? "";
 
             using var form = new MultipartFormDataContent();
+
+            // basic
             form.Add(new StringContent(model.Name ?? ""), "Name");
             form.Add(new StringContent(model.Note ?? ""), "Note");
             form.Add(new StringContent(model.Latitude.ToString(System.Globalization.CultureInfo.InvariantCulture)), "Latitude");
             form.Add(new StringContent(model.Longitude.ToString(System.Globalization.CultureInfo.InvariantCulture)), "Longitude");
             form.Add(new StringContent(selectedUsername), "Usernames");
 
+            // new fields
+            form.Add(new StringContent(model.PlaceName ?? ""), "PlaceName");
+            form.Add(new StringContent(model.Building ?? ""), "Building");
+            form.Add(new StringContent(model.Address ?? ""), "Address");
+            form.Add(new StringContent(model.District ?? ""), "District");
+            form.Add(new StringContent(model.Province ?? ""), "Province");
+            form.Add(new StringContent(model.Postcode ?? ""), "Postcode");
+            form.Add(new StringContent(model.ContractPerson ?? ""), "ContractPerson");
+            form.Add(new StringContent(model.ContractPhone ?? ""), "ContractPhone");
+
+            // images
             foreach (var f in newFiles)
             {
                 var sc = new StreamContent(f.OpenReadStream(5_000_000));
@@ -240,6 +293,12 @@ else
         }
     }
 
+    private async Task OpenImage(string? src)
+    {
+        if (string.IsNullOrWhiteSpace(src)) return;
+        await JS.InvokeVoidAsync("showImage", src);
+    }
+
     private void GoBack() => Navigation.NavigateTo("/LocationList");
 
     private string BuildImageUrl(string? url)
@@ -250,12 +309,13 @@ else
             return url;
 
         if (!url.StartsWith("/"))
-            url = "/images/uploads/" + url; 
+            url = "/images/uploads/" + url;
 
         var full = $"{ApiBaseUrl.TrimEnd('/')}{url}";
         return $"{full}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
     }
 
+    // ===== DTOs =====
     public class UserItem
     {
         public int Id { get; set; }
@@ -263,16 +323,12 @@ else
         public string Fullname { get; set; } = "";
     }
 
-    public class LocationEditVm
+    public class LocationImageDto
     {
-        public int Id { get; set; }
-        public string? Name { get; set; }
-        public string? Note { get; set; }
-        public float Latitude { get; set; }
-        public float Longitude { get; set; }
-        public int UserId { get; set; }
+        public int? Id { get; set; }
+        public string? ImageUrl { get; set; } = "";
     }
-  
+
     public class LocationDto
     {
         public int Id { get; set; }
@@ -284,7 +340,35 @@ else
         public string Username { get; set; } = "";
         public string Fullname { get; set; } = "";
         public List<LocationImageDto>? Images { get; set; }
+
+        // new fields from API
+        public string? PlaceName { get; set; }
+        public string? Building { get; set; }
+        public string? Address { get; set; }
+        public string? District { get; set; }
+        public string? Province { get; set; }
+        public string? Postcode { get; set; }
+        public string? ContractPerson { get; set; }
+        public string? ContractPhone { get; set; }
     }
-    public class LocationImageDto { public int? Id { get; set; } 
-    public string? ImageUrl { get; set; } = ""; }
+
+    public class LocationEditVm
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+        public string? Note { get; set; }
+        public float Latitude { get; set; }
+        public float Longitude { get; set; }
+        public int UserId { get; set; }
+
+        // new fields (bound in form)
+        public string? PlaceName { get; set; }
+        public string? Building { get; set; }
+        public string? Address { get; set; }
+        public string? District { get; set; }
+        public string? Province { get; set; }
+        public string? Postcode { get; set; }
+        public string? ContractPerson { get; set; }
+        public string? ContractPhone { get; set; }
+    }
 }

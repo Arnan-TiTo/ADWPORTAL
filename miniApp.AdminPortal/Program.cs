@@ -8,6 +8,8 @@ using miniApp.AdminPortal.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddRazorPages();
+
 // === Fixed API token ===
 var fixedToken = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
 builder.Services.AddSingleton(new AuthTokenProvider(fixedToken ?? ""));
