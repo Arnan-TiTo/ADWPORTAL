@@ -7,7 +7,7 @@
     var apiBaseUrl = ViewData["APIBASEURL"] ?? "";
 }
 
-<div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-4">
+<div class="max-w-md w-full mx-auto my-auto px-2 py-2">
     <!-- Header -->
     <div class="flex items-center mb-2">
         <button onclick="history.back()" class="text-xl">&#8592;</button>
@@ -16,16 +16,16 @@
 
     <!-- Search -->
     <div>
-        <input type="text" placeholder="Search" class="w-full bg-gray-100 rounded-xl px-4 py-2 focus:outline-none" />
+        <input type="text" placeholder="Search" class="w-full bg-gray-100 rounded-xl px-4 py-2 pb-2 focus:outline-none" />
     </div>
 
     <!-- Add Item Button -->
-    <button onclick="clearForm()" type="button" class="bg-blue-800 text-white font-semibold px-4 py-2 rounded-full">
-        + Add Item
+    <button onclick="clearForm()" type="button" class="bg-blue-800 text-white font-semibold px-4 py-2 relative mt-3 rounded-xl">
+        Add Item
     </button>
 
     <!-- Stock In Form -->
-    <form id="stockInForm" onsubmit="return submitStockIn(this, event);" class="space-y-3">
+    <form id="stockInForm" onsubmit="return submitStockIn(this, event);" class="space-y-3 py-2">
         <div class="grid grid-cols-2 gap-3">
             <input type="text" name="CreatedAt" id="CreatedAt" value="@DateTime.Now.ToString("dd/MM/yyyy")"
                    disabled class="border rounded-xl px-3 py-2 w-full bg-gray-100 text-gray-500" />

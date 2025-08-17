@@ -49,15 +49,9 @@ namespace miniApp.Web.Pages
                 CategoryDropdown = categoryResponse;
 
             var username = User.FindFirst(ClaimTypes.Name)?.Value;
-            if (!string.IsNullOrEmpty(username))
-            {
-                var userInfo = await http.GetFromJsonAsync<UserResponse>($"{APIBASEURL}api/users/profile?username={username}");
-                if (userInfo != null)
-                {
-                    CurrentUserFullname = userInfo.Fullname;
-                    CurrentUserId = userInfo.Id;
-                }
-            }
+            CurrentUserFullname = User.FindFirst("FULLNAME")?.Value ?? "";
+            CurrentUserId = Convert.ToInt32( User.FindFirst("USERID")?.Value);
+
         }
 
         public class LocationItem

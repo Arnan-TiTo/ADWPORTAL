@@ -4,7 +4,30 @@
     ViewData["Title"] = "Stock Count";
 }
 
-<div class="max-w-md w-full mx-auto px-4 py-4 space-y-6">
+@functions {
+    string ProductImg(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return Url.Content("~/images/products/vibechic_logo.png"); // รูป default
+
+        url = url.Replace("\\", "/").Trim();
+
+        if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return url;
+
+        if (url.StartsWith("/images/", StringComparison.OrdinalIgnoreCase))
+            return Url.Content("~" + url); // เช่น /images/products/a.jpg
+
+        if (url.StartsWith("images/", StringComparison.OrdinalIgnoreCase))
+            return Url.Content("~/" + url); // เช่น images/products/a.jpg
+
+        return Url.Content("~/images/products/" + url.TrimStart('/'));
+    }
+}
+
+
+<div class="max-w-md w-full mx-auto my-auto px-2 py-2">
     <!-- Header -->
     <div class="flex items-center justify-between">
         <button onclick="history.back()" class="text-xl">&#8592;</button>
@@ -43,7 +66,7 @@
                 {
                     var p = Model.Products[i];
                     <div class="flex items-center gap-4 border-b pb-2">
-                        <img src="/images/products/@(!string.IsNullOrEmpty(p.ImageUrl) ? p.ImageUrl : "vibechic_logo.png")"
+                        <img src="@ProductImg(p.ImageUrl)"
                              alt="Product" class="w-12 h-12 rounded" />
                         <div class="flex-grow">
                             <div class="font-semibold">@p.Name</div>

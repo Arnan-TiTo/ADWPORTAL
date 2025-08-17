@@ -10,23 +10,21 @@
 </div>
 
 <!-- กันชน bottom nav + layout -->
-<div class="max-w-md w-full mx-auto px-4 py-4 space-y-6 min-h-screen pb-24 md:pb-28">
-
+<div class="max-w-md w-full mx-auto my-auto px-2 py-2">
     <!-- Header -->
-    <div class="bg-yellow-200 text-center py-6 px-4 rounded-2xl relative w-full">
+    <div class="bg-yellow-200 text-center py-4 px-4 rounded-2xl relative w-full">
         <img src="/images/logo.png" alt="Logo" class="w-16 h-16 mx-auto rounded-full -mt-10 border-4 border-white" />
         <h2 class="text-lg font-bold text-black mt-2">@Model.Username</h2>
         <p class="text-sm text-gray-700">@Model.RoleDescription</p>
     </div>
 
     <!-- Form -->
-    <form id="locationForm" class="space-y-4" autocomplete="off">
+    <form id="locationForm" class="space-y-4 py-4" autocomplete="off">
         <!-- Basic -->
-        <input id="Name" placeholder="Location name" class="w-full px-4 py-2 border rounded-md shadow-sm" />
+        <input id="Name" placeholder="Location name" class="w-full px-4 py-4 border rounded-md shadow-sm" />
         <span class="text-red-600 text-sm" id="nameError"></span>
 
         <!-- Note (multi-line) -->
-        <label for="Note" class="block text-sm font-medium text-gray-700">Note</label>
         <textarea id="Note" class="w-full px-4 py-2 border rounded-md shadow-sm"
                   rows="4" placeholder="รายละเอียดเพิ่มเติม..."></textarea>
         <span class="text-red-600 text-sm" id="noteError"></span>
