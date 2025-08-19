@@ -186,7 +186,7 @@ namespace miniApp.API.Controllers
             };
 
             await _context.Database.ExecuteSqlRawAsync(
-                "EXEC miniapp.dbo.sp_AdjustOrTransferStock @ProductId, @FromLocationId, @ToLocationId, @Qty, @ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note",
+                "EXEC dbo.sp_AdjustOrTransferStock @ProductId, @FromLocationId, @ToLocationId, @Qty, @ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note",
                 p
             );
 
@@ -221,7 +221,7 @@ namespace miniApp.API.Controllers
             };
 
             await _context.Database.ExecuteSqlRawAsync(
-                "EXEC miniapp.dbo.sp_AdjustOrTransferStock @ProductId, @FromLocationId, @ToLocationId, @Qty, @ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note",
+                "EXEC dbo.sp_AdjustOrTransferStock @ProductId, @FromLocationId, @ToLocationId, @Qty, @ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note",
                 p
             );
 
@@ -240,7 +240,7 @@ namespace miniApp.API.Controllers
             await using var tx = await _context.Database.BeginTransactionAsync();
 
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
-                UPDATE miniapp.dbo.ProductStocks
+                UPDATE dbo.ProductStocks
                    SET QtyReserved = QtyReserved + {2}, UpdatedAt = SYSUTCDATETIME()
                  WHERE ProductId = {0} AND LocationId = {1}
                    AND (QtyOnHand - QtyReserved - QtyDamaged) >= {2};",
@@ -254,7 +254,7 @@ namespace miniApp.API.Controllers
 
             //location ลง log ด้วย (FromLocationId = LocationId)
             await _context.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO miniapp.dbo.StockTransactions
+                INSERT INTO dbo.StockTransactions
                     (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
                 VALUES
                     ({0}, {1}, NULL, {2}, 'RESERVE', {3}, {4}, {5}, {6});",
@@ -280,7 +280,7 @@ namespace miniApp.API.Controllers
             await using var tx = await _context.Database.BeginTransactionAsync();
 
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
-                UPDATE miniapp.dbo.ProductStocks
+                UPDATE dbo.ProductStocks
                    SET QtyReserved = QtyReserved - {2}, UpdatedAt = SYSUTCDATETIME()
                  WHERE ProductId = {0} AND LocationId = {1}
                    AND QtyReserved >= {2};",
@@ -294,7 +294,7 @@ namespace miniApp.API.Controllers
 
             //location ลง log ด้วย
             await _context.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO miniapp.dbo.StockTransactions
+                INSERT INTO dbo.StockTransactions
                     (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
                 VALUES
                     ({0}, {1}, NULL, {2}, 'RESERVE_CANCEL', {3}, {4}, {5}, {6});",
@@ -320,7 +320,7 @@ namespace miniApp.API.Controllers
             await using var tx = await _context.Database.BeginTransactionAsync();
 
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
-                UPDATE miniapp.dbo.ProductStocks
+                UPDATE dbo.ProductStocks
                    SET QtyReserved = QtyReserved - {2}, UpdatedAt = SYSUTCDATETIME()
                  WHERE ProductId = {0} AND LocationId = {1}
                    AND QtyReserved >= {2};",
@@ -346,7 +346,7 @@ namespace miniApp.API.Controllers
             };
 
             await _context.Database.ExecuteSqlRawAsync(
-                "EXEC miniapp.dbo.sp_AdjustOrTransferStock @ProductId, @FromLocationId, @ToLocationId, @Qty, @ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note",
+                "EXEC dbo.sp_AdjustOrTransferStock @ProductId, @FromLocationId, @ToLocationId, @Qty, @ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note",
                 p
             );
 
@@ -365,7 +365,7 @@ namespace miniApp.API.Controllers
             await using var tx = await _context.Database.BeginTransactionAsync();
 
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
-                UPDATE miniapp.dbo.ProductStocks
+                UPDATE dbo.ProductStocks
                    SET QtyDamaged = QtyDamaged + {2}, UpdatedAt = SYSUTCDATETIME()
                  WHERE ProductId = {0} AND LocationId = {1}
                    AND (QtyOnHand - QtyReserved - QtyDamaged) >= {2};",
@@ -379,7 +379,7 @@ namespace miniApp.API.Controllers
 
             // location ลง log
             await _context.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO miniapp.dbo.StockTransactions
+                INSERT INTO dbo.StockTransactions
                     (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
                 VALUES
                     ({0}, {1}, NULL, {2}, 'DAMAGE_ADD', {3}, {4}, {5}, {6});",
@@ -405,7 +405,7 @@ namespace miniApp.API.Controllers
             await using var tx = await _context.Database.BeginTransactionAsync();
 
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
-                UPDATE miniapp.dbo.ProductStocks
+                UPDATE dbo.ProductStocks
                    SET QtyDamaged = QtyDamaged - {2}, UpdatedAt = SYSUTCDATETIME()
                  WHERE ProductId = {0} AND LocationId = {1}
                    AND QtyDamaged >= {2};",
@@ -419,7 +419,7 @@ namespace miniApp.API.Controllers
 
             // ✅ ผูก location ลง log
             await _context.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO miniapp.dbo.StockTransactions
+                INSERT INTO dbo.StockTransactions
                     (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
                 VALUES
                     ({0}, {1}, NULL, {2}, 'DAMAGE_REPAIR', {3}, {4}, {5}, {6});",
@@ -489,7 +489,7 @@ namespace miniApp.API.Controllers
 
                 // 2) เพิ่มแถวเริ่มต้น
                 await _context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO miniapp.dbo.ProductStocks
+            INSERT INTO dbo.ProductStocks
               (ProductId, LocationId, QtyOnHand, QtyReserved, QtyDamaged,
                MinLevel, MaxLevel, ReorderPoint, Cost, UpdatedAt)
             VALUES
@@ -513,7 +513,7 @@ namespace miniApp.API.Controllers
             };
 
                     await _context.Database.ExecuteSqlRawAsync(
-                        "EXEC miniapp.dbo.sp_AdjustOrTransferStock " +
+                        "EXEC dbo.sp_AdjustOrTransferStock " +
                         "@ProductId, @FromLocationId, @ToLocationId, @Qty, " +
                         "@ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note", p);
                 }
@@ -582,7 +582,7 @@ namespace miniApp.API.Controllers
 
                 // ลบด้วยคำสั่ง SQL ตรง ๆ (ไม่มี OUTPUT จึงไม่ชน trigger)
                 var affected = await _context.Database.ExecuteSqlRawAsync(
-                    @"DELETE FROM miniapp.dbo.ProductStocks 
+                    @"DELETE FROM dbo.ProductStocks 
               WHERE LocationId = {0} AND ProductId = {1};",
                     locationId, productId);
 

@@ -22,7 +22,6 @@
         while (u.StartsWith("/")) u = u[1..];
 
         if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
-
         if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
 
         return $"/images/{folder}/{u}";
@@ -86,7 +85,7 @@
         </div>
     </div>
 
-    <!-- Product List -->
+    <!-- Product List (เฉพาะสินค้าใน location ที่ user ถูก assign) -->
     <div>
         <div class="flex items-center justify-between mb-1">
             <span class="text-sm font-semibold">All Product</span>
@@ -121,6 +120,10 @@
     <script>
         const APIBASEURL = '@apiBase';
         const AUTHTOKEN  = '@token';
+        const USERID     = @userId;
+
+        // ชุด product id ที่ user มองเห็น (ฝั่ง server filter มาแล้ว)
+        const VISIBLE_IDS = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.VisibleProductIds));
 
         function scrollCategory(dir) {
           document.getElementById("categoryScroll").scrollLeft += dir * 120;
@@ -132,12 +135,9 @@
         function resolveImg(url, folder = 'products') {
           if (!url) return `/images/${folder}/default.png`;
           url = String(url).replace(/\\/g, '/').trim();
-
           if (/^https?:\/\//i.test(url)) return url;
-
           url = url.replace(/^\/+/, '');
-
-          if (/^images\//i.test(url))        return '/' + url;
+          if (/^images\//i.test(url)) return '/' + url;
           if (new RegExp(`^${folder}/`, 'i').test(url)) return `/images/${url}`;
           return `/images/${folder}/${url}`;
         }
@@ -154,6 +154,7 @@
             return;
           }
 
+          // เรียก API เดิม แล้ว filter ด้วย VISIBLE_IDS
           const url = `${APIBASEURL}api/product/ProductSearch?query=${encodeURIComponent(keyword)}`;
 
           try {
@@ -163,7 +164,10 @@
               return;
             }
 
-            const products = await res.json();
+            const vis = new Set(VISIBLE_IDS || []);
+            let products = await res.json();
+            products = Array.isArray(products) ? products.filter(p => vis.has(p.id)) : [];
+
             if (!products.length) {
               container.innerHTML = `<p class="text-sm text-gray-400">No products found.</p>`;
               return;

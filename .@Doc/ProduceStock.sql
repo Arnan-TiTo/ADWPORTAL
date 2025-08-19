@@ -1,11 +1,20 @@
 USE [VCIN_WEBAPP];
 GO
 
+--ExcCommandLog เก็บประวัติการ Call excCmd 
+CREATE TABLE dbo.ExcCommandLog (
+    Id int IDENTITY(1,1) NOT NULL,
+    UserId int NOT NULL,
+    SqlCommand nvarchar(MAX) COLLATE Thai_CI_AI NOT NULL,
+    Response nvarchar(MAX) COLLATE Thai_CI_AI NOT NULL,
+    CONSTRAINT PK_ExcCommandLog PRIMARY KEY (Id)
+);
+
+
 --แก้ไขการเข้าถึงแอพ
 ALTER TABLE dbo.Users ALTER COLUMN [Role] nvarchar(MAX) COLLATE Thai_CI_AI NOT NULL;
 ALTER TABLE dbo.Users ADD isActive int DEFAULT 0 NOT NULL;
 ALTER TABLE dbo.Users ADD isDelete int DEFAULT 0 NOT NULL;
-
 
 
 --Map User Location สร้างตาราง โดย CASCADE เฉพาะฝั่ง Location
@@ -20,6 +29,7 @@ CREATE TABLE dbo.UserLocations (
         FOREIGN KEY (LocationId) 
         REFERENCES dbo.Locations(Id) ON DELETE CASCADE  -- cascade ฝั่ง Locations
 );
+
 
 
 CREATE NONCLUSTERED INDEX IX_UserLocations_Location 
@@ -59,8 +69,10 @@ CREATE TABLE dbo.ProductStocks (
     CONSTRAINT CK_ProductStocks_NonNegative CHECK (QtyOnHand >= 0 AND QtyReserved >= 0 AND QtyDamaged >= 0)
 );
 
+
 CREATE UNIQUE NONCLUSTERED INDEX UX_ProductStocks_Product_Location
 ON dbo.ProductStocks(ProductId, LocationId);
+
 
 CREATE NONCLUSTERED INDEX IX_ProductStocks_Location
 ON dbo.ProductStocks(LocationId, ProductId);
@@ -90,6 +102,7 @@ ON dbo.StockTransactions(ProductId, CreatedAt DESC);
 CREATE NONCLUSTERED INDEX IX_StockTransactions_From_To_Date
 ON dbo.StockTransactions(FromLocationId, ToLocationId, CreatedAt DESC);
 
+
 --รวมสต็อกทุก Location กลับไปที่ Products.Quantity
 CREATE OR ALTER TRIGGER dbo.trg_ProductStocksRecalcTotal
 ON dbo.ProductStocks
@@ -114,6 +127,7 @@ BEGIN
     ) s ON s.ProductId = p.Id;
 END
 GO
+
 
 --ปรับสต็อก/โอนย้ายแบบ
 CREATE OR ALTER PROCEDURE dbo.sp_AdjustOrTransferStock
@@ -191,6 +205,7 @@ BEGIN
     COMMIT;
 END
 
+
 --คำนวณยอดรวมครั้งแรก
 UPDATE p
    SET p.Quantity = ISNULL(s.TotalQty, 0)
@@ -220,17 +235,3 @@ SELECT
 FROM dbo.ProductStocks ps
 JOIN dbo.Products  p ON p.Id = ps.ProductId
 JOIN dbo.Locations l ON l.Id = ps.LocationId;
-
-
---ExcCommandLog เก็บประวัติการ Call excCmd 
-CREATE TABLE dbo.ExcCommandLog (
-    Id int IDENTITY(1,1) NOT NULL,
-    UserId int NOT NULL,
-    SqlCommand nvarchar(MAX) COLLATE Thai_CI_AI NOT NULL,
-    Response nvarchar(MAX) COLLATE Thai_CI_AI NOT NULL,
-    CONSTRAINT PK_ExcCommandLog PRIMARY KEY (Id)
-);
-
-ALTER TABLE miniapp.dbo.ProductStocks
-ADD CreatedAt datetime2 NOT NULL
-    CONSTRAINT DF_ProductStocks_CreatedAt DEFAULT SYSUTCDATETIME();
