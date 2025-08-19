@@ -1,0 +1,481 @@
+﻿@page "/ProductStockList"
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.Extensions.Options
+@inject IHttpClientFactory ClientFactory
+@inject IOptions<ApiSettings> Options
+@inject AuthTokenProvider TokenProvider
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider Auth
+
+<h3 class="mb-3">Manage Product Stock</h3>
+
+<!-- 1) LOCATION -->
+<div class="card mb-3">
+    <div class="card-body">
+        <label class="form-label">Location</label>
+        <select class="form-select" @onchange="OnLocationChanged">
+            <option value="">-- Select location --</option>
+            @foreach (var l in locations)
+            {
+                <option value="@l.Id" selected="@(l.Id == selectedLocationId)">@l.Name</option>
+            }
+        </select>
+    </div>
+</div>
+
+<!-- 2) PRODUCT ADD -->
+<div class="row g-2 align-items-end">
+  <div class="col-md-5">
+    <label class="form-label">Search product (เฉพาะที่ยังไม่มีใน location นี้)</label>
+    <input class="form-control"
+           placeholder="Type name or SKU…"
+           @bind="searchText"
+           @oninput="OnSearchInput"
+           @onfocus="OpenSuggestIfNeeded"
+           disabled="@(selectedLocationId<=0)" />
+
+    @if (selectedLocationId > 0)
+    {
+      <select class="form-select mt-2"
+              @bind="selectedProductId"
+              disabled="@(finding)">
+        @if (finding)
+        {
+          <option value="">(loading...)</option>
+        }
+        else if (searchOptions.Count == 0)
+        {
+          <option value="">(เพิ่มสินค้าทั้งหมดแล้ว)</option>
+        }
+        else
+        {
+          <option value="">-- Select product --</option>
+          @foreach (var p in searchOptions)
+          {
+            <option value="@p.Id">@p.Name (@p.Sku)</option>
+          }
+        }
+      </select>
+    }
+  </div>
+
+  <div class="col-md-2">
+    <label class="form-label">Initial Qty (optional)</label>
+    <input type="number" class="form-control" min="0" step="1"
+           @bind="initialQty" disabled="@(selectedLocationId<=0)" />
+  </div>
+
+  <div class="col-md-4">
+    <label class="form-label">Note (optional)</label>
+    <input class="form-control" @bind="addNote" disabled="@(selectedLocationId<=0)" />
+  </div>
+
+  <div class="col-md-1 d-grid">
+    <button class="btn btn-primary"
+            @onclick="AddRow"
+            disabled="@((adding || selectedLocationId<=0 || selectedProductId<=0))">
+      @(adding ? "Adding..." : "Add")
+    </button>
+  </div>
+</div>
+
+
+<!-- 3) LIST -->
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title mb-3">Products in this location</h5>
+
+        @if (loading)
+        {
+            <p><em>Loading…</em></p>
+        }
+        else if (selectedLocationId <= 0)
+        {
+            <p class="text-muted">Please select a location.</p>
+        }
+        else if (rows.Count == 0)
+        {
+            <p>No products in this location.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width:64px;">Image</th>
+                            <th>Product</th>
+                            <th>SKU</th>
+                            <th class="text-end">OnHand</th>
+                            <th class="text-end">Reserved</th>
+                            <th class="text-end">Damaged</th>
+                            <th class="text-end">Available</th>
+                            <th style="width:280px;" class="text-end">Quick In/Out</th>
+                            <th style="width:80px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in rows)
+                        {
+                            var img = BuildImageUrl(r.ImageUrl);
+                            <tr>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(img))
+                                    {
+                                        <img src="@img" width="48" height="48" class="rounded border object-fit-cover" />
+                                    }
+                                    else { <span class="text-muted">-</span> }
+                                </td>
+                                <td>@r.Name</td>
+                                <td>@r.Sku</td>
+                                <td class="text-end">@r.QtyOnHand</td>
+                                <td class="text-end">@r.QtyReserved</td>
+                                <td class="text-end">@r.QtyDamaged</td>
+                                <td class="text-end fw-bold">@r.QtyAvailable</td>
+                                <td class="text-end">
+                                    <div class="input-group input-group-sm justify-content-end" style="max-width:260px;margin-left:auto;">
+                                        <span class="input-group-text">Qty</span>
+                                        <input type="number" class="form-control" min="1" step="1"
+                                               style="max-width:90px;"
+                                               @bind="r.EditQty" @bind:event="oninput" />
+                                        <button class="btn btn-outline-success"
+                                                title="+ In"
+                                                @onclick="() => QuickAdjust(r, +r.EditQty)"
+                                                disabled="@(saving || r.EditQty<=0)">
+                                            + In
+                                        </button>
+                                        <button class="btn btn-outline-warning"
+                                                title="− Out"
+                                                @onclick="() => QuickAdjust(r, -r.EditQty)"
+                                                disabled="@(saving || r.EditQty<=0 || r.EditQty > r.QtyAvailable)">
+                                            − Out
+                                        </button>
+                                    </div>
+                                </td>
+                                <td>
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            title="Delete row"
+                                            @onclick="() => DeleteRowSmart(r)"
+                                            disabled="@saving">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    // ===== State =====
+    private bool loading = true;
+    private bool adding = false;
+    private bool saving = false;
+
+    private List<LocationOption> locations = new();
+    private int selectedLocationId = 0;
+
+    // Add area
+    private string? searchText;
+    private List<ProductDrop> searchOptions = new();
+    private int selectedProductId = 0;
+    private int initialQty = 0;
+    private string? addNote;
+    private bool finding = false;
+
+    // List rows
+    private List<Row> rows = new();
+
+    private string ApiBase => Options.Value.ApiBaseUrl;
+
+    // Auth user id (for PerformedByUserId)
+    private int _userId = 0;
+
+    // ===== Lifecycle =====
+    protected override async Task OnInitializedAsync()
+    {
+        // read USERID claim
+        try
+        {
+            var auth = await Auth.GetAuthenticationStateAsync();
+            var claim = auth.User?.FindFirst("USERID")?.Value;
+            int.TryParse(claim, out _userId);
+        }
+        catch { _userId = 0; }
+
+        await LoadLocations();
+        loading = false;
+    }
+
+    // ===== HTTP =====
+    private async Task<HttpClient> CreateClient()
+    {
+        var c = ClientFactory.CreateClient();
+        c.BaseAddress = new Uri(ApiBase);
+        var token = TokenProvider.Token;
+        if (!string.IsNullOrWhiteSpace(token))
+            c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return c;
+    }
+
+    private async Task LoadLocations()
+    {
+        try
+        {
+            var http = await CreateClient();
+            locations = await http.GetFromJsonAsync<List<LocationOption>>("api/locations/dropdown") ?? new();
+            // ไม่ auto เลือก location — ให้ผู้ใช้เลือกเอง
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load locations failed: {ex.Message}", "error");
+            locations = new();
+        }
+    }
+
+    private async Task LoadRows()
+    {
+        rows = new();
+        searchOptions = new();
+        selectedProductId = 0;
+        searchText = string.Empty;
+
+        if (selectedLocationId <= 0) return;
+
+        try
+        {
+            var http = await CreateClient();
+            // ใช้ endpoint list ตาม location + มี userId
+            var url = $"api/ProductStock/location/{selectedLocationId}?userId={_userId}";
+            var items = await http.GetFromJsonAsync<List<Row>>(url) ?? new();
+            // default EditQty = 1
+            rows = items.Select(i => { i.EditQty = 1; return i; }).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load rows failed: {ex.Message}", "error");
+        }
+    }
+
+    // ===== Add: search & fetch dropdown =====
+    private async Task OnLocationChanged(ChangeEventArgs e)
+    {
+        selectedLocationId = int.TryParse(e.Value?.ToString(), out var v) ? v : 0;
+        await LoadRows();
+
+        // โหลด top list ทันที แม้ยังไม่พิมพ์
+        if (selectedLocationId > 0)
+            await FetchProductsForAdd(string.Empty);
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs _)
+        => await FetchProductsForAdd(searchText ?? string.Empty);
+
+    private async Task OpenSuggestIfNeeded(FocusEventArgs _)
+    {
+        if (selectedLocationId > 0 && searchOptions.Count == 0)
+            await FetchProductsForAdd(searchText ?? string.Empty);
+    }
+
+    private async Task FetchProductsForAdd(string keyword)
+    {
+        if (selectedLocationId <= 0) { searchOptions = new(); selectedProductId = 0; return; }
+
+        try
+        {
+            finding = true;
+            var http = await CreateClient();
+            var url = $"api/ProductStock/dropdown-not-in-location?locationid={selectedLocationId}&q={Uri.EscapeDataString(keyword)}";
+            searchOptions = await http.GetFromJsonAsync<List<ProductDrop>>(url) ?? new();
+            if (searchOptions.Count == 0) selectedProductId = 0;
+        }
+        catch
+        {
+            searchOptions = new();
+            selectedProductId = 0;
+        }
+        finally { finding = false; }
+    }
+
+    private async Task AddRow()
+    {
+        if (selectedLocationId <= 0 || selectedProductId <= 0) return;
+
+        try
+        {
+            adding = true;
+            var http = await CreateClient();
+
+            var payload = new
+            {
+                LocationId = selectedLocationId,
+                ProductId = selectedProductId,
+                InitialQty = Math.Max(0, initialQty),
+                ReasonCode = "ADD_PRODUCT",
+                ReferenceType = "ADD_PRODUCT",
+                ReferenceId = (string)"",
+                PerformedByUserId = _userId,
+                Note = addNote ?? ""
+            };
+
+            var resp = await http.PostAsJsonAsync("api/ProductStock/add-row", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                await JS.InvokeVoidAsync("showToast", "Added.", "success");
+                // reload list for correctness
+                await LoadRows();
+
+                // reset add form
+                searchText = string.Empty;
+                searchOptions = new();
+                selectedProductId = 0;
+                initialQty = 0;
+                addNote = string.Empty;
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("showToast", $"Add failed: {await resp.Content.ReadAsStringAsync()}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Add failed: {ex.Message}", "error");
+        }
+        finally { adding = false; }
+    }
+
+    // ===== Quick in/out on list =====
+    private async Task QuickAdjust(Row r, int qtySigned)
+    {
+        if (qtySigned == 0) return;
+        if (qtySigned < 0 && Math.Abs(qtySigned) > r.QtyAvailable)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Max {r.QtyAvailable} (available).", "warning");
+            return;
+        }
+
+        try
+        {
+            saving = true;
+            var http = await CreateClient();
+
+            var payload = new
+            {
+                ProductId = r.ProductId,
+                LocationId = selectedLocationId,
+                QtyOnHand = qtySigned,
+                ReasonCode = qtySigned > 0 ? "ADJUST_IN" : "ADJUST_OUT",
+                ReferenceType = qtySigned > 0 ? "ADJUST_IN" : "ADJUST_OUT",
+                ReferenceId = "",
+                PerformedByUserId = _userId,
+                Note = ""
+            };
+
+            var resp = await http.PostAsJsonAsync("api/ProductStock/adjust", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                // update UI
+                r.QtyOnHand += qtySigned;
+                r.QtyAvailable += qtySigned;
+                r.EditQty = 1; 
+                await JS.InvokeVoidAsync("showToast", "Saved.", "success");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("showToast", $"Adjust failed: {await resp.Content.ReadAsStringAsync()}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Adjust failed: {ex.Message}", "error");
+        }
+        finally { saving = false; }
+    }
+
+
+    private async Task DeleteRowSmart(Row r)
+    {
+        if (r.QtyReserved > 0)
+        {
+            await JS.InvokeVoidAsync("showToast", "ยังมีจองค้างอยู่ กรุณา Release ให้หมดก่อนลบ.", "warning");
+            return;
+        }
+        if (r.QtyDamaged > 0)
+        {
+            await JS.InvokeVoidAsync("showToast", "ยังมีชำรุดค้างอยู่ กรุณาแก้ไขชำรุดให้เป็น 0 ก่อนลบ.", "warning");
+            return;
+        }
+        if (r.QtyOnHand > 0)
+        {
+            await JS.InvokeVoidAsync("showToast", "คงเหลือต้องเท่ากับ 0 กรุณาแก้ไขให้ถูกต้องก่อนลบ.", "warning");
+            return;
+        }
+
+        var confirm = await JS.InvokeAsync<bool>("confirm", 
+            r.QtyOnHand == 0
+            ? $"ลบ \"{r.Name}\" ยืนยันหรือไม่?"
+            : $"ลบสินค้า \"{r.Name}\" ออกจาก Location นี้\nยืนยันหรือไม่?");
+        if (!confirm) return;
+
+        try
+        {
+            saving = true;
+
+            var http = await CreateClient();
+            var resp = await http.DeleteAsync($"api/ProductStock/{selectedLocationId}/{r.ProductId}");
+            if (resp.IsSuccessStatusCode)
+            {
+                await JS.InvokeVoidAsync("showToast", "Deleted.", "success");
+
+                await Task.Yield();
+
+                rows.Remove(r);
+                await InvokeAsync(StateHasChanged);
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("showToast", $"Delete failed: {await resp.Content.ReadAsStringAsync()}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Delete failed: {ex.Message}", "error");
+        }
+        finally { saving = false; }
+    }
+
+
+    // ===== Utils & DTOs =====
+    private string BuildImageUrl(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        if (raw.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return raw;
+        if (!raw.StartsWith("/")) raw = "/images/products/" + raw.Trim();
+        return $"{ApiBase.TrimEnd('/')}{raw}";
+    }
+
+    public class LocationOption { public int Id { get; set; } public string Name { get; set; } = ""; }
+    public class ProductDrop { public int Id { get; set; } public string Name { get; set; } = ""; public string? Sku { get; set; } }
+
+    public class Row
+    {
+        public int ProductId { get; set; }
+        public string Name { get; set; } = "";
+        public string? Sku { get; set; }
+        public string? ImageUrl { get; set; }
+        public decimal Price { get; set; }
+        public int QtyOnHand { get; set; }
+        public int QtyReserved { get; set; }
+        public int QtyDamaged { get; set; }
+        public int QtyAvailable { get; set; }
+
+        // UI only
+        public int EditQty { get; set; } = 1;
+    }
+}

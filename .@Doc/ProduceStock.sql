@@ -231,4 +231,6 @@ CREATE TABLE dbo.ExcCommandLog (
     CONSTRAINT PK_ExcCommandLog PRIMARY KEY (Id)
 );
 
-
+ALTER TABLE miniapp.dbo.ProductStocks
+ADD CreatedAt datetime2 NOT NULL
+    CONSTRAINT DF_ProductStocks_CreatedAt DEFAULT SYSUTCDATETIME();

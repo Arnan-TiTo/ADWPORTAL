@@ -24,7 +24,6 @@ namespace miniApp.API.Controllers
             _config = config;
         }
 
-        // ===== Simple service-to-service token like your sample =====
         private bool IsAuthorized()
         {
             var expectedToken = _config["AUTH_TOKEN"];
@@ -36,23 +35,14 @@ namespace miniApp.API.Controllers
             return token == expectedToken;
         }
 
-        // ===== Helper: (optional) set session context for RLS if you enabled it =====
         private async Task SetUserSessionContextAsync(int userId)
         {
-            // If you didn't enable RLS, this is harmless/no-op.
             var p = new SqlParameter("@userId", userId);
             await _context.Database.ExecuteSqlRawAsync("EXEC sys.sp_set_session_context @key=N'user_id', @value=@userId", p);
         }
 
-        // ===== Helper: user can see this location? (when not using RLS) =====
-        private async Task<bool> UserHasAccessAsync(int userId, int locationId)
-        {
-            return await _context.UserLocations
-                .AnyAsync(ul => ul.UserId == userId && ul.LocationId == locationId);
-        }
 
         // ====== GET: api/productstock (paged list with filters, scoped by user) ======
-        // Query params: userId (required), locationId?, productId?, search?, page=1, pageSize=50
         [HttpGet]
         public async Task<IActionResult> GetStocks([FromQuery] int userId, [FromQuery] int? locationId,
                                                    [FromQuery] int? productId, [FromQuery] string? search,
@@ -61,18 +51,17 @@ namespace miniApp.API.Controllers
             if (!IsAuthorized()) return Unauthorized();
             if (userId <= 0) return BadRequest("userId is required.");
 
-            await SetUserSessionContextAsync(userId); // for RLS (optional)
+            await SetUserSessionContextAsync(userId);
 
             var q = from ps in _context.ProductStocks
                     join p in _context.Products on ps.ProductId equals p.Id
                     join l in _context.Locations on ps.LocationId equals l.Id
-                    // If you do NOT use RLS, uncomment the WHERE EXISTS to enforce app-side filtering:
-                    // where _context.UserLocations.Any(ul => ul.UserId == userId && ul.LocationId == ps.LocationId)
                     select new
                     {
                         ps.ProductId,
                         p.Name,
                         p.Sku,
+                        p.ImageUrl,
                         ps.LocationId,
                         LocationName = l.Name,
                         ps.QtyOnHand,
@@ -80,7 +69,9 @@ namespace miniApp.API.Controllers
                         ps.QtyDamaged,
                         ps.QtyAvailable,
                         p.Price,
-                        TotalQtyAllLocations = p.Quantity
+                        TotalQtyAllLocations = p.Quantity,
+                        CategoryName = (string?)null,
+                        BrandName = (string?)null
                     };
 
             if (locationId.HasValue) q = q.Where(x => x.LocationId == locationId.Value);
@@ -92,11 +83,10 @@ namespace miniApp.API.Controllers
             }
 
             var total = await q.CountAsync();
-            var items = await q
-                .OrderBy(x => x.Name).ThenBy(x => x.LocationName)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
+            var items = await q.OrderBy(x => x.Name).ThenBy(x => x.LocationName)
+                               .Skip((page - 1) * pageSize)
+                               .Take(pageSize)
+                               .ToListAsync();
 
             return Ok(new { total, page, pageSize, items });
         }
@@ -113,13 +103,13 @@ namespace miniApp.API.Controllers
             var q = from ps in _context.ProductStocks
                     join p in _context.Products on ps.ProductId equals p.Id
                     join l in _context.Locations on ps.LocationId equals l.Id
-                    // where _context.UserLocations.Any(ul => ul.UserId == userId && ul.LocationId == ps.LocationId)
                     where ps.ProductId == productId
                     select new
                     {
                         ps.ProductId,
                         p.Name,
                         p.Sku,
+                        p.ImageUrl,
                         ps.LocationId,
                         LocationName = l.Name,
                         ps.QtyOnHand,
@@ -127,14 +117,16 @@ namespace miniApp.API.Controllers
                         ps.QtyDamaged,
                         ps.QtyAvailable,
                         p.Price,
-                        TotalQtyAllLocations = p.Quantity
+                        TotalQtyAllLocations = p.Quantity,
+                        CategoryName = (string?)null,
+                        BrandName = (string?)null
                     };
 
             var items = await q.OrderBy(x => x.LocationName).ToListAsync();
             return Ok(items);
         }
 
-        // ====== GET: api/productstock/location/{locationId}?userId=...  all products at one location ======
+        // ====== GET: api/productstock/location/{locationId}?userId=... ======
         [HttpGet("location/{locationId}")]
         public async Task<IActionResult> GetByLocation(int locationId, [FromQuery] int userId)
         {
@@ -142,9 +134,6 @@ namespace miniApp.API.Controllers
             if (userId <= 0) return BadRequest("userId is required.");
 
             await SetUserSessionContextAsync(userId);
-
-            // If not using RLS, enforce:
-            // if (!await UserHasAccessAsync(userId, locationId)) return Forbid();
 
             var q = from ps in _context.ProductStocks
                     join p in _context.Products on ps.ProductId equals p.Id
@@ -155,6 +144,7 @@ namespace miniApp.API.Controllers
                         ps.ProductId,
                         p.Name,
                         p.Sku,
+                        p.ImageUrl,
                         ps.LocationId,
                         LocationName = l.Name,
                         ps.QtyOnHand,
@@ -162,7 +152,9 @@ namespace miniApp.API.Controllers
                         ps.QtyDamaged,
                         ps.QtyAvailable,
                         p.Price,
-                        TotalQtyAllLocations = p.Quantity
+                        TotalQtyAllLocations = p.Quantity,
+                        CategoryName = (string?)null,
+                        BrandName = (string?)null
                     };
 
             var items = await q.OrderBy(x => x.Name).ToListAsync();
@@ -170,7 +162,6 @@ namespace miniApp.API.Controllers
         }
 
         // ====== POST: api/productstock/adjust  (รับเข้า/ตัดออก single-leg) ======
-        // body: { productId, locationId, qty, reasonCode, referenceType?, referenceId?, performedByUserId?, note? }
         [HttpPost("adjust")]
         public async Task<IActionResult> Adjust([FromBody] AdjustStockDto dto)
         {
@@ -179,18 +170,14 @@ namespace miniApp.API.Controllers
             if (dto.ProductId <= 0 || dto.LocationId <= 0 || dto.QtyOnHand == 0) return BadRequest("ProductId, LocationId, Qty are required.");
             if (string.IsNullOrWhiteSpace(dto.ReasonCode)) dto.ReasonCode = dto.QtyOnHand > 0 ? "PURCHASE" : "ISSUE";
 
-            // If not using RLS:
-            // if (!await UserHasAccessAsync(dto.PerformedByUserId ?? 0, dto.LocationId)) return Forbid();
-
             await using var tx = await _context.Database.BeginTransactionAsync();
 
-            // call stored procedure
             var p = new[]
             {
                 new SqlParameter("@ProductId", dto.ProductId),
                 new SqlParameter("@FromLocationId", dto.QtyOnHand < 0 ? dto.LocationId : (object)DBNull.Value),
                 new SqlParameter("@ToLocationId",   dto.QtyOnHand > 0 ? dto.LocationId : (object)DBNull.Value),
-                new SqlParameter("@Qty", Math.Abs(dto.QtyOnHand)), // sp expects positive for transfer; for single-leg we pass abs and From/To determines +/- inside sp
+                new SqlParameter("@Qty", Math.Abs(dto.QtyOnHand)),
                 new SqlParameter("@ReasonCode", dto.ReasonCode),
                 new SqlParameter("@ReferenceType", (object?)dto.ReferenceType ?? DBNull.Value),
                 new SqlParameter("@ReferenceId",   (object?)dto.ReferenceId   ?? DBNull.Value),
@@ -198,7 +185,6 @@ namespace miniApp.API.Controllers
                 new SqlParameter("@Note", (object?)dto.Note ?? DBNull.Value),
             };
 
-            // For single-leg we pass either From or To; sp handles +/- accordingly.
             await _context.Database.ExecuteSqlRawAsync(
                 "EXEC miniapp.dbo.sp_AdjustOrTransferStock @ProductId, @FromLocationId, @ToLocationId, @Qty, @ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note",
                 p
@@ -208,8 +194,7 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== POST: api/productstock/transfer  (โอนย้ายระหว่างสาขา) ======
-        // body: { productId, fromLocationId, toLocationId, qty, referenceType?, referenceId?, performedByUserId?, note? }
+        // ====== POST: api/productstock/transfer  ======
         [HttpPost("transfer")]
         public async Task<IActionResult> Transfer([FromBody] TransferStockDto dto)
         {
@@ -244,8 +229,7 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== POST: api/productstock/reserve  (จองของ) ======
-        // body: { productId, locationId, qty, referenceType?, referenceId?, performedByUserId?, note? }
+        // ====== POST: api/productstock/reserve  ======
         [HttpPost("reserve")]
         public async Task<IActionResult> Reserve([FromBody] ReserveDto dto)
         {
@@ -255,7 +239,6 @@ namespace miniApp.API.Controllers
 
             await using var tx = await _context.Database.BeginTransactionAsync();
 
-            // optimistic guard: only increase reserved if available >= qty
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
                 UPDATE miniapp.dbo.ProductStocks
                    SET QtyReserved = QtyReserved + {2}, UpdatedAt = SYSUTCDATETIME()
@@ -269,13 +252,13 @@ namespace miniApp.API.Controllers
                 return Conflict("Insufficient available quantity to reserve.");
             }
 
-            // audit log (optional): you can log RESERVE in StockTransactions if desired
+            //location ลง log ด้วย (FromLocationId = LocationId)
             await _context.Database.ExecuteSqlRawAsync(@"
                 INSERT INTO miniapp.dbo.StockTransactions
                     (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
                 VALUES
-                    ({0}, NULL, NULL, {1}, 'RESERVE', {2}, {3}, {4}, {5});",
-                dto.ProductId, dto.QtyOnHand,
+                    ({0}, {1}, NULL, {2}, 'RESERVE', {3}, {4}, {5}, {6});",
+                dto.ProductId, dto.LocationId, dto.QtyOnHand,
                 (object?)dto.ReferenceType ?? DBNull.Value,
                 (object?)dto.ReferenceId ?? DBNull.Value,
                 (object?)dto.PerformedByUserId ?? DBNull.Value,
@@ -286,8 +269,7 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== POST: api/productstock/release-reserve  (ปล่อยจอง/ยกเลิกจอง) ======
-        // body: { productId, locationId, qty, ... }
+        // ====== POST: api/productstock/release-reserve  ======
         [HttpPost("release-reserve")]
         public async Task<IActionResult> ReleaseReserve([FromBody] ReserveDto dto)
         {
@@ -310,12 +292,13 @@ namespace miniApp.API.Controllers
                 return Conflict("Not enough reserved quantity to release.");
             }
 
+            //location ลง log ด้วย
             await _context.Database.ExecuteSqlRawAsync(@"
                 INSERT INTO miniapp.dbo.StockTransactions
                     (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
                 VALUES
-                    ({0}, NULL, NULL, {1}, 'RESERVE_CANCEL', {2}, {3}, {4}, {5});",
-                dto.ProductId, dto.QtyOnHand,
+                    ({0}, {1}, NULL, {2}, 'RESERVE_CANCEL', {3}, {4}, {5}, {6});",
+                dto.ProductId, dto.LocationId, dto.QtyOnHand,
                 (object?)dto.ReferenceType ?? DBNull.Value,
                 (object?)dto.ReferenceId ?? DBNull.Value,
                 (object?)dto.PerformedByUserId ?? DBNull.Value,
@@ -326,8 +309,7 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== POST: api/productstock/ship-from-reserved  (ตัดส่งของจากยอดจอง) ======
-        // body: { productId, locationId, qty, referenceType?, referenceId?, performedByUserId?, note? }
+        // ====== POST: api/productstock/ship-from-reserved  (optional) ======
         [HttpPost("ship-from-reserved")]
         public async Task<IActionResult> ShipFromReserved([FromBody] ReserveDto dto)
         {
@@ -337,7 +319,6 @@ namespace miniApp.API.Controllers
 
             await using var tx = await _context.Database.BeginTransactionAsync();
 
-            // 1) decrease reserved first
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
                 UPDATE miniapp.dbo.ProductStocks
                    SET QtyReserved = QtyReserved - {2}, UpdatedAt = SYSUTCDATETIME()
@@ -351,13 +332,12 @@ namespace miniApp.API.Controllers
                 return Conflict("Not enough reserved quantity to ship.");
             }
 
-            // 2) cut OnHand via stored procedure (single-leg outbound)
             var p = new[]
             {
                 new SqlParameter("@ProductId", dto.ProductId),
                 new SqlParameter("@FromLocationId", dto.LocationId),
                 new SqlParameter("@ToLocationId", DBNull.Value),
-                new SqlParameter("@Qty", dto.QtyOnHand), // outbound
+                new SqlParameter("@Qty", dto.QtyOnHand),
                 new SqlParameter("@ReasonCode", "SALE"),
                 new SqlParameter("@ReferenceType", (object?)dto.ReferenceType ?? DBNull.Value),
                 new SqlParameter("@ReferenceId", (object?)dto.ReferenceId ?? DBNull.Value),
@@ -374,8 +354,7 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== POST: api/productstock/damage-add  (พบของเสีย: เพิ่ม Damaged, OnHand ไม่เปลี่ยน) ======
-        // body: { productId, locationId, qty, referenceType?, referenceId?, performedByUserId?, note? }
+        // ====== POST: api/productstock/damage-add  ======
         [HttpPost("damage-add")]
         public async Task<IActionResult> DamageAdd([FromBody] DamageDto dto)
         {
@@ -385,7 +364,6 @@ namespace miniApp.API.Controllers
 
             await using var tx = await _context.Database.BeginTransactionAsync();
 
-            // Only increase damaged if available >= qty (so available won't go negative)
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
                 UPDATE miniapp.dbo.ProductStocks
                    SET QtyDamaged = QtyDamaged + {2}, UpdatedAt = SYSUTCDATETIME()
@@ -399,12 +377,13 @@ namespace miniApp.API.Controllers
                 return Conflict("Insufficient available quantity to mark as damaged.");
             }
 
+            // location ลง log
             await _context.Database.ExecuteSqlRawAsync(@"
                 INSERT INTO miniapp.dbo.StockTransactions
                     (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
                 VALUES
-                    ({0}, NULL, NULL, {1}, 'DAMAGE_ADD', {2}, {3}, {4}, {5});",
-                dto.ProductId, dto.QtyOnHand,
+                    ({0}, {1}, NULL, {2}, 'DAMAGE_ADD', {3}, {4}, {5}, {6});",
+                dto.ProductId, dto.LocationId, dto.QtyOnHand,
                 (object?)dto.ReferenceType ?? DBNull.Value,
                 (object?)dto.ReferenceId ?? DBNull.Value,
                 (object?)dto.PerformedByUserId ?? DBNull.Value,
@@ -415,7 +394,7 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== POST: api/productstock/damage-repair  (ซ่อมของเสีย: ลด Damaged, OnHand ไม่เปลี่ยน) ======
+        // ====== POST: api/productstock/damage-repair  ======
         [HttpPost("damage-repair")]
         public async Task<IActionResult> DamageRepair([FromBody] DamageDto dto)
         {
@@ -438,12 +417,13 @@ namespace miniApp.API.Controllers
                 return Conflict("Not enough damaged quantity to repair.");
             }
 
+            // ✅ ผูก location ลง log
             await _context.Database.ExecuteSqlRawAsync(@"
                 INSERT INTO miniapp.dbo.StockTransactions
                     (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
                 VALUES
-                    ({0}, NULL, NULL, {1}, 'DAMAGE_REPAIR', {2}, {3}, {4}, {5});",
-                dto.ProductId, dto.QtyOnHand,
+                    ({0}, {1}, NULL, {2}, 'DAMAGE_REPAIR', {3}, {4}, {5}, {6});",
+                dto.ProductId, dto.LocationId, dto.QtyOnHand,
                 (object?)dto.ReferenceType ?? DBNull.Value,
                 (object?)dto.ReferenceId ?? DBNull.Value,
                 (object?)dto.PerformedByUserId ?? DBNull.Value,
@@ -453,7 +433,225 @@ namespace miniApp.API.Controllers
             await tx.CommitAsync();
             return NoContent();
         }
+
+        // ====== GET: api/productstock/audit?locationId=&productId=&top=50  ======
+        [HttpGet("audit")]
+        public async Task<IActionResult> Audit([FromQuery] int locationId, [FromQuery] int productId, [FromQuery] int top = 50)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+            if (locationId <= 0 || productId <= 0) return BadRequest("locationId and productId are required.");
+
+            // รวม transaction ที่เกี่ยวกับ location นั้น: จาก From หรือ To
+            var q = from st in _context.StockTransactions
+                    join u in _context.Users on st.PerformedByUserId equals u.Id into uj
+                    from u in uj.DefaultIfEmpty()
+                    where st.ProductId == productId
+                          && (st.FromLocationId == locationId || st.ToLocationId == locationId
+                              || (st.FromLocationId == null && st.ToLocationId == null))
+                    orderby st.CreatedAt descending
+                    select new
+                    {
+                        st.CreatedAt,
+                        Action = st.ReasonCode,
+                        Qty = Math.Abs(st.QtyChange),
+                        st.Note,
+                        ByUser = (u.Fullname ?? u.Username)
+                    };
+
+            var items = await q.Take(Math.Clamp(top, 1, 500)).ToListAsync();
+
+            return Ok(items.Select(x => new
+            {
+                x.CreatedAt,
+                x.Action,
+                x.Qty,
+                x.Note,
+                x.ByUser
+            }));
+        }
+
+        // ====== POST: api/productstock/add-row  (สร้างแถว stock และรับเข้าตั้งต้นได้) ======
+        [HttpPost("add-row")]
+        public async Task<IActionResult> AddRow([FromBody] AddStockRowDto dto)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+            if (dto is null) return BadRequest("Body is required.");
+            if (dto.ProductId <= 0 || dto.LocationId <= 0)
+                return BadRequest("ProductId, LocationId are required.");
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // 1) กันซ้ำ
+                var exists = await _context.ProductStocks
+                    .AnyAsync(x => x.ProductId == dto.ProductId && x.LocationId == dto.LocationId);
+                if (exists) return Conflict("Row already exists for this product & location.");
+
+                // 2) เพิ่มแถวเริ่มต้น
+                await _context.Database.ExecuteSqlInterpolatedAsync($@"
+            INSERT INTO miniapp.dbo.ProductStocks
+              (ProductId, LocationId, QtyOnHand, QtyReserved, QtyDamaged,
+               MinLevel, MaxLevel, ReorderPoint, Cost, UpdatedAt)
+            VALUES
+              ({dto.ProductId}, {dto.LocationId}, 0, 0, 0,
+               NULL, NULL, NULL, 0, SYSUTCDATETIME());");
+
+                // 3) รับเข้าเริ่มต้น (บันทึก log ผ่าน sp)
+                if (dto.InitialQty > 0)
+                {
+                    var p = new[]
+                    {
+                new SqlParameter("@ProductId", dto.ProductId),
+                new SqlParameter("@FromLocationId", DBNull.Value),
+                new SqlParameter("@ToLocationId", dto.LocationId),
+                new SqlParameter("@Qty", dto.InitialQty),
+                new SqlParameter("@ReasonCode", "INITIAL"),
+                new SqlParameter("@ReferenceType", (object?)(dto.ReferenceType ?? "INITIAL")),
+                new SqlParameter("@ReferenceId", (object?)dto.ReferenceId ?? DBNull.Value),
+                new SqlParameter("@PerformedByUserId", (object?)dto.PerformedByUserId ?? DBNull.Value),
+                new SqlParameter("@Note", (object?)dto.Note ?? DBNull.Value),
+            };
+
+                    await _context.Database.ExecuteSqlRawAsync(
+                        "EXEC miniapp.dbo.sp_AdjustOrTransferStock " +
+                        "@ProductId, @FromLocationId, @ToLocationId, @Qty, " +
+                        "@ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note", p);
+                }
+
+                await tx.CommitAsync();
+                return StatusCode(201, new { message = "Created", dto.ProductId, dto.LocationId });
+            }
+            catch (SqlException ex)
+            {
+                await tx.RollbackAsync();
+                return StatusCode(500, new
+                {
+                    message = "Add-row failed (SqlException)",
+                    error = ex.Message,
+                    ex.Number,
+                    ex.State,
+                    ex.Procedure,
+                    ex.LineNumber,
+                    ex.Server
+                });
+            }
+            catch (DbUpdateException ex)
+            {
+                await tx.RollbackAsync();
+                var root = ex.GetBaseException();
+                return StatusCode(500, new
+                {
+                    message = "Add-row failed (DbUpdateException)",
+                    error = root?.Message ?? ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return StatusCode(500, new { message = "Add-row failed (Exception)", error = ex.Message });
+            }
+        }
+
+
+
+        // ====== DELETE: api/productstock/{locationId}/{productId}  (ลบสินค้าได้ เมื่อยอดคงเหลือ=0) ======
+        [HttpDelete("{locationId:int}/{productId:int}")]
+        public async Task<IActionResult> DeleteRow(int locationId, int productId)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+            if (locationId <= 0 || productId <= 0) return BadRequest();
+
+            try
+            {
+                // อ่านเฉพาะคอลัมน์ที่ต้องใช้ (กัน null) 
+                var row = await _context.ProductStocks
+                    .Where(x => x.LocationId == locationId && x.ProductId == productId)
+                    .Select(x => new { x.QtyOnHand, x.QtyReserved, x.QtyDamaged })
+                    .FirstOrDefaultAsync();
+
+                if (row == null) return NotFound();
+
+                if (row.QtyOnHand != 0 || row.QtyReserved != 0 || row.QtyDamaged != 0)
+                    return Conflict(new
+                    {
+                        message = "Cannot delete. Quantities must be zero.",
+                        row.QtyOnHand,
+                        row.QtyReserved,
+                        row.QtyDamaged
+                    });
+
+                // ลบด้วยคำสั่ง SQL ตรง ๆ (ไม่มี OUTPUT จึงไม่ชน trigger)
+                var affected = await _context.Database.ExecuteSqlRawAsync(
+                    @"DELETE FROM miniapp.dbo.ProductStocks 
+              WHERE LocationId = {0} AND ProductId = {1};",
+                    locationId, productId);
+
+                if (affected == 0) return NotFound(); // เผื่อถูกลบไปก่อนหน้าแบบ concurrent
+                return NoContent();
+            }
+            catch (DbUpdateException ex)
+            {
+                return StatusCode(409, new { message = "Delete failed due to DB constraint.", error = ex.GetBaseException().Message });
+            }
+            catch (SqlException ex)
+            {
+                return StatusCode(409, new { message = "Delete failed due to DB constraint/trigger.", error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Server error while deleting row.", error = ex.Message });
+            }
+        }
+
+
+
+        [HttpGet("dropdown")]
+        public async Task<IActionResult> ProductDropdown([FromQuery] string? q = null, [FromQuery] int top = 50)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+
+            var query = _context.Products.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                q = q.Trim();
+                query = query.Where(p => (p.Name ?? "").Contains(q) || (p.Sku ?? "").Contains(q));
+            }
+
+            var items = await query
+                .OrderBy(p => p.Name)
+                .Select(p => new { p.Id, p.Name, p.Sku })
+                .Take(Math.Clamp(top, 1, 200))
+                .ToListAsync();
+
+            return Ok(items);
+        }
+
+        // GET: api/products/dropdown-not-in-location?locationId=1&q=…
+        [HttpGet("dropdown-not-in-location")]
+        public async Task<IActionResult> ProductDropdownNotInLocation(
+            [FromQuery] int locationId,
+            [FromQuery] string? q = null,
+            [FromQuery] int top = 50)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+            if (locationId <= 0) return BadRequest("locationId is required.");
+
+            var baseQuery = _context.Products.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                q = q.Trim();
+                baseQuery = baseQuery.Where(p => (p.Name ?? "").Contains(q) || (p.Sku ?? "").Contains(q));
+            }
+
+            var items = await (from p in baseQuery
+                               where !_context.ProductStocks.Any(ps => ps.ProductId == p.Id && ps.LocationId == locationId)
+                               orderby p.Name
+                               select new { p.Id, p.Name, p.Sku })
+                              .Take(Math.Clamp(top, 1, 200))
+                              .ToListAsync();
+
+            return Ok(items);
+        }
+
     }
-
-
 }
