@@ -50,6 +50,7 @@ namespace miniApp.API.Controllers
             if (!IsAuthorized()) return Unauthorized();
 
             var users = await _context.Users
+                 .Where(u => u.isDelete == 0)
                 .Select(u => new UserResponseDto
                 {
                     Id = u.Id,
@@ -59,7 +60,8 @@ namespace miniApp.API.Controllers
                     Phone = u.Phone ?? "",
                     Role = u.Role.ToString(),
                     QrLogin = u.QrLogin,
-                    IsApproveQr = u.isApproveQr
+                    isApproveQr = u.isApproveQr,
+                    isActive = u.isActive
                 }).ToListAsync();
 
             return Ok(users);
@@ -82,7 +84,8 @@ namespace miniApp.API.Controllers
                 Phone = u.Phone ?? "",
                 Role = u.Role.ToString(), 
                 QrLogin = u.QrLogin,
-                IsApproveQr = u.isApproveQr
+                isApproveQr = u.isApproveQr,
+                isActive = u.isActive
             });
         }
 
@@ -98,16 +101,6 @@ namespace miniApp.API.Controllers
             var exists = await _context.Users.AnyAsync(x => x.Username == dto.Username);
             if (exists) return Conflict("Username already exists.");
 
-            RoleType role = RoleType.Staff;
-            if (Enum.TryParse(dto.Role, true, out RoleType parsedRole))
-            {
-                role = parsedRole;
-            }
-            else
-            {
-                role = RoleType.Staff;
-            }
-
             var user = new User
             {
                 Username = dto.Username.Trim(),
@@ -115,15 +108,29 @@ namespace miniApp.API.Controllers
                 Fullname = dto.Fullname?.Trim() ?? "",
                 Email = dto.Email?.Trim() ?? "",
                 Phone = dto.Phone?.Trim() ?? "",
-                Role = role,
+                Role = dto.Role?.Trim() ?? "",
                 QrLogin = dto.QrLogin ?? string.Empty,
-                isApproveQr = dto.IsApproveQr
+                isApproveQr = dto.isApproveQr,
+                isActive = dto.isActive
             };
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
             return Ok(new { Id = user.Id });
         }
+
+        private static string CanonicalRole(string role)
+        {
+            var r = (role ?? "").Trim().Replace(" ", "").Replace("_", "").ToLowerInvariant();
+            return r switch
+            {
+                "admin" => "Admin",
+                "frontline" => "FrontLine",
+                "salereport" => "SaleReport",
+                _ => role?.Trim() ?? ""
+            };
+        }
+
 
         // PUT api/users/{id}
         [HttpPut("{id:int}")]
@@ -134,40 +141,87 @@ namespace miniApp.API.Controllers
             var u = await _context.Users.FindAsync(id);
             if (u == null) return NotFound();
 
+            if (!string.IsNullOrWhiteSpace(dto.Username))
+            {
+                var newUsername = dto.Username.Trim();
+
+                if (!string.Equals(newUsername, u.Username, StringComparison.OrdinalIgnoreCase))
+                {
+                    var exists = await _context.Users
+                        .AnyAsync(x => x.Id != id && x.Username.ToLower() == newUsername.ToLower());
+             
+                    if (exists)
+                        return Conflict("Username already exists.");
+
+                    u.Username = newUsername;
+                }
+            }
+
             if (!string.IsNullOrWhiteSpace(dto.Password))
                 u.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
 
-            u.Fullname = dto.Fullname?.Trim() ?? u.Fullname;
-            u.Email = dto.Email?.Trim() ?? "";
-            u.Phone = dto.Phone?.Trim() ?? "";
-            
-            RoleType role = RoleType.Staff;
-            if (Enum.TryParse(dto.Role, true, out RoleType parsedRole))
-            {
-                role = parsedRole;
-            }
-            else
-            {
-                role = RoleType.Staff;
-            }
-            u.Role = role;
+            if (!string.IsNullOrWhiteSpace(dto.Username))
+                u.Username = dto.Username.Trim();
+
+            if (dto.Fullname != null)
+                u.Fullname = dto.Fullname.Trim();
+
+            if (dto.Phone != null)
+                u.Phone = dto.Phone.Trim();
+
+            if (dto.Email != null)
+                u.Email = dto.Email.Trim();
+
+            if (dto.Role != null)
+                u.Role = CanonicalRole(dto.Role);
 
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
 
         // DELETE api/users/{id}
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
             if (!IsAuthorized()) return Unauthorized();
-
             var u = await _context.Users.FindAsync(id);
             if (u == null) return NotFound();
-            _context.Users.Remove(u);
+
+            u.isDelete = 1;
+            u.isActive = 0;
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
+        // PUT api/users/{id}/activate
+        [HttpPut("{id:int}/activate")]
+        public async Task<IActionResult> Activate(int id)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+
+            var u = await _context.Users.FindAsync(id);
+            if (u == null) return NotFound();
+
+            u.isActive = 1;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // PUT api/users/{id}/deactivate
+        [HttpPut("{id:int}/deactivate")]
+        public async Task<IActionResult> Deactivate(int id)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+
+            var u = await _context.Users.FindAsync(id);
+            if (u == null) return NotFound();
+
+            u.isActive = 0;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
 
         // PUT api/users/{id}/approve-qr
         [HttpPut("{id:int}/approve-qr")]

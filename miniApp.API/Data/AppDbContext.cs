@@ -21,6 +21,8 @@ namespace miniApp.API.Data
         public DbSet<ProductBrand> ProductBrands { get; set; }
         public DbSet<OrderHd> OrderHd { get; set; }
         public DbSet<OrderDt> OrderDt { get; set; }
+        public DbSet<ProductStock> ProductStocks { get; set; }
+        public DbSet<UserLocation> UserLocations { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -48,6 +50,23 @@ namespace miniApp.API.Data
                 .WithOne(p => p.Category)
                 .HasForeignKey(p => p.CategoryId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<UserLocation>(e =>
+            {
+                e.ToTable("UserLocations");
+                e.HasKey(x => new { x.UserId, x.LocationId });
+
+                e.HasOne(x => x.User)
+                 .WithMany(u => u.UserLocations)
+                 .HasForeignKey(x => x.UserId)
+                 .OnDelete(DeleteBehavior.Cascade);
+
+                e.HasOne(x => x.Location)
+                 .WithMany(l => l.UserLocations)
+                 .HasForeignKey(x => x.LocationId)
+                 .OnDelete(DeleteBehavior.Cascade);
+            });
+
         }
     }
 }

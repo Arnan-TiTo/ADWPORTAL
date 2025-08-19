@@ -22,7 +22,7 @@ namespace miniApp.API.Data
                     Fullname = "Admin Tester",
                     Email = "admin@demo.com",
                     Phone = "0800000000",
-                    Role = RoleType.Staff
+                    Role = "Admin",
                 };
                 context.Users.Add(user);
                 needSave = true;

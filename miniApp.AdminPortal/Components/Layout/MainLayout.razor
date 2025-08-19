@@ -1,52 +1,74 @@
 ﻿@rendermode InteractiveServer
 @inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-  <AuthorizeView>
-    <Authorized>
-      <div class="page">
-        <div class="sidebar @(isSidebarOpen ? "open" : "closed")">
-          <nav>
-            <ul>
-              <li><a href="/">Home</a></li>
-              <li><a href="UserList">User</a></li>
-              <li><a href="ProductList">Product</a></li>
-              <li><a href="ProductCategoryList">Product Category</a></li>
-              <li><a href="ProductBrandList">Product Brand</a></li>
-              <li><a href="OrderList">Order</a></li>
-              <li><a href="LocationList">Location</a></li>
-              <li><a href="NotificationList">Notification</a></li>
-            </ul>
-          </nav>
-        </div>
-
-        <div class="main-content @(isSidebarOpen ? "shrink" : "")">
-          <div class="top-row">
-            <div class="logo-area">
-              <img src="/images/logo.png" class="logo" /> VAC Admin Portal
-              <button class="menu-toggle" @onclick="ToggleSidebar">☰</button>
-              <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="Logout">Logout</button>
+<AuthorizeView>
+    <Authorized Context="auth">
+        <div class="page">
+            <!-- Sidebar -->
+            <div class="sidebar @(isSidebarOpen ? "open" : "closed")">
+                <nav>
+                    <ul>
+                        <li><NavLink href="/" Match="NavLinkMatch.All" ActiveClass="is-active">Home</NavLink></li>
+                        <li><NavLink href="/UserList" Match="NavLinkMatch.Prefix" ActiveClass="is-active">User</NavLink></li>
+                        <li><NavLink href="/ProductList" Match="NavLinkMatch.Prefix" ActiveClass="is-active">Product</NavLink></li>
+                        <li><NavLink href="/ProductCategoryList" Match="NavLinkMatch.Prefix" ActiveClass="is-active">Product Category</NavLink></li>
+                        <li><NavLink href="/ProductBrandList" Match="NavLinkMatch.Prefix" ActiveClass="is-active">Product Brand</NavLink></li>
+                        <li><NavLink href="/OrderList" Match="NavLinkMatch.Prefix" ActiveClass="is-active">Order</NavLink></li>
+                        <li><NavLink href="/LocationList" Match="NavLinkMatch.Prefix" ActiveClass="is-active">Location</NavLink></li>
+                        <li><NavLink href="/NotificationList" Match="NavLinkMatch.Prefix" ActiveClass="is-active">Notification</NavLink></li>
+                    </ul>
+                </nav>
             </div>
-          </div>
-          <main>@Body</main>
 
+            <!-- Main -->
+            <div class="main-content @(isSidebarOpen ? "shrink" : "")">
+                <div class="top-row d-flex align-items-center">
+                    <div class="logo-area d-flex align-items-center gap-2">
+                        <img src="/images/logo.png" class="logo" />
+                        <strong>VAC Admin Portal</strong>
+                        <button class="menu-toggle" @onclick="ToggleSidebar">☰</button>
+                    </div>
+
+                    <!-- ดันขวา -->
+                    <span class="ms-auto"></span>
+
+                    <!-- ชื่อผู้ใช้จาก Claims -->
+                    <span class="topbar-name me-2">
+                        Welcome @GetDisplayName(auth.User)
+                    </span>
+
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="Logout">Logout</button>
+                </div>
+
+                <main>@Body</main>
+            </div>
         </div>
-      </div>
     </Authorized>
 
     <NotAuthorized>
-      <RedirectToLogin />
+        <RedirectToLogin />
     </NotAuthorized>
-  </AuthorizeView>
+</AuthorizeView>
 
 @code {
-  bool isSidebarOpen = true;
-  void ToggleSidebar() => isSidebarOpen = !isSidebarOpen;
+    private bool isSidebarOpen = true;
+    void ToggleSidebar() => isSidebarOpen = !isSidebarOpen;
 
-    async Task Logout()
+    // อ่านชื่อจาก Claims
+    private static string GetDisplayName(ClaimsPrincipal? user)
+    {
+        if (user is null) return "";
+        var full = user.FindFirst("FULLNAME")?.Value;
+        if (!string.IsNullOrWhiteSpace(full)) return full!;
+        return user.Identity?.Name ?? "";
+    }
+
+    private async Task Logout()
     {
         await JS.InvokeVoidAsync("miniapp.logout");
-        // ไม่ต้อง Nav.NavigateTo ที่นี่ JS จะ redirect เอง
     }
 }

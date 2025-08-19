@@ -4,8 +4,9 @@
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.Extensions.Options
 @using Microsoft.JSInterop
-@using miniApp.AdminPortal.Components.Pages
 @using miniApp.AdminPortal.Models
+@using miniApp.AdminPortal.Shared
+@using miniApp.AdminPortal.Components
 @inject IHttpClientFactory ClientFactory
 @inject IOptions<ApiSettings> Options
 @inject AuthTokenProvider TokenProvider
@@ -65,93 +66,108 @@
     </div>
 </div>
 
-@if (products is null)
+@if (loading)
 {
     <p><em>Loading...</em></p>
 }
-else if (!products.Any())
+else if (!filtered.Any())
 {
     <p>No products found.</p>
 }
 else
 {
-    <table class="table table-striped align-middle">
-      <thead>
-    <tr>
-        <th style="width:80px;">Image</th>
-        <th @onclick='() => SortBy("Name")' style="cursor:pointer">
-            Name @SortIcon("Name")
-        </th>
-        <th @onclick='() => SortBy("SKU")' style="cursor:pointer">
-            SKU @SortIcon("Sku")
-        </th>
-        <th @onclick='() => SortBy("Category")' style="cursor:pointer">
-            Category @SortIcon("Category")
-        </th>
-        <th @onclick='() => SortBy("Brand")' style="cursor:pointer">
-            Brand @SortIcon("Brand")
-        </th>
-        <th class="text-end" style="width:120px; cursor:pointer" @onclick='() => SortBy("Price")'>
-            Price @SortIcon("Price")
-        </th>
-        <th class="text-end" style="width:90px; cursor:pointer" @onclick='() => SortBy("Quantity")'>
-            Qty @SortIcon("Quantity")
-        </th>
-
-        <th class="text-end" style="width:160px;">Action</th>
-    </tr>
-</thead>
-
-        <tbody>
-            @foreach (var p in products)
-            {
-                var fullImageUrl = string.IsNullOrEmpty(p.ImageUrl) ? null : $"{ApiBaseUrl.TrimEnd('/')}{p.ImageUrl}";
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
                 <tr>
-                    <td>
-                        @if (!string.IsNullOrEmpty(fullImageUrl))
-                        {
-                            <img src="@fullImageUrl"
-                                 width="56" height="56"
-                                 class="rounded border object-fit-cover"
-                                 style="cursor: zoom-in"
-                                 @onclick="() => OpenImage(fullImageUrl)" />
-                        }
-                        else
-                        {
-                            <span class="text-muted">-</span>
-                        }
-                    </td>
-                    <td>@p.Name</td>
-                    <td>@p.Sku</td>
-                    <td>@p.CategoryName</td>
-                    <td>@p.BrandName</td>
-                    <td class="text-end">@p.Price.ToString("C")</td>
-                    <td class="text-end">@p.Quantity</td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-primary me-2" @onclick="() => EditProduct(p.Id)">Edit</button>
-                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(p.Id, p.Name)">Delete</button>
-                    </td>
+                    <th style="width:80px;">Image</th>
+                    <th @onclick='() => SortBy("Name")' style="cursor:pointer">
+                        Name @SortIcon("Name")
+                    </th>
+                    <th @onclick='() => SortBy("Sku")' style="cursor:pointer">
+                        SKU @SortIcon("Sku")
+                    </th>
+                    <th @onclick='() => SortBy("Category")' style="cursor:pointer">
+                        Category @SortIcon("Category")
+                    </th>
+                    <th @onclick='() => SortBy("Brand")' style="cursor:pointer">
+                        Brand @SortIcon("Brand")
+                    </th>
+                    <th class="text-end" style="width:120px; cursor:pointer" @onclick='() => SortBy("Price")'>
+                        Price @SortIcon("Price")
+                    </th>
+                    <th class="text-end" style="width:90px; cursor:pointer" @onclick='() => SortBy("Quantity")'>
+                        Qty @SortIcon("Quantity")
+                    </th>
+
+                    <th class="text-end" style="width:160px;">Action</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+
+            <tbody>
+                @foreach (var p in paged)
+                {
+                    var fullImageUrl = string.IsNullOrEmpty(p.ImageUrl) ? null : $"{ApiBaseUrl.TrimEnd('/')}{p.ImageUrl}";
+                    <tr>
+                        <td>
+                            @if (!string.IsNullOrEmpty(fullImageUrl))
+                            {
+                                <img src="@fullImageUrl"
+                                     width="56" height="56"
+                                     class="rounded border object-fit-cover"
+                                     style="cursor: zoom-in"
+                                     @onclick="() => OpenImage(fullImageUrl)" />
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                        <td>@p.Name</td>
+                        <td>@p.Sku</td>
+                        <td>@p.CategoryName</td>
+                        <td>@p.BrandName</td>
+                        <td class="text-end">@p.Price.ToString("C")</td>
+                        <td class="text-end">@p.Quantity</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-primary me-2" @onclick="() => EditProduct(p.Id)">Edit</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(p.Id, p.Name)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <Pager State="_pager" OnPageChanged="OnPageChanged" ContainerClass="d-flex justify-content-end mt-2" />
 }
 
 @code {
-    private List<ProductDto>? products;
+    // ---------- Paging ----------
+    private PaginationState _pager = new() { WindowSize = 5 }; // PageSize set in OnInitializedAsync
+
+    // ---------- Data ----------
+    private List<ProductDto> all = new();
+    private List<ProductDto> filtered = new();
+    private List<ProductDto> paged = new();
+
     private List<CategoryDto>? categories;
     private List<BrandDto>? brands;
 
+    // ---------- Filters ----------
     private string? queryText;
     private int? selectedCategoryId;
     private int? selectedBrandId;
 
+    // ---------- Sorting ----------
     private string sortColumn = "Name";
     private bool sortAscending = true;
 
+    // ---------- UI ----------
     private CancellationTokenSource? _cts;
+    private bool loading = true;
 
-    private string ApiBaseUrl => Options.Value.ApiBaseUrl;
+    private string ApiBaseUrl => Options.Value.ApiBaseUrl ?? "";
 
     private async Task OpenImage(string? src)
     {
@@ -161,15 +177,18 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        _pager.SetPageSize(10); // หน้าละ 10 รายการ
+
         var token = TokenProvider.Token;
         if (string.IsNullOrEmpty(token))
         {
             await JSRuntime.InvokeVoidAsync("alert", "Auth token not found in server.");
+            loading = false;
             return;
         }
 
         var client = ClientFactory.CreateClient();
-        client.BaseAddress = new Uri(ApiBaseUrl);
+        client.BaseAddress = new Uri(ApiBaseUrl.TrimEnd('/') + "/");
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token);
 
@@ -177,22 +196,29 @@ else
         {
             categories = await client.GetFromJsonAsync<List<CategoryDto>>("api/ProductCategory");
             brands = await client.GetFromJsonAsync<List<BrandDto>>("api/ProductBrand");
-            products = await client.GetFromJsonAsync<List<ProductDto>>("api/Product");
 
-            ApplySort();
+            // โหลดทั้งหมดรอบแรก
+            all = await client.GetFromJsonAsync<List<ProductDto>>("api/Product") ?? new();
+
+            ApplyFilterSortAndPage(resetPage: true);
         }
         catch (Exception ex)
         {
             await JSRuntime.InvokeVoidAsync("alert", $"Failed to load products: {ex.Message}");
         }
+        finally
+        {
+            loading = false;
+        }
     }
 
+    // ---------- Server-side search (คงโลจิกเดิม) ----------
     private async Task Search()
     {
         try
         {
             var client = ClientFactory.CreateClient();
-            client.BaseAddress = new Uri(ApiBaseUrl);
+            client.BaseAddress = new Uri(ApiBaseUrl.TrimEnd('/') + "/");
             client.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", TokenProvider.Token);
 
@@ -219,10 +245,11 @@ else
                 result = await client.GetFromJsonAsync<List<ProductDto>>("api/Product") ?? new();
             }
 
-            if (hasBrand) result = result.Where(x => x.BrandId == selectedBrandId).ToList();
+            if (hasBrand)
+                result = result.Where(x => x.BrandId == selectedBrandId).ToList();
 
-            products = result;
-            ApplySort();
+            all = result;
+            ApplyFilterSortAndPage(resetPage: true);
         }
         catch (HttpRequestException ex)
         {
@@ -230,6 +257,57 @@ else
         }
     }
 
+    // ---------- Filtering + Sorting + Paging ----------
+    private void ApplyFilterSortAndPage(bool resetPage)
+    {
+        // ตอนนี้ filter ทั้งหมดทำที่ server แล้ว -> ใช้ all ตรง ๆ
+        filtered = all;
+
+        // sort
+        var sorted = ApplySort(filtered);
+
+        // page
+        _pager.SetTotal(sorted.Count());
+        if (resetPage) _pager.GoTo(1);
+        else if (_pager.Page > _pager.TotalPages) _pager.GoTo(_pager.TotalPages);
+
+        paged = sorted.Page(_pager);
+
+        StateHasChanged();
+    }
+
+    private IEnumerable<ProductDto> ApplySort(IEnumerable<ProductDto> src)
+    {
+        Func<ProductDto, object?> key = sortColumn switch
+        {
+            "Name" => p => p.Name,
+            "Sku" => p => p.Sku,
+            "Category" => p => p.CategoryName,
+            "Brand" => p => p.BrandName,
+            "Price" => p => p.Price,
+            "Quantity" => p => p.Quantity,
+            _ => p => p.Name
+        };
+
+        return sortAscending ? src.OrderBy(key) : src.OrderByDescending(key);
+    }
+
+    private void SortBy(string column)
+    {
+        if (sortColumn == column) sortAscending = !sortAscending;
+        else { sortColumn = column; sortAscending = true; }
+
+        ApplyFilterSortAndPage(resetPage: false);
+    }
+
+    private MarkupString SortIcon(string column)
+    {
+        if (sortColumn != column) return (MarkupString)string.Empty;
+        var icon = sortAscending ? "↑" : "↓";
+        return (MarkupString)$"<span class='ms-1'>{icon}</span>";
+    }
+
+    // ---------- Search inputs ----------
     private void OnQueryChanged(ChangeEventArgs e)
     {
         queryText = e.Value?.ToString();
@@ -274,42 +352,17 @@ else
 
     private string GetSelectValue(int? val) => val?.ToString() ?? "";
 
-    private void SortBy(string column)
+    // ---------- Pager callback ----------
+    private Task OnPageChanged(int p)
     {
-        if (sortColumn == column) sortAscending = !sortAscending;
-        else { sortColumn = column; sortAscending = true; }
-
-        ApplySort();
-    }
-
-    private void ApplySort()
-    {
-        if (products is null) return;
-
-        IEnumerable<ProductDto> q = products;
-
-        Func<ProductDto, object?> key = sortColumn switch
-        {
-            "Name" => p => p.Name,
-            "Sku" => p => p.Sku,
-            "Category" => p => p.CategoryName,
-            "Brand" => p => p.BrandName,
-            "Price" => p => p.Price,
-            "Quantity" => p => p.Quantity,
-            _ => p => p.Name
-        };
-
-        products = sortAscending ? q.OrderBy(key).ToList() : q.OrderByDescending(key).ToList();
+        _pager.GoTo(p);
+        var sorted = ApplySort(filtered);
+        paged = sorted.Page(_pager);
         StateHasChanged();
+        return Task.CompletedTask;
     }
 
-    private MarkupString SortIcon(string column)
-    {
-        if (sortColumn != column) return (MarkupString)string.Empty;
-        var icon = sortAscending ? "↑" : "↓";
-        return (MarkupString)$"<span class='ms-1'>{icon}</span>";
-    }
-
+    // ---------- Actions ----------
     private void EditProduct(int id) => Navigation.NavigateTo($"/ProductEdit/{id}");
     private void AddProduct() => Navigation.NavigateTo("/ProductEdit/0");
 
@@ -324,7 +377,7 @@ else
         }
 
         var client = ClientFactory.CreateClient();
-        client.BaseAddress = new Uri(Options.Value.ApiBaseUrl);
+        client.BaseAddress = new Uri(ApiBaseUrl.TrimEnd('/') + "/");
         client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", TokenProvider.Token);
 
@@ -332,8 +385,8 @@ else
         if (resp.IsSuccessStatusCode)
         {
             await JS.InvokeVoidAsync("showToast", "Deleted.", "success");
-            products?.RemoveAll(x => x.Id == id);
-            StateHasChanged();
+            all.RemoveAll(x => x.Id == id);
+            ApplyFilterSortAndPage(resetPage: false);
         }
         else
         {
@@ -341,6 +394,7 @@ else
         }
     }
 
+    // ---------- DTO ----------
     public class ProductDto
     {
         public int Id { get; set; }

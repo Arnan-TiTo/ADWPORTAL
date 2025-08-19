@@ -3,13 +3,13 @@
 @using System.Net.Http.Json
 @using Microsoft.Extensions.Options
 @using Microsoft.JSInterop
-@using miniApp.AdminPortal.Components.Pages
 @using miniApp.AdminPortal.Models
+@using miniApp.AdminPortal.Shared
+@using miniApp.AdminPortal.Components
 @inject IHttpClientFactory ClientFactory
 @inject IOptions<ApiSettings> Options
 @inject AuthTokenProvider TokenProvider
 @inject IJSRuntime JS
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <h3 class="d-flex align-items-center justify-content-between">
@@ -34,136 +34,150 @@
     </div>
 </div>
 
-@if (viewItems is null)
+@if (loading)
 {
     <p><em>Loading...</em></p>
 }
-else if (!viewItems.Any())
+else if (!filtered.Any())
 {
     <p>No locations found.</p>
 }
 else
 {
-    <table class="table table-striped table-sm align-middle">
-        <thead>
-            <tr>
-                <th style="width:90px;">Images</th>
-
-                <th style="cursor:pointer" @onclick="SortByName">
-                    Name @SortIcon(nameof(LocationDto.Name))
-                </th>
-
-                <th style="cursor:pointer" @onclick="SortByNote">
-                    Note @SortIcon("Note")
-                </th>
-
-                <th style="cursor:pointer" @onclick="SortByLat">
-                    Lat @SortIcon(nameof(LocationDto.Latitude))
-                </th>
-
-                <th style="cursor:pointer" @onclick="SortByLng">
-                    Lng @SortIcon(nameof(LocationDto.Longitude))
-                </th>
-
-                <th style="cursor:pointer" @onclick="SortByUser">
-                    User @SortIcon("User")
-                </th>
-
-                <th style="width:140px;">Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var l in viewItems)
-            {
-                var first = l.Images?.FirstOrDefault()?.ImageUrl;
+    <div class="table-responsive">
+        <table class="table table-striped table-sm align-middle">
+            <thead>
                 <tr>
-                    <td>
-                        @if (!string.IsNullOrWhiteSpace(first))
-                        {
-                            var fullImageUrl = BuildImageUrl(first);
-                            <div class="position-relative d-inline-block">
-                                <img src="@fullImageUrl"
-                                     width="50" height="50"
-                                     class="rounded border object-fit-cover"
-                                     style="cursor: zoom-in"
-                                     @onclick="() => OpenImage(fullImageUrl)" />
-                                @if ((l.Images?.Count ?? 0) > 1)
-                                {
-                                    <span class="badge bg-dark position-absolute bottom-0 end-0">
-                                        +@(l.Images!.Count - 1)
-                                    </span>
-                                }
-                            </div>
-                        }
-                        else
-                        {
-                            <span>-</span>
-                        }
-                    </td>
+                    <th style="width:90px;">Images</th>
 
-                    <td>@l.Name</td>
-                    <td class="text-truncate" style="max-width:320px">@l.Note</td>
-                    <td>@l.Latitude</td>
-                    <td>@l.Longitude</td>
-                    <td>@(string.IsNullOrWhiteSpace(l.Fullname) ? l.Username : l.Fullname)</td>
+                    <th style="cursor:pointer" @onclick="SortByName">
+                        Name @SortIcon(nameof(LocationDto.Name))
+                    </th>
 
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-primary me-2" @onclick="() => Edit(l.Id)">Edit</button>
-                        <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(l.Id, l.Name)">
-                            Delete
-                        </button>
-                    </td>
+                    <th style="cursor:pointer" @onclick="SortByNote">
+                        Note @SortIcon("Note")
+                    </th>
+
+                    <th style="cursor:pointer" @onclick="SortByLat">
+                        Lat @SortIcon(nameof(LocationDto.Latitude))
+                    </th>
+
+                    <th style="cursor:pointer" @onclick="SortByLng">
+                        Lng @SortIcon(nameof(LocationDto.Longitude))
+                    </th>
+
+                    <th style="cursor:pointer" @onclick="SortByUser">
+                        User @SortIcon("User")
+                    </th>
+
+                    <th style="width:140px;">Action</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var l in paged)
+                {
+                    var first = l.Images?.FirstOrDefault()?.ImageUrl;
+                    <tr>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(first))
+                            {
+                                var fullImageUrl = BuildImageUrl(first);
+                                <div class="position-relative d-inline-block">
+                                    <img src="@fullImageUrl"
+                                         width="50" height="50"
+                                         class="rounded border object-fit-cover"
+                                         style="cursor: zoom-in"
+                                         @onclick="() => OpenImage(fullImageUrl)" />
+                                    @if ((l.Images?.Count ?? 0) > 1)
+                                    {
+                                        <span class="badge bg-dark position-absolute bottom-0 end-0">
+                                            +@(l.Images!.Count - 1)
+                                        </span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <span>-</span>
+                            }
+                        </td>
+
+                        <td>@l.Name</td>
+                        <td class="text-truncate" style="max-width:320px">@l.Note</td>
+                        <td>@l.Latitude</td>
+                        <td>@l.Longitude</td>
+                        <td>@(string.IsNullOrWhiteSpace(l.Fullname) ? l.Username : l.Fullname)</td>
+
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-primary me-2" @onclick="() => Edit(l.Id)">Edit</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(l.Id, l.Name)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <Pager State="_pager" OnPageChanged="OnPageChanged" ContainerClass="d-flex justify-content-end mt-2" />
 }
 
 @code {
-    private List<LocationDto>? allItems;
-    private List<LocationDto>? viewItems;
+    // ---------- Paging ----------
+    private PaginationState _pager = new() { WindowSize = 5 }; // PageSize จะตั้งใน OnInitializedAsync
+
+    // ---------- Data ----------
+    private List<LocationDto> allItems = new();
+    private List<LocationDto> filtered = new();
+    private List<LocationDto> paged = new();
+
+    // ---------- UI state ----------
+    private bool loading = true;
 
     private string? _queryText;
     private string? QueryText
     {
         get => _queryText;
-        set { _queryText = value; ApplyFilter(); } 
+        set { _queryText = value; ApplyFilterSortAndPage(resetPage: true); }
     }
 
     private string sortField = nameof(LocationDto.Name);
     private bool sortAsc = true;
 
-    private string ApiBaseUrl => Options.Value.ApiBaseUrl;
+    private string ApiBaseUrl => Options.Value.ApiBaseUrl?.TrimEnd('/') ?? "";
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        _pager.SetPageSize(5);
+        await Load();
+        loading = false;
+    }
 
     private async Task Load()
     {
         try
         {
             var client = ClientFactory.CreateClient();
-            client.BaseAddress = new Uri(ApiBaseUrl);
+            client.BaseAddress = new Uri(ApiBaseUrl + "/");
 
             var token = TokenProvider.Token;
             if (!string.IsNullOrWhiteSpace(token))
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", token);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             allItems = await client.GetFromJsonAsync<List<LocationDto>>("api/Locations/all") ?? new();
-            ApplyFilter();
+            ApplyFilterSortAndPage(resetPage: true);
         }
         catch (Exception ex)
         {
             await JS.InvokeVoidAsync("showToast", $"Failed to load: {ex.Message}", "error");
+            allItems = new();
+            ApplyFilterSortAndPage(resetPage: true);
         }
     }
 
-    private void ApplyFilter()
+    private void ApplyFilterSortAndPage(bool resetPage)
     {
-        if (allItems is null) { viewItems = new(); return; }
-
+        // 1) filter
         IEnumerable<LocationDto> q = allItems;
-
         if (!string.IsNullOrWhiteSpace(QueryText))
         {
             var key = QueryText.Trim();
@@ -171,9 +185,16 @@ else
                 (x.Name ?? string.Empty).Contains(key, StringComparison.OrdinalIgnoreCase) ||
                 (x.Note ?? string.Empty).Contains(key, StringComparison.OrdinalIgnoreCase));
         }
+        filtered = q.ToList();
 
-        q = ApplySort(q);
-        viewItems = q.ToList();
+        // 2) sort
+        var sorted = ApplySort(filtered);
+
+        // 3) page
+        _pager.SetTotal(sorted.Count());
+        if (resetPage) _pager.GoTo(1);
+        paged = sorted.Page(_pager);
+
         StateHasChanged();
     }
 
@@ -192,13 +213,13 @@ else
         return sortAsc ? src.OrderBy(key) : src.OrderByDescending(key);
     }
 
+    // ---- sorting handlers
     private void ToggleSort(string field)
     {
         if (sortField == field) sortAsc = !sortAsc;
         else { sortField = field; sortAsc = true; }
-        ApplyFilter();
+        ApplyFilterSortAndPage(resetPage: false);
     }
-
     private void SortByName() => ToggleSort(nameof(LocationDto.Name));
     private void SortByNote() => ToggleSort("Note");
     private void SortByLat() => ToggleSort(nameof(LocationDto.Latitude));
@@ -206,15 +227,14 @@ else
     private void SortByUser() => ToggleSort("User");
 
     private MarkupString SortIcon(string field)
-        => sortField == field
-            ? (MarkupString)$"&nbsp;<small>{(sortAsc ? "▲" : "▼")}</small>"
-            : (MarkupString)string.Empty;
+        => sortField == field ? (MarkupString)$"&nbsp;<small>{(sortAsc ? "▲" : "▼")}</small>" : (MarkupString)string.Empty;
 
     private void ClearSearch()
     {
-        QueryText = null; 
+        QueryText = string.Empty;
         sortField = nameof(LocationDto.Name);
         sortAsc = true;
+        ApplyFilterSortAndPage(resetPage: true);
     }
 
     private void Edit(int id) => Navigation.NavigateTo($"/LocationEdit/{id}");
@@ -222,25 +242,23 @@ else
     private async Task ConfirmDelete(int id, string? name)
     {
         var safe = string.IsNullOrWhiteSpace(name) ? "(no name)" : name;
-        var ok = await JS.InvokeAsync<bool>("confirmToast",
-            $"Delete location ID: {id}\n{safe} ?", "Delete", "Cancel", "error");
+        var ok = await JS.InvokeAsync<bool>("confirmToast", $"Delete location ID: {id}\n{safe} ?", "Delete", "Cancel", "error");
         if (!ok) return;
 
         try
         {
             var client = ClientFactory.CreateClient();
-            client.BaseAddress = new Uri(ApiBaseUrl);
+            client.BaseAddress = new Uri(ApiBaseUrl + "/");
 
             var token = TokenProvider.Token;
             if (!string.IsNullOrWhiteSpace(token))
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", token);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var resp = await client.DeleteAsync($"api/Locations/{id}?username=admin");
             if (resp.IsSuccessStatusCode)
             {
-                allItems?.RemoveAll(x => x.Id == id);
-                ApplyFilter();
+                allItems.RemoveAll(x => x.Id == id);
+                ApplyFilterSortAndPage(resetPage: true);
                 await JS.InvokeVoidAsync("showToast", "Deleted.", "success");
             }
             else
@@ -264,17 +282,25 @@ else
     private string BuildImageUrl(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+        if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return url;
+        if (!url.StartsWith("/")) url = "/images/locations/" + url;
 
-        if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-            return url;
-
-        if (!url.StartsWith("/"))
-            url = "/images/locations/" + url;
-
-        var full = $"{ApiBaseUrl.TrimEnd('/')}{url}";
+        var full = $"{ApiBaseUrl}{url}";
         return $"{full}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
     }
 
+    // ---------- Pager callback ----------
+    private Task OnPageChanged(int p)
+    {
+        _pager.GoTo(p);
+        // คำนวณหน้าใหม่จากรายการที่ sort แล้ว
+        var sorted = ApplySort(filtered);
+        paged = sorted.Page(_pager);
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    // ---------- DTO ----------
     public class LocationDto
     {
         public int Id { get; set; }

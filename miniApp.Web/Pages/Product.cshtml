@@ -12,28 +12,22 @@
 }
 
 @functions {
-    // รองรับ: "products/xxx.jpg", "/images/products/xxx.jpg", URL เต็ม http/https)
     string Img(string? url, string folder = "products")
     {
         if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
 
         var u = url.Replace("\\", "/").Trim();
 
-        //URL
         if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             return u;
-
-        //ตัด /
+        
         while (u.StartsWith("/")) u = u[1..];
 
-        //images/ -> /images/...
         if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
 
-        //products/... -> /images/products/...
         if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
 
-        //filename
         return $"/images/{folder}/{u}";
     }
 }
@@ -75,7 +69,6 @@
             {
                 <div class="bg-white border rounded-xl p-4 shadow-sm">
                     <div class="text-center mb-2">
-                        <!-- ใช้ตัวช่วย Img() กัน path ซ้ำ -->
                         <img src="@Img(product.ImageUrl)" alt="Product" class="w-20 h-20 mx-auto mb-2 object-cover rounded" />
                         <p class="text-sm text-gray-500">@product.Name</p>
                     </div>

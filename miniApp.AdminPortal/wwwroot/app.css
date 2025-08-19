@@ -4,7 +4,7 @@
 
 
 body.scale-wrap {
-    overflow: auto;
+    overflow: hidden;
 }
 
 html, body {
@@ -58,9 +58,58 @@ h3, .h3 {
         padding: .55rem .6rem;
     }
 
-.sidebar nav a {
-    font-size: .9rem;
+
+/* Sidebar */
+.sidebar {
+    background: linear-gradient(180deg, #04394a 0%, #04394c 80%);
+    color: white;
+    width: 0;
+    overflow: hidden;
+    transition: width 0.3s ease-in-out;
+    height: 100%;
+    position: fixed;
+    top: 3.5rem; /* สูงเท่าทอปบาร์ */
+    left: 0;
+    z-index: 100;
+    padding-top: 0;
+    border-right: 2px solid green;
 }
+
+
+.sidebar.open {
+    width: 250px;
+}
+
+/* สไตล์ลิงก์ในแถบข้าง */
+.sidebar nav ul {
+    list-style: none;
+    padding: 1rem;
+    margin: 0;
+}
+
+.sidebar nav li {
+    margin: .75rem 0;
+}
+
+.sidebar nav a {
+    color: #fff;
+    text-decoration: none; /* ปกติไม่ขีดเส้น */
+    display: block;
+    padding: .25rem 0;
+}
+
+    /* ขีดเส้นเฉพาะรายการที่แอคทีฟ (คลิกล่าสุด/หน้าเดียวเท่านั้น) */
+.sidebar nav a.is-active {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 2px;
+}
+
+/* ไม่อยากให้ hover มีเส้น ก็อย่าใส่ text-decoration ตอน hover */
+.sidebar nav a:hover {
+    opacity: .9;
+}
+
 
 a, .btn-link {
     color: #006bb7;
@@ -110,3 +159,23 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+
+/* Logo และปุ่ม ☰ */
+.logo-area {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.logo {
+    height: 40px;
+}
+
+.menu-toggle {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 2rem;
+    cursor: pointer;
+}
+

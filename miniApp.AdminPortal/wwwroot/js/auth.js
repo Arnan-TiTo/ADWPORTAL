@@ -16,11 +16,10 @@ window.miniapp.logout = async function () {
     try {
         await fetch('/auth/logout', {
             method: 'POST',
-            credentials: 'same-origin'   // สำคัญ: ให้ส่ง/รับคุกกี้
+            credentials: 'same-origin'
         });
     } catch (e) {
         console.error('logout failed', e);
     }
-    // redirect หลังคุกกี้ถูกลบแล้ว
     location.replace('/login');
 };

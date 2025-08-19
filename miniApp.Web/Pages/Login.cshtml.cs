@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using miniApp.Web.Services;
-using System.Linq;
 using System.Security.Claims;
 using miniApp.Web.Dtos;
 

@@ -25,6 +25,8 @@
       <input id="password" type="password" placeholder="Password"
              class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black" />
 
+      <input id="role" type="hidden" value="FrontLine"/>  
+
       <button type="submit" class="w-full bg-black text-white py-3 rounded-xl font-semibold transition hover:bg-gray-900">
         Continue
       </button>
@@ -75,6 +77,11 @@
   </div>
 </div>
 
+<!--Toast Notification Container -->
+<div id="toast" class="fixed top-5 right-5 z-50 hidden">
+    <div id="toastContent" class="px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium"></div>
+</div>
+
 @section Scripts {
   <script src="https://cdn.jsdelivr.net/npm/qr-scanner@@1.4.2/qr-scanner.umd.min.js"></script>
   <script>QrScanner.WORKER_PATH='https://cdn.jsdelivr.net/npm/qr-scanner@@1.4.2/qr-scanner-worker.min.js';</script>
@@ -87,19 +94,21 @@
       e.preventDefault();
       const username=document.getElementById('username').value.trim();
       const password=document.getElementById('password').value.trim();
-      if(!username||!password){ alert('Please enter username and password.'); return false; }
+      const role=document.getElementById('role').value.trim();
+
+      if(!username||!password){ showToast('Please enter username and password.', "red"); return false; }
       const r=await fetch(`${apiBase}api/Auth/login`,{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({username,password})
+        body:JSON.stringify({username,password,role})
       });
-      if(!r.ok){ alert(await r.text()||'Invalid username or password.'); return false; }
+      if(!r.ok){ showToast(await r.text()||'Invalid username or password.', "red"); return false; }
       const data=await r.json();
       const s=await fetch('/Login?handler=SetSession',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({token:data.token,userId:data.userId,fullname:data.fullname,username}),
         credentials:'include'
       });
-      if(s.ok) location.href='/'; else alert('Failed to set session.');
+      if(s.ok) location.href='/'; else showToast('Failed to set session.', "red");
       return false;
     }
 
@@ -184,12 +193,13 @@
     function qrText(decoded){ return typeof decoded==='string'?decoded:(decoded?.data||''); }
 
     async function handleDecoded(decoded){
+      const role=document.getElementById('role').value.trim();
       const text=qrText(decoded); if(!text){ setStatus('Invalid QR.'); return; }
       setStatus('QR detected. Logging in...');
       try{
         const r=await fetch(`${apiBase}api/qrlogin/loginByQr`,{
           method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({ qr:text })
+          body:JSON.stringify({ qr:text,role })
         });
         if(!r.ok){ setStatus(await r.text()||'QR not recognized.'); return; }
         const result=await r.json();
@@ -199,8 +209,18 @@
           body:JSON.stringify({ token:result.token, userId:result.userId, fullname:result.fullname, username:result.username }),
           credentials:'include'
         });
-        if(s.ok) location.href='/'; else alert('Failed to set session.');
+        if(s.ok) location.href='/'; else showToast('Failed to set session.', "red");
       }catch(err){ console.error(err); setStatus('Login failed.'); }
+    }
+
+    function showToast(message, color) {
+        const toast = document.getElementById("toast");
+        const content = document.getElementById("toastContent");
+        content.textContent = message;
+        content.className =
+            "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-" + color + "-500";
+        toast.classList.remove("hidden");
+        setTimeout(() => toast.classList.add("hidden"), 4000);
     }
   </script>
 }

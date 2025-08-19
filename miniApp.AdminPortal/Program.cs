@@ -76,6 +76,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery(); 
 
+
+
 //session logout
 app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDto dto) =>
 {

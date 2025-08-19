@@ -5,8 +5,9 @@
 @using System.Text
 @using Microsoft.Extensions.Options
 @using Microsoft.JSInterop
-@using miniApp.AdminPortal.Components.Pages
 @using miniApp.AdminPortal.Models
+@using miniApp.AdminPortal.Shared
+@using miniApp.AdminPortal.Components
 @inject IHttpClientFactory ClientFactory
 @inject IOptions<ApiSettings> Options
 @inject AuthTokenProvider TokenProvider
@@ -40,7 +41,7 @@
                 <InputDate @bind-Value="dateTo" class="form-control" />
             </div>
             <div class="col-md-1 d-grid">
-                <button class="btn btn-dark" @onclick="ApplyFilter">Search</button>
+                <button class="btn btn-dark" @onclick="ApplyFilterClick">Search</button>
             </div>
             <div class="col-md-1 d-grid">
                 <button class="btn btn-outline-secondary" @onclick="ClearFilter">Clear</button>
@@ -49,11 +50,11 @@
     </div>
 </div>
 
-@if (view is null)
+@if (loading)
 {
     <p><em>Loading...</em></p>
 }
-else if (!view.Any())
+else if (!filtered.Any())
 {
     <p>No orders found.</p>
 }
@@ -93,7 +94,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var o in view)
+                @foreach (var o in paged)
                 {
                     var amount = CalcOrderAmount(o);
                     <tr>
@@ -185,57 +186,78 @@ else
             </tbody>
         </table>
     </div>
+
+    <Pager State="_pager" OnPageChanged="OnPageChanged" ContainerClass="d-flex justify-content-end mt-2" />
 }
 
 @code {
-    private List<OrderViewDto>? orders;
-    private List<OrderViewDto>? view;
+    // ---------- Paging ----------
+    private PaginationState _pager = new() { WindowSize = 5 }; 
+
+    // ---------- Data ----------
+    private List<OrderViewDto> all = new();
+    private List<OrderViewDto> filtered = new();
+    private List<OrderViewDto> paged = new();
+
     private HashSet<int> expanded = new();
 
+    // ---------- Filter ----------
     private string? queryOrderNo;
     private DateTime? dateFrom;
     private DateTime? dateTo;
 
+    // ---------- Sorting ----------
     private string? sortField;
     private bool sortAsc = true;
 
-    private string ApiBaseUrl => Options.Value.ApiBaseUrl;
+    // ---------- UI state ----------
+    private bool loading = true;
+
+    private string ApiBaseUrl => Options.Value.ApiBaseUrl?.TrimEnd('/') ?? "";
 
     protected override async Task OnInitializedAsync()
     {
+        _pager.SetPageSize(5);
         await Load();
+        loading = false;
     }
+
 
     private async Task Load()
     {
         try
         {
             var client = ClientFactory.CreateClient();
-            client.BaseAddress = new Uri(ApiBaseUrl);
+            client.BaseAddress = new Uri(ApiBaseUrl + "/");
 
             var token = TokenProvider.Token;
             if (!string.IsNullOrWhiteSpace(token))
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            orders = await client.GetFromJsonAsync<List<OrderViewDto>>("api/Order") ?? new();
-            foreach (var o in orders) o.Items ??= new();
+            all = await client.GetFromJsonAsync<List<OrderViewDto>>("api/Order") ?? new();
+            foreach (var o in all) o.Items ??= new();
 
+            // default sort: วันที่ล่าสุดก่อน
             sortField = nameof(OrderViewDto.OrderDate);
             sortAsc = false;
 
-            ApplyFilter();
+            ApplyFilterSortAndPage(resetPage: true);
         }
         catch (Exception ex)
         {
             await JS.InvokeVoidAsync("showToast", $"Failed to load orders: {ex.Message}", "error");
+            all = new();
+            ApplyFilterSortAndPage(resetPage: true);
         }
     }
 
-    private void ApplyFilter()
-    {
-        if (orders is null) { view = new(); return; }
+    // --- Filtering + Sorting + Paging ---
+    private void ApplyFilterClick() => ApplyFilterSortAndPage(resetPage: true);
 
-        IEnumerable<OrderViewDto> q = orders;
+    private void ApplyFilterSortAndPage(bool resetPage)
+    {
+        // 1) filter
+        IEnumerable<OrderViewDto> q = all;
 
         if (!string.IsNullOrWhiteSpace(queryOrderNo))
         {
@@ -254,8 +276,16 @@ else
             q = q.Where(o => o.OrderDate.ToLocalTime().Date <= toDate);
         }
 
-        q = ApplySort(q);
-        view = q.ToList();
+        filtered = q.ToList();
+
+        // 2) sort
+        var sorted = ApplySort(filtered);
+
+        // 3) page
+        _pager.SetTotal(sorted.Count());
+        if (resetPage) _pager.GoTo(1);
+        paged = sorted.Page(_pager);
+
         StateHasChanged();
     }
 
@@ -278,7 +308,7 @@ else
     {
         if (sortField == field) sortAsc = !sortAsc;
         else { sortField = field; sortAsc = true; }
-        ApplyFilter();
+        ApplyFilterSortAndPage(resetPage: false);
     }
 
     private void SortByOrderNo() => ToggleSort(nameof(OrderViewDto.OrderNo));
@@ -292,12 +322,6 @@ else
             ? (MarkupString)$"&nbsp;<small>{(sortAsc ? "▲" : "▼")}</small>"
             : (MarkupString)string.Empty;
 
-    private async Task HandleEnter(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter") ApplyFilter();
-        await Task.CompletedTask;
-    }
-
     private void ClearFilter()
     {
         queryOrderNo = null;
@@ -307,9 +331,10 @@ else
         sortField = nameof(OrderViewDto.OrderDate);
         sortAsc = false;
 
-        ApplyFilter();
+        ApplyFilterSortAndPage(resetPage: true);
     }
 
+    // --- Row expand / actions ---
     private void ToggleExpand(int id)
     {
         if (!expanded.Add(id)) expanded.Remove(id);
@@ -327,10 +352,10 @@ else
         if (url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return url;
 
         if (url.StartsWith("/"))
-            return $"{ApiBaseUrl.TrimEnd('/')}{url}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+            return $"{ApiBaseUrl}{url}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
 
         var guess = $"/images/slips/{url}";
-        return $"{ApiBaseUrl.TrimEnd('/')}{guess}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        return $"{ApiBaseUrl}{guess}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
     }
 
     private async Task OpenImage(string? src)
@@ -350,7 +375,7 @@ else
         try
         {
             var client = ClientFactory.CreateClient();
-            client.BaseAddress = new Uri(ApiBaseUrl);
+            client.BaseAddress = new Uri(ApiBaseUrl + "/");
 
             var token = TokenProvider.Token;
             if (!string.IsNullOrWhiteSpace(token))
@@ -359,8 +384,9 @@ else
             var resp = await client.DeleteAsync($"api/Order/{id}");
             if (resp.IsSuccessStatusCode)
             {
-                orders?.RemoveAll(x => x.Id == id);
-                ApplyFilter();
+                all.RemoveAll(x => x.Id == id);
+                expanded.Remove(id);
+                ApplyFilterSortAndPage(resetPage: true);
                 await JS.InvokeVoidAsync("showToast", "Deleted.", "success");
             }
             else
@@ -376,7 +402,7 @@ else
 
     private async Task ExportCsv()
     {
-        if (view is null || view.Count == 0)
+        if (filtered is null || filtered.Count == 0)
         {
             await JS.InvokeVoidAsync("showToast", "No data to export.", "warning");
             return;
@@ -384,9 +410,9 @@ else
 
         var header = new[]
         {
-        "OrderNo","OrderDate","Customer","Phone","Address",
-        "Product","Qty","UnitPrice","Discount","LineTotal","OrderAmount"
-    };
+            "OrderNo","OrderDate","Customer","Phone","Address",
+            "Product","Qty","UnitPrice","Discount","LineTotal","OrderAmount"
+        };
         var lines = new List<string> { string.Join(",", header) };
 
         string Esc(string s)
@@ -397,26 +423,24 @@ else
             return needs ? $"\"{s}\"" : s;
         }
 
-        foreach (var o in view)
+        foreach (var o in filtered)
         {
-            var orderAmount = CalcOrderAmount(o)
-                .ToString("0.00", CultureInfo.InvariantCulture);
-
+            var orderAmount = CalcOrderAmount(o).ToString("0.00", CultureInfo.InvariantCulture);
             var address = $"{o.AddressLine}, {o.SubDistrict}, {o.District}, {o.Province}, {o.ZipCode}";
-
             var items = o.Items ?? new List<OrderItemDto>();
+
             if (items.Count == 0)
             {
                 lines.Add(string.Join(",", new[]
                 {
-                Esc(o.OrderNo ?? ""),
-                Esc(o.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")),
-                Esc(o.CustomerName ?? ""),
-                Esc(o.CustomerPhone ?? ""),
-                Esc(address),
-                "", "", "", "", "",
-                orderAmount
-            }));
+                    Esc(o.OrderNo ?? ""),
+                    Esc(o.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")),
+                    Esc(o.CustomerName ?? ""),
+                    Esc(o.CustomerPhone ?? ""),
+                    Esc(address),
+                    "", "", "", "", "",
+                    orderAmount
+                }));
                 continue;
             }
 
@@ -427,24 +451,23 @@ else
 
                 lines.Add(string.Join(",", new[]
                 {
-                Esc(o.OrderNo ?? ""),
-                Esc(o.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")),
-                Esc(o.CustomerName ?? ""),
-                Esc(o.CustomerPhone ?? ""),
-                Esc(address),
-                Esc(it.ProductName ?? ""),
-                it.Quantity.ToString(CultureInfo.InvariantCulture),
-                it.UnitPrice.ToString("0.00", CultureInfo.InvariantCulture),
-                it.Discount.ToString("0.00", CultureInfo.InvariantCulture),
-                lineTotal,
-                orderAmount
-            }));
+                    Esc(o.OrderNo ?? ""),
+                    Esc(o.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")),
+                    Esc(o.CustomerName ?? ""),
+                    Esc(o.CustomerPhone ?? ""),
+                    Esc(address),
+                    Esc(it.ProductName ?? ""),
+                    it.Quantity.ToString(CultureInfo.InvariantCulture),
+                    it.UnitPrice.ToString("0.00", CultureInfo.InvariantCulture),
+                    it.Discount.ToString("0.00", CultureInfo.InvariantCulture),
+                    lineTotal,
+                    orderAmount
+                }));
             }
         }
 
         var csvContent = string.Join("\r\n", lines);
-
-        var bom = System.Text.Encoding.UTF8.GetPreamble();
+        var bom = Encoding.UTF8.GetPreamble();
         var csvBytes = bom.Concat(Encoding.UTF8.GetBytes(csvContent)).ToArray();
 
         var base64 = Convert.ToBase64String(csvBytes);
@@ -452,6 +475,18 @@ else
         await JS.InvokeVoidAsync("downloadFile", fileName, "text/csv;charset=utf-8", base64);
     }
 
+    // ---------- Pager callback ----------
+    private Task OnPageChanged(int p)
+    {
+        _pager.GoTo(p);
+        // คำนวณหน้าใหม่จากรายการที่ sort แล้ว
+        var sorted = ApplySort(filtered);
+        paged = sorted.Page(_pager);
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    // ---------- DTO ----------
     public class OrderViewDto
     {
         public int Id { get; set; }

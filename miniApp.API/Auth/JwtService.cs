@@ -23,7 +23,7 @@ namespace miniApp.API.Auth
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.Role, Enum.GetName(typeof(RoleType), user.Role) ?? "staff")
+                new Claim(ClaimTypes.Role, user.Role)
 
             };
 

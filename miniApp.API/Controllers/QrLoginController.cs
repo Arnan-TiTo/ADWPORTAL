@@ -42,12 +42,18 @@ namespace miniApp.API.Controllers
             if (dto == null || string.IsNullOrWhiteSpace(dto.Qr))
                 return BadRequest("QR content is required.");
 
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.QrLogin == dto.Qr);
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.QrLogin == dto.Qr && u.isDelete == 0);
             if (user == null)
-                return Unauthorized("QR not found.");
+                return Unauthorized("QR is not found.");
 
             if (user.isApproveQr != 1)
-                return Unauthorized("QR not approved.");
+                return Unauthorized("QR is not approved.");
+
+            if (user.isActive != 1)
+                return Unauthorized("Account is not active.");
+
+            if (user.Role != dto.Role)
+                return Unauthorized("Invalid account access app.");
 
             var jwt = _jwtService.GenerateToken(user);
             return Ok(new
@@ -62,6 +68,8 @@ namespace miniApp.API.Controllers
         public class QrLoginDto
         {
             public string Qr { get; set; } = "";
+            public string Role { get; set; } = "";
+
         }
 
         [HttpPost("scan")]

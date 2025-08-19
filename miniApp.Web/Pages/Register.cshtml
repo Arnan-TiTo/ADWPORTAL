@@ -30,6 +30,8 @@
       <input id="password" name="password" type="password" placeholder="Password" autocomplete="new-password"
              class="w-full px-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-black" />
 
+      <input id="role" type="hidden" value="FrontLine" />
+
       <button type="submit" id="btnRegister" class="w-full bg-black text-white py-3 rounded-md font-semibold">
         Register
       </button>
@@ -89,6 +91,8 @@
       const email    = document.getElementById('email').value.trim();
       const phone    = document.getElementById('phone').value.trim();
       const password = document.getElementById('password').value;
+      const role = document.getElementById('role').value;
+
 
       if(!fullname || !username || !email || !phone || !password){
         showError('Please fill all fields.'); return false;
@@ -102,8 +106,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            fullname, username, email, phone, password,
-            role: 'Staff'
+            fullname, username, email, phone, password,role
           })
         });
 

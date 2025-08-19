@@ -33,6 +33,7 @@
                     <label class="form-label">Password</label>
                     <InputText type="password" class="form-control" @bind-Value="_model.Password" />
                 </div>
+                
 
                 <button type="submit" class="btn btn-primary w-100 mb-3" disabled="@_busy">
                     @(_busy ? "Signing in..." : "Sign in")
@@ -103,7 +104,7 @@
         {
             var api = HttpClientFactory.CreateClient("ApiClient");
             var resp = await api.PostAsJsonAsync("api/Auth/login",
-                           new { username = _model.Username, password = _model.Password });
+                           new { username = _model.Username, password = _model.Password ,_model.Role});
 
             if (!resp.IsSuccessStatusCode)
             {
@@ -190,5 +191,6 @@
     {
         [System.ComponentModel.DataAnnotations.Required] public string Username { get; set; } = "";
         [System.ComponentModel.DataAnnotations.Required] public string Password { get; set; } = "";
+        [System.ComponentModel.DataAnnotations.Required] public string Role { get; set; } = "Admin";
     }
 }

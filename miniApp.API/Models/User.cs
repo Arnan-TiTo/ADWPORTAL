@@ -3,12 +3,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace miniApp.API.Models
 {
-    public enum RoleType
-    {
-        Admin,
-        Staff
-    }
-
     public class User
     {
         public int Id { get; set; }
@@ -27,12 +21,17 @@ namespace miniApp.API.Models
         [EmailAddress]
         public string Email { get; set; } = string.Empty;
 
-        public RoleType Role { get; set; } = RoleType.Staff;
+        public string Role { get; set; } = string.Empty;
 
         public ICollection<Location>? Locations { get; set; }
         
         [Required]
         public string QrLogin { get; set; } = string.Empty;
         public int isApproveQr { get; set; } = 0; // 0: not approved, 1: approved
+        public int isActive { get; set; } = 0; // 0: not active, 1: active
+        public int isDelete { get; set; } = 0; // 0: not active, 1: active
+
+        public ICollection<UserLocation> UserLocations { get; set; } = new List<UserLocation>();
+
     }
 }

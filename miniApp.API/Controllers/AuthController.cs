@@ -1,3 +1,4 @@
+using Humanizer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using miniApp.API.Auth;
@@ -31,16 +32,6 @@ namespace miniApp.API.Controllers
 
             var hashed = BCrypt.Net.BCrypt.HashPassword(dto.Password);
            
-            RoleType role = RoleType.Staff; 
-            if (Enum.TryParse(dto.Role, true, out RoleType parsedRole))
-            {
-                role = parsedRole;
-            }
-            else
-            {
-                role = RoleType.Staff; 
-            }
-
             var user = new User
             {
                 Username = dto.Username,
@@ -48,7 +39,7 @@ namespace miniApp.API.Controllers
                 Fullname = dto.Fullname,
                 Phone = dto.Phone,
                 Email = dto.Email,
-                Role = role,
+                Role = dto.Role?.Trim() ?? "",
                 QrLogin = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16))
             };
 
@@ -61,9 +52,15 @@ namespace miniApp.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto login)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == login.Username);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == login.Username && u.isDelete == 0); 
             if (user == null || !BCrypt.Net.BCrypt.Verify(login.Password, user.PasswordHash))
-                return Unauthorized("Invalid credentials.");
+                return Unauthorized("Invalid username or password.");
+
+            if (user.isActive != 1)
+                return Unauthorized("Account is not active.");
+
+            if (user.Role != login.Role)
+                return Unauthorized("Invalid account access app.");
 
             var token = _jwtService.GenerateToken(user);
 
@@ -81,5 +78,8 @@ namespace miniApp.API.Controllers
     {
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public int isActive { get; set; } 
+
     }
 }
