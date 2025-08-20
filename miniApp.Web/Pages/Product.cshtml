@@ -1,13 +1,15 @@
 ﻿@page
 @model miniApp.Web.Pages.ProductModel
 @inject IHttpClientFactory HttpClientFactory
+
 @{
     ViewData["Title"] = "Product";
-    var authToken = @Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration config
-        ? config["AUTHTOKEN"] ?? ""
+
+    var authToken = Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg1
+        ? cfg1["AUTHTOKEN"] ?? ""
         : "";
-    var apiBaseUrl = @Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg
-        ? cfg["APIBASEURL"] ?? ""
+    var apiBaseUrl = Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg2
+        ? cfg2["APIBASEURL"] ?? ""
         : "";
 }
 
@@ -15,51 +17,71 @@
     string Img(string? url, string folder = "products")
     {
         if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
-
         var u = url.Replace("\\", "/").Trim();
-
         if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            return u;
-        
+            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return u;
         while (u.StartsWith("/")) u = u[1..];
-
         if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
-
         if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
-
         return $"/images/{folder}/{u}";
     }
 }
 
 <div class="max-w-md w-full mx-auto my-auto px-2 py-2">
     <!-- Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between mb-3">
         <button onclick="history.back()" class="text-xl">&#8592;</button>
         <h1 class="text-lg font-semibold text-center flex-1">Product</h1>
     </div>
 
-    <!-- Search -->
-    <form method="get" class="relative">
-        <input type="text" name="query" value="@Model.SearchQuery" placeholder="Search by name or SKU"
-               class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm" />
-        <button type="submit"
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
-            🔍
-        </button>
+    <!-- Filter bar: Location + Search -->
+    <form method="get" class="grid grid-cols-1 gap-2 mb-3">
+        <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600 min-w-[72px]">Location</label>
+            <select name="locationId"
+                    class="flex-1 bg-white border rounded-xl px-3 py-2 text-sm"
+                    onchange="this.form.submit()"
+                    @(Model.Locations.Count == 0 ? "disabled" : "")>
+                @if (Model.Locations.Count == 0)
+                {
+                    <option value="">(no permission)</option>
+                }
+                else
+                {
+                    @foreach (var l in Model.Locations)
+                    {
+                        <option value="@l.Id" selected="@(l.Id == Model.LocationId)">@l.Name</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <div class="relative">
+            <input type="text" name="query" value="@Model.SearchQuery" placeholder="Search by name or SKU"
+                   class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm pr-8" />
+            <input type="hidden" name="sort" value="@Model.SortOrder" />
+            <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</button>
+        </div>
+
+        <div class="flex gap-2">
+            <a href="?query=@Model.SearchQuery&locationId=@Model.LocationId&sort=asc"
+               class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm">
+                <img src="/images/icons/Alignment.PNG" class="w-5 h-5 inline" />
+            </a>
+            <a href="?query=@Model.SearchQuery&locationId=@Model.LocationId&sort=@(Model.SortOrder == "asc" ? "desc" : "asc")"
+               class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+                <img src="/images/icons/Sort.png" alt="Sort Icon" class="w-5 h-5" />
+                Sort @(Model.SortOrder == "asc" ? "🔽" : "🔼")
+            </a>
+        </div>
     </form>
 
-    <!-- Sort & Alignment Buttons -->
-    <div class="flex gap-2 mb-4">
-        <a href="?query=@Model.SearchQuery&sort=asc" class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm">
-            <img src="/images/icons/Alignment.PNG" class="w-5 h-5 inline" />
-        </a>
-        <a href="?query=@Model.SearchQuery&sort=@(Model.SortOrder == "asc" ? "desc" : "asc")"
-           class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm flex items-center gap-2">
-            <img src="/images/icons/Sort.png" alt="Sort Icon" class="w-5 h-5" />
-            Sort @(Model.SortOrder == "asc" ? "🔽" : "🔼")
-        </a>
-    </div>
+    @if (Model.Locations.Count == 0)
+    {
+        <div class="bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-xl px-3 py-2 text-sm">
+            ยังไม่ได้รับสิทธิ์ Location ใด ๆ – ติดต่อผู้ดูแลระบบ
+        </div>
+    }
 
     <!-- Results -->
     @if (Model.Products != null && Model.Products.Count > 0)
@@ -67,42 +89,79 @@
         <div class="space-y-6">
             @foreach (var product in Model.Products)
             {
-                <div class="bg-white border rounded-xl p-4 shadow-sm">
+                var targetOptions = Model.Locations.Where(l => l.Id != Model.LocationId).ToList();
+                <div class="bg-white border rounded-xl p-4 shadow-sm prod-card" data-pid="@product.Id">
                     <div class="text-center mb-2">
                         <img src="@Img(product.ImageUrl)" alt="Product" class="w-20 h-20 mx-auto mb-2 object-cover rounded" />
-                        <p class="text-sm text-gray-500">@product.Name</p>
+                        <div class="text-sm text-gray-800 font-semibold">@product.Name</div>
+                        <div class="text-xs text-gray-500">@product.Sku</div>
                     </div>
 
-                    <form onsubmit="return submitEditItem(this, event);" class="space-y-4">
-                        <input type="hidden" name="Name" value="@product.Name" />
-                        <input type="hidden" name="Sku" value="@product.Sku" />
-                        <input type="hidden" name="Description" value="@product.Description" />
-                        <input type="hidden" name="LocationId" value="@product.LocationId" />
+                    <!-- Summary -->
+                    <div class="grid grid-cols-3 gap-2 text-xs text-gray-600 mb-3">
+                        <div>OnHand: <span class="js-onhand">@product.OnHand</span></div>
+                        <div>Reserved: <span class="js-reserved">@product.Reserved</span></div>
+                        <div>Damaged: <span class="js-damaged">@product.Damaged</span></div>
+                        <div class="col-span-3">Available: <span class="js-available">@product.Available</span></div>
+                    </div>
 
+                    <!-- 1) Adjust In -->
+                    <form onsubmit="return submitAdjust(this, event);" class="space-y-2 border rounded-xl p-3 mb-3">
+                        <div class="text-sm font-semibold">Adjust (รับเข้า/บวกเพิ่ม)</div>
+                        <input type="hidden" name="ProductId" value="@product.Id" />
                         <div class="grid grid-cols-2 gap-3">
-                            <input type="text" name="Date" value="@product.CreatedAt?.ToString("dd/MM/yyyy")"
-                                   class="w-full border rounded-xl px-4 py-2 text-sm bg-gray-100 text-gray-500" readonly />
-                            <input type="text" value="@product.Sku"
-                                   class="w-full border rounded-xl px-4 py-2 text-sm bg-gray-100 text-gray-500" readonly />
+                            <input type="number" name="AddQty" value="0" step="1" min="0"
+                                   class="w-full border rounded-xl px-3 py-2 text-sm"
+                                   placeholder="Add Qty (+)" />
+                            <input type="text" name="Note" value="" class="w-full border rounded-xl px-3 py-2 text-sm" placeholder="Note (optional)" />
                         </div>
+                        <button type="submit" class="w-full bg-black text-white py-2 rounded-xl text-sm">Save (add to stock)</button>
+                    </form>
 
-                        <input type="number" name="Quantity" value="@product.Quantity"
-                               class="w-full border rounded-xl px-4 py-2 text-sm" required />
+                    <!-- 2) Damage (ของเสีย) -->
+                    <form onsubmit="return submitDamage(this, event);" class="space-y-2 border rounded-xl p-3 mb-3">
+                        <div class="text-sm font-semibold">Damage (บันทึกของเสีย)</div>
+                        <input type="hidden" name="ProductId" value="@product.Id" />
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="number" name="Qty" value="0" step="1" min="0"
+                                   class="w-full border rounded-xl px-3 py-2 text-sm"
+                                   placeholder="Qty" />
+                            <input type="text" name="Note" value="" class="w-full border rounded-xl px-3 py-2 text-sm" placeholder="เหตุผล (จำเป็น)" />
+                        </div>
+                        <button type="submit" class="w-full bg-yellow-600 text-white py-2 rounded-xl text-sm">Mark Damaged</button>
+                    </form>
 
-                        <input type="text" value="@product.Description"
-                               class="w-full border rounded-xl px-4 py-2 text-sm bg-gray-100 text-gray-500" readonly />
+                    <!-- 3) Damage Write-off (ทำลาย/ตัดทิ้ง) -->
+                    <form onsubmit="return submitWriteoff(this, event);" class="space-y-2 border rounded-xl p-3 mb-3">
+                        <div class="text-sm font-semibold">Damage Write-off (ทำลาย/ตัดทิ้ง)</div>
+                        <input type="hidden" name="ProductId" value="@product.Id" />
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="number" name="Qty" value="0" step="1" min="0"
+                                   class="w-full border rounded-xl px-3 py-2 text-sm"
+                                   placeholder="Qty (≤ Damaged)" />
+                            <input type="text" name="Note" value="" class="w-full border rounded-xl px-3 py-2 text-sm" placeholder="เหตุผล (จำเป็น)" />
+                        </div>
+                        <button type="submit" class="w-full bg-red-600 text-white py-2 rounded-xl text-sm">Write-off</button>
+                    </form>
 
-                        <input type="text" readonly value="@product.UserFullname"
-                               class="w-full border rounded-xl px-4 py-2 text-sm text-gray-500 bg-gray-100" />
-
-                        <input type="hidden" name="UserId" value="@product.UserId" />
-                        <input type="text" name="Note" value="@product.Note"
-                               placeholder="Note" class="w-full border rounded-xl px-4 py-2 text-sm" />
-                        <input type="hidden" name="Id" value="@product.Id" />
-
-                        <button type="submit" class="w-full bg-black text-white py-3 rounded-xl font-semibold">
-                            Edit Item
-                        </button>
+                    <!-- 4) Transfer -->
+                    <form onsubmit="return submitTransfer(this, event);" class="space-y-2 border rounded-xl p-3">
+                        <div class="text-sm font-semibold">Transfer (โอนย้ายระหว่างโลเคชัน)</div>
+                        <input type="hidden" name="ProductId" value="@product.Id" />
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="number" name="Qty" value="0" step="1" min="0"
+                                   class="w-full border rounded-xl px-3 py-2 text-sm"
+                                   placeholder="Qty (≤ Available)" />
+                            <select name="ToLocationId" class="w-full border rounded-xl px-3 py-2 text-sm">
+                                <option value="">-- เลือกปลายทาง --</option>
+                                @foreach (var loc in targetOptions)
+                                {
+                                    <option value="@loc.Id">@loc.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <input type="text" name="Note" value="" class="w-full border rounded-xl px-3 py-2 text-sm" placeholder="เหตุผล (optional)" />
+                        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-xl text-sm">Transfer</button>
                     </form>
                 </div>
             }
@@ -114,59 +173,219 @@
     }
 </div>
 
-<!--Toast Notification Container -->
+<!-- Toast -->
 <div id="toast" class="fixed top-5 right-5 z-50 hidden">
     <div id="toastContent" class="px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium"></div>
 </div>
 
+
 @section Scripts {
     <script>
-        async function submitEditItem(formElement) {
-            event?.preventDefault();
+        const APIBASE = '@apiBaseUrl';
+        const TOKEN   = '@authToken';
+        const LOC_ID  = @Model.LocationId.GetValueOrDefault(0);
+        const USER_ID = @Model.CurrentUserId;
 
-            const formData = new FormData(formElement);
-            const dto = {
-                Id: parseInt(formData.get("Id")),
-                Quantity: parseInt(formData.get("Quantity"))
+        function showToast(message, variant = "success") {
+          const toast = document.getElementById("toast");
+          const content = document.getElementById("toastContent");
+
+          const base = "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium";
+          const COLORS = {
+            success: "bg-green-600",
+            error:   "bg-red-600",
+            warn:    "bg-yellow-500",
+            info:    "bg-blue-600",
+          };
+
+          content.className = `${base} ${COLORS[variant] || "bg-gray-800"}`;
+          content.textContent = message;
+          toast.classList.remove("hidden");
+          setTimeout(() => toast.classList.add("hidden"), 3500);
+        }
+
+        function getCard(el){ return el.closest('.prod-card'); }
+        function num(val){ const n = parseInt(val); return isNaN(n) ? 0 : n; }
+
+        function updateFields(card, {onhandDelta=0, damagedDelta=0, reservedDelta=0, availableDelta=0}){
+            const elOn = card.querySelector('.js-onhand');
+            const elDm = card.querySelector('.js-damaged');
+            const elRv = card.querySelector('.js-reserved');
+            const elAv = card.querySelector('.js-available');
+
+            const on  = num(elOn.textContent);
+            const dm  = num(elDm.textContent);
+            const rv  = num(elRv.textContent);
+            const av  = num(elAv.textContent);
+
+            const nOn = on + onhandDelta;
+            const nDm = dm + damagedDelta;
+            const nRv = rv + reservedDelta;
+            const nAv = av + availableDelta;
+
+            elOn.textContent = nOn.toString();
+            elDm.textContent = nDm.toString();
+            elRv.textContent = nRv.toString();
+            elAv.textContent = nAv.toString();
+        }
+
+        // 1) Adjust In
+        async function submitAdjust(form, ev){
+            ev?.preventDefault();
+            const card = getCard(form);
+            const pid  = parseInt(form.ProductId.value);
+            const add  = num(form.AddQty.value);
+            const note = (form.Note.value || "").trim();
+
+            if (!add || add <= 0){ showToast("กรุณาใส่จำนวนที่จะเพิ่ม", "warn"); return false; }
+
+            const payload = {
+                ProductId: pid,
+                LocationId: LOC_ID,
+                QtyOnHand: add,
+                ReasonCode: "ManualIn",
+                ReferenceType: "MANUAL",
+                ReferenceId: "",
+                PerformedByUserId: USER_ID,
+                Note: note
             };
-            const data = [dto];
 
-            const apiBaseUrl = '@ViewData["APIBASEURL"]';
-            const apiUrl = apiBaseUrl + 'api/Product/updatequantities';
-            const authToken = '@ViewData["AUTHTOKEN"]';
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": "Bearer " + authToken
-                    },
-                    body: JSON.stringify(data)
+            try{
+                const resp = await fetch(APIBASE + 'api/ProductStock/adjust', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+                    body: JSON.stringify(payload)
                 });
+                if(!resp.ok){ showToast("Adjust failed", "error"); return false; }
 
-                if (response.ok) {
-                    showToast("Product updated successfully", "green");
-                } else {
-                    showToast("Failed to update product", "red");
-                    console.warn("Payload:", data, "URL:", apiUrl);
-                }
-            } catch (err) {
-                console.error("Error:", err);
-                showToast("Error occurred", "red");
-            }
-
+                // OnHand +add, Available +add
+                updateFields(card, { onhandDelta: add, availableDelta: add });
+                form.AddQty.value = "0"; form.Note.value = "";
+                showToast("Stock adjusted", "success");
+            }catch(e){ console.error(e); showToast("Error occurred", "error"); }
             return false;
         }
 
-        function showToast(message, color) {
-            const toast = document.getElementById("toast");
-            const content = document.getElementById("toastContent");
-            content.textContent = message;
-            content.className =
-                "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium bg-" + color + "-500";
-            toast.classList.remove("hidden");
-            setTimeout(() => toast.classList.add("hidden"), 4000);
+        // 2) Damage Add
+        async function submitDamage(form, ev){
+            ev?.preventDefault();
+            const card = getCard(form);
+            const pid  = parseInt(form.ProductId.value);
+            const qty  = num(form.Qty.value);
+            const note = (form.Note.value || "").trim();
+            if (!qty || qty <= 0){ showToast("จำนวนต้องมากกว่า 0", "warn"); return false; }
+            if (!note){ showToast("กรุณาใส่เหตุผล", "warn"); return false; }
+
+            const payload = {
+                ProductId: pid,
+                LocationId: LOC_ID,
+                QtyOnHand: qty,
+                ReasonCode: "DAMAGE_ADD",
+                ReferenceType: "DAMAGE",
+                ReferenceId: "",
+                PerformedByUserId: USER_ID,
+                Note: note
+            };
+
+            try{
+                const resp = await fetch(APIBASE + 'api/ProductStock/damage-add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+                    body: JSON.stringify(payload)
+                });
+                if(!resp.ok){ const t = await resp.text(); console.warn(t); showToast("Damage failed", "error"); return false; }
+
+                // Damaged +qty, Available -qty (OnHand คงเดิม)
+                updateFields(card, { damagedDelta: qty, availableDelta: -qty });
+                form.Qty.value = "0"; form.Note.value = "";
+                showToast("Marked damaged", "success");
+            }catch(e){ console.error(e); showToast("Error occurred", "error"); }
+            return false;
+        }
+
+        // 3) Damage Write-off
+        async function submitWriteoff(form, ev){
+            ev?.preventDefault();
+            const card = getCard(form);
+            const pid  = parseInt(form.ProductId.value);
+            const qty  = num(form.Qty.value);
+            const dm   = num(card.querySelector('.js-damaged').textContent);
+            const note = (form.Note.value || "").trim();
+            if (!qty || qty <= 0){ showToast("จำนวนต้องมากกว่า 0", "warn"); return false; }
+            if (qty > dm){ showToast("จำนวนเกิน Damaged", "warn"); return false; }
+            if (!note){ showToast("กรุณาใส่เหตุผล", "warn"); return false; }
+
+            const payload = {
+                ProductId: pid,
+                LocationId: LOC_ID,
+                QtyOnHand: qty,
+                ReasonCode: "DAMAGE_WRITE_OFF",
+                ReferenceType: "DAMAGE",
+                ReferenceId: "",
+                PerformedByUserId: USER_ID,
+                Note: note
+            };
+           
+            try{
+                const resp = await fetch(APIBASE + 'api/ProductStock/damage-writeoff', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+                    body: JSON.stringify(payload)
+                });
+                if(!resp.ok){ const t = await resp.text(); console.warn(t); showToast("Write-off failed", "error"); return false; }
+
+                /* ผลกระทบ:
+                   - OnHand -qty
+                   - Damaged -qty
+                   - Available ไม่เปลี่ยน
+                */
+                updateFields(card, { onhandDelta: -qty, damagedDelta: -qty });
+                form.Qty.value = "0"; form.Note.value = "";
+                showToast("Write-off done", "success");
+            }catch(e){ console.error(e); showToast("Error occurred", "error"); }
+            return false;
+        }
+
+        // 4) Transfer
+        async function submitTransfer(form, ev){
+            ev?.preventDefault();
+            const card = getCard(form);
+            const pid  = parseInt(form.ProductId.value);
+            const qty  = num(form.Qty.value);
+            const toId = parseInt(form.ToLocationId.value || "0");
+            const avail= num(card.querySelector('.js-available').textContent);
+            const note = (form.Note.value || "").trim();
+
+            if (!toId){ showToast("เลือกปลายทางก่อน", "warn"); return false; }
+            if (!qty || qty <= 0){ showToast("จำนวนต้องมากกว่า 0", "warn"); return false; }
+            if (qty > avail){ showToast("เกิน Available", "warn"); return false; }
+
+            const payload = {
+                ProductId: pid,
+                FromLocationId: LOC_ID,
+                ToLocationId: toId,
+                QtyOnHand: qty,
+                ReasonCode: "TRANSFER",
+                ReferenceType: "TRANSFER",
+                ReferenceId: "",
+                PerformedByUserId: USER_ID,
+                Note: note
+            };
+
+            try{
+                const resp = await fetch(APIBASE + 'api/ProductStock/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+                    body: JSON.stringify(payload)
+                });
+                if(!resp.ok){ const t = await resp.text(); console.warn(t); showToast("Transfer failed", "error"); return false; }
+
+                // ฝั่งต้นทาง: OnHand -qty, Available -qty
+                updateFields(card, { onhandDelta: -qty, availableDelta: -qty });
+                form.Qty.value = "0"; form.ToLocationId.value = ""; form.Note.value = "";
+                showToast("Transferred", "success");
+            }catch(e){ console.error(e); showToast("Error occurred", "error"); }
+            return false;
         }
     </script>
 }

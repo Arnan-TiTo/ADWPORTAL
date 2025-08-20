@@ -1,96 +1,154 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Net.Http.Json;
-using System.Security.Claims;
+using System.Text.Json;
 
 namespace miniApp.Web.Pages
 {
     public class ProductModel : PageModel
     {
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration;
-        private readonly string APIBASEURL;
-        private readonly string AUTHTOKEN;
+        private readonly IConfiguration _config;
 
-        public ProductModel(IHttpClientFactory httpClientFactory, IConfiguration configuration)
-        {
-            _httpClientFactory = httpClientFactory;
-            _configuration = configuration;
-            APIBASEURL = _configuration["APIBASEURL"] ?? "";
-            AUTHTOKEN = _configuration["AUTHTOKEN"] ?? "";
-        }
+        public ProductModel(IHttpClientFactory httpClientFactory, IConfiguration config)
+            => (_httpClientFactory, _config) = (httpClientFactory, config);
 
-        public List<LocationItem> LocationDropdown { get; set; } = new();
-        public string CurrentUserFullname { get; set; } = "";
+        // ===== Query Params / Binding =====
+        [BindProperty(Name = "query", SupportsGet = true)] public string? SearchQuery { get; set; }
+        [BindProperty(Name = "sort", SupportsGet = true)] public string SortOrder { get; set; } = "asc";
+        [BindProperty(Name = "locationId", SupportsGet = true)] public int? LocationId { get; set; }
+
+        // ===== View Data =====
         public int CurrentUserId { get; set; }
-        public string SearchQuery { get; set; } = "";
-        public string SortOrder { get; set; } = "";
-        public List<ProductItem> Products { get; set; } = new();
+        public List<LocationOption> Locations { get; set; } = new();
+        public List<ProductDto> Products { get; set; } = new();
 
-        public async Task OnGetAsync(string? query = null, string? sort = null)
+        public async Task OnGetAsync()
         {
-            if (string.IsNullOrEmpty(query) && string.IsNullOrEmpty(sort))
+            var client = _httpClientFactory.CreateClient();
+            var apiBase = (_config["APIBASEURL"] ?? "").TrimEnd('/') + "/";
+            var token = _config["AUTHTOKEN"] ?? "";
+            var userId = HttpContext.Session.GetInt32("USERID") ?? 0;
+            CurrentUserId = userId;
+
+            if (!string.IsNullOrWhiteSpace(token))
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            ViewData["APIBASEURL"] = apiBase;
+            ViewData["AUTHTOKEN"] = token;
+            ViewData["USERID"] = userId;
+
+            // 1) สิทธิ์ location ของ user
+            var allows = new List<UserLocationDto>();
+            if (userId > 0)
+                allows = await client.GetFromJsonAsync<List<UserLocationDto>>(
+                    $"{apiBase}api/userlocations/user/{userId}") ?? new();
+
+            var allowIds = allows.Select(a => a.LocationId).ToHashSet();
+
+            // 2) dropdown location (กรองด้วยสิทธิ์)
+            var drops = await client.GetFromJsonAsync<List<LocationOption>>(
+                $"{apiBase}api/locations/dropdown") ?? new();
+
+            Locations = drops
+                .Where(d => allowIds.Count == 0 || allowIds.Contains(d.Id))
+                .OrderBy(d => d.Name)
+                .ToList();
+
+            if (Locations.Count > 0 && (!LocationId.HasValue || LocationId <= 0))
+                LocationId = Locations.First().Id;
+
+            if (LocationId.HasValue && allowIds.Count > 0 && !allowIds.Contains(LocationId.Value))
+            {
+                Products = new();
                 return;
+            }
 
-            ViewData["APIBASEURL"] = _configuration["APIBASEURL"];
-            ViewData["AUTHTOKEN"] = _configuration["AUTHTOKEN"];
+            // 3) อ่าน ProductStocks ของ location ที่เลือก → เอาค่า OnHand/Reserved/Damaged/Available
+            var stockMap = new Dictionary<int, StockRow>();
+            HashSet<int> locProductIds = new();
+            if (LocationId is int locId && locId > 0)
+            {
+                var stocks = await client.GetFromJsonAsync<List<StockRow>>(
+                    $"{apiBase}api/ProductStock/location/{locId}?userId={userId}") ?? new();
+                stockMap = stocks.ToDictionary(s => s.ProductId, s => s);
+                locProductIds = stocks.Select(s => s.ProductId).ToHashSet();
+            }
 
-            var http = _httpClientFactory.CreateClient();
-            http.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", AUTHTOKEN);
+            // 4) โหลดสินค้า → กรองเฉพาะที่มีในสต็อกของโลเคชันนี้ + ค้นหา + sort
+            var all = await client.GetFromJsonAsync<List<ProductDto>>($"{apiBase}api/product") ?? new();
 
-            // Load dropdown
-            var locationResponse = await http.GetFromJsonAsync<List<LocationItem>>($"{APIBASEURL}api/locations/dropdown");
-            if (locationResponse != null)
-                LocationDropdown = locationResponse;
+            IEnumerable<ProductDto> q = all;
 
-            // Load user info
-            var username = User.FindFirst(ClaimTypes.Name)?.Value;
-            CurrentUserFullname = User.FindFirst("FULLNAME")?.Value ?? "";
-            CurrentUserId = Convert.ToInt32(User.FindFirst("USERID")?.Value);
+            if (LocationId is int _l && _l > 0)
+                q = locProductIds.Count > 0 ? q.Where(p => locProductIds.Contains(p.Id))
+                                            : Enumerable.Empty<ProductDto>();
 
-            SearchQuery = query ?? "";
-            SortOrder = sort ?? "";
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                var k = SearchQuery.Trim();
+                q = q.Where(p =>
+                    (p.Name ?? "").Contains(k, StringComparison.OrdinalIgnoreCase) ||
+                    (p.Sku ?? "").Contains(k, StringComparison.OrdinalIgnoreCase));
+            }
 
-            var result = string.IsNullOrEmpty(query)
-                ? await http.GetFromJsonAsync<List<ProductItem>>($"{APIBASEURL}api/product")
-                : await http.GetFromJsonAsync<List<ProductItem>>($"{APIBASEURL}api/product/productsearch?query={query}");
+            q = SortOrder?.Equals("desc", StringComparison.OrdinalIgnoreCase) == true
+                ? q.OrderByDescending(p => p.Name)
+                : q.OrderBy(p => p.Name);
 
-            if (result != null)
-                Products = result;
+            Products = q.ToList();
 
-            if (SortOrder == "asc")
-                Products = Products.OrderBy(p => p.Name).ToList();
-            else if (SortOrder == "desc")
-                Products = Products.OrderByDescending(p => p.Name).ToList();
+            // 5) อัดค่าจาก ProductStocks ลง ProductDto
+            foreach (var p in Products)
+            {
+                if (stockMap.TryGetValue(p.Id, out var s))
+                {
+                    p.OnHand = s.QtyOnHand;
+                    p.Available = s.QtyAvailable;
+                    p.Reserved = s.QtyReserved;
+                    p.Damaged = s.QtyDamaged;
+                }
+                else
+                {
+                    p.OnHand = p.Available = p.Reserved = p.Damaged = 0;
+                }
+            }
         }
 
-        public class LocationItem
+        // ===== DTOs =====
+        public class LocationOption { public int Id { get; set; } public string Name { get; set; } = ""; }
+        public class UserLocationDto { public int UserId { get; set; } public int LocationId { get; set; } }
+
+        // ดึงจาก ProductStock/location
+        public class StockRow
+        {
+            public int ProductId { get; set; }
+            public int QtyOnHand { get; set; }
+            public int QtyReserved { get; set; }
+            public int QtyDamaged { get; set; }
+            public int QtyAvailable { get; set; }
+        }
+
+        public class ProductDto
         {
             public int Id { get; set; }
             public string Name { get; set; } = "";
-        }
-
-        public class UserResponse
-        {
-            public int Id { get; set; }
-            public string Fullname { get; set; } = "";
-        }
-
-        public class ProductItem
-        {
-            public int Id { get; set; }
-            public string ImageUrl { get; set; }
-            public string Name { get; set; } = string.Empty;
             public string? Sku { get; set; }
             public string? Description { get; set; }
-            public int LocationId { get; set; }
-            public string LocationName { get; set; } = string.Empty;
-            public int UserId { get; set; }
             public int Quantity { get; set; }
-            public string UserFullname { get; set; } = string.Empty;
             public string? Note { get; set; }
+            public string? ImageUrl { get; set; }
             public DateTime? CreatedAt { get; set; }
+            public int LocationId { get; set; }
+            public int UserId { get; set; }
+            public string? UserFullname { get; set; }
+
+            // From ProductStocks
+            public int OnHand { get; set; }
+            public int Available { get; set; }
+            public int Reserved { get; set; }
+            public int Damaged { get; set; }
         }
     }
 }

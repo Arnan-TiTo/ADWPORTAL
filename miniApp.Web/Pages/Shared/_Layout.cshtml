@@ -13,8 +13,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Front Line</title>
-    <link href="~/css/site.css" rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="/css/tailwind.input.css" asp-append-version="true" />
+    <link href="~/css/app.css" rel="stylesheet" />
+    @* ?script src="https://cdn.tailwindcss.com"></script> *@
     <script>
         function toggleSidebar() {
             const sidebar = document.getElementById("sidebar");

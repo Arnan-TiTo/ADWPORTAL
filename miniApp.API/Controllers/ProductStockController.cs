@@ -417,7 +417,7 @@ namespace miniApp.API.Controllers
                 return Conflict("Not enough damaged quantity to repair.");
             }
 
-            // ✅ ผูก location ลง log
+            // ผูก location ลง log
             await _context.Database.ExecuteSqlRawAsync(@"
                 INSERT INTO dbo.StockTransactions
                     (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
@@ -586,7 +586,7 @@ namespace miniApp.API.Controllers
               WHERE LocationId = {0} AND ProductId = {1};",
                     locationId, productId);
 
-                if (affected == 0) return NotFound(); // เผื่อถูกลบไปก่อนหน้าแบบ concurrent
+                if (affected == 0) return NotFound();
                 return NoContent();
             }
             catch (DbUpdateException ex)
@@ -653,5 +653,51 @@ namespace miniApp.API.Controllers
             return Ok(items);
         }
 
+        // POST: api/productstock/damage-writeoff
+        [HttpPost("damage-writeoff")]
+        public async Task<IActionResult> DamageWriteOff([FromBody] DamageDto dto)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+            if (dto == null) return BadRequest();
+            if (dto.ProductId <= 0 || dto.LocationId <= 0 || dto.QtyOnHand <= 0)
+                return BadRequest("ProductId, LocationId, positive Qty are required.");
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+
+            // 1) ต้องมีกองเสียพอให้ตัดทิ้ง
+            var affected = await _context.Database.ExecuteSqlRawAsync(@"
+        UPDATE dbo.ProductStocks
+           SET QtyDamaged = QtyDamaged - {2}, UpdatedAt = SYSUTCDATETIME()
+         WHERE ProductId = {0} AND LocationId = {1}
+           AND QtyDamaged >= {2};",
+                dto.ProductId, dto.LocationId, dto.QtyOnHand);
+
+            if (affected == 0)
+            {
+                await tx.RollbackAsync();
+                return Conflict("Not enough damaged quantity to write-off.");
+            }
+
+            // 2) ตัดของออกจากสต็อกจริง (ออกจากสาขานี้)
+            var p = new[]
+            {
+                new SqlParameter("@ProductId", dto.ProductId),
+                new SqlParameter("@FromLocationId", dto.LocationId),
+                new SqlParameter("@ToLocationId", DBNull.Value),
+                new SqlParameter("@Qty", dto.QtyOnHand),
+                new SqlParameter("@ReasonCode", "DAMAGE_WRITE_OFF"),
+                new SqlParameter("@ReferenceType", (object?)dto.ReferenceType ?? DBNull.Value),
+                new SqlParameter("@ReferenceId",   (object?)dto.ReferenceId   ?? DBNull.Value),
+                new SqlParameter("@PerformedByUserId", (object?)dto.PerformedByUserId ?? DBNull.Value),
+                new SqlParameter("@Note", (object?)dto.Note ?? DBNull.Value),
+            };
+
+            await _context.Database.ExecuteSqlRawAsync(
+                "EXEC dbo.sp_AdjustOrTransferStock @ProductId, @FromLocationId, @ToLocationId, @Qty, " +
+                "@ReasonCode, @ReferenceType, @ReferenceId, @PerformedByUserId, @Note", p);
+
+            await tx.CommitAsync();
+            return NoContent();
+        }
     }
 }
