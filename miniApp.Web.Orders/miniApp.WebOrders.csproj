@@ -7,8 +7,18 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<Folder Include="wwwroot\images\" />
-		<Folder Include="wwwroot\uploads\" />
+	  <Compile Remove="wwwroot\images\**" />
+	  <Compile Remove="wwwroot\uploads\**" />
+	  <Content Remove="wwwroot\images\**" />
+	  <Content Remove="wwwroot\uploads\**" />
+	  <EmbeddedResource Remove="wwwroot\images\**" />
+	  <EmbeddedResource Remove="wwwroot\uploads\**" />
+	  <None Remove="wwwroot\images\**" />
+	  <None Remove="wwwroot\uploads\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="tailwind.config.js" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -16,6 +26,15 @@
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.1.2" />
 		<PackageReference Include="Tailwind.Extensions.AspNetCore" Version="1.0.0" />
+		<PackageReference Include="tailwindcss.cli.windows.x64" Version="3.4.0" />
 	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="wwwroot\js\" />
+	</ItemGroup>
+
+  <Target Name="TailwindBuild" BeforeTargets="Build">
+    <Exec Command="dotnet tailwindcss -i ./wwwroot/css/tailwind.input.css -o ./wwwroot/css/site.css --minify" />
+  </Target>
 
 </Project>

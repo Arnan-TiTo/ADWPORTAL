@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using miniApp.API.Data;
@@ -86,6 +88,7 @@ namespace miniApp.API.Controllers
                 Social = h.Social,
                 Items = h.OrderDts.Select(d => new OrderItemDto
                 {
+                    LocationId = d.LocationId,
                     ProductId = d.ProductId,
                     ProductName = d.ProductName,
                     Quantity = d.Quantity,
@@ -130,6 +133,7 @@ namespace miniApp.API.Controllers
                     products.TryGetValue(d.ProductId, out var prod);
                     return new OrderItemDto
                     {
+                        LocationId = d.LocationId,
                         ProductId = d.ProductId,
                         ProductName = d.ProductName,
                         Quantity = d.Quantity,
@@ -147,45 +151,133 @@ namespace miniApp.API.Controllers
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
         {
             if (!IsAuthorized()) return Unauthorized();
-
+            if (dto is null || dto.Items is null || dto.Items.Count == 0)
+                return BadRequest("Body & items are required.");
             if (!IsValidJsonOrNull(dto.Social))
                 return BadRequest("Social must be a valid JSON string or null.");
 
-            var order = new OrderHd
+            // เอา USERID จาก session/claims ไปตั้ง session context
+            int userId = 0;
+            try
             {
-                OrderNo = "OD" + DateTime.Now.Ticks.ToString()[^6..],
-                OrderDate = DateTime.UtcNow,
-                CustomerName = dto.CustomerName,
-                CustomerPhone = dto.CustomerPhone,
-                CustomerEmail = dto.CustomerEmail,
-                AddressLine = dto.AddressLine,
-                SubDistrict = dto.SubDistrict,
-                District = dto.District,
-                Province = dto.Province,
-                ZipCode = dto.ZipCode,
-                Gender = dto.Gender ?? "",
-                BirthDate = dto.BirthDate,
-                Occupation = dto.Occupation ?? "",
-                Nationality = dto.Nationality ?? "",
-                MayIAsk = dto.MayIAsk,
-                PaymentMethod = dto.PaymentMethod,
-                SlipImage = dto.SlipImage,
-                Social = dto.Social,
-                OrderDts = dto.Items.Select(i => new OrderDt
+                var claim = HttpContext.User?.FindFirst("USERID")?.Value;
+                int.TryParse(claim, out userId);
+            }
+            catch { userId = 0; }
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                if (userId > 0)
                 {
-                    ProductId = i.ProductId,
-                    ProductName = i.ProductName,
-                    Quantity = i.Quantity,
-                    UnitPrice = i.UnitPrice,
-                    Discount = i.Discount
-                }).ToList()
-            };
+                    await _context.Database.ExecuteSqlRawAsync(
+                        "EXEC sys.sp_set_session_context @key=N'user_id', @value={0};", userId);
+                }
 
-            _context.OrderHd.Add(order);
-            await _context.SaveChangesAsync();
+                // เตรียม TVP
+                var tvp = new System.Data.DataTable();
+                tvp.Columns.Add("ProductId", typeof(int));
+                tvp.Columns.Add("ProductName", typeof(string));
+                tvp.Columns.Add("UnitPrice", typeof(decimal));
+                tvp.Columns.Add("Quantity", typeof(int));
+                tvp.Columns.Add("Discount", typeof(decimal));
+                tvp.Columns.Add("LocationId", typeof(int));
 
-            return Ok(new { order.Id, order.OrderNo });
+                foreach (var i in dto.Items)
+                {
+                    tvp.Rows.Add(i.ProductId, i.ProductName ?? "", i.UnitPrice, i.Quantity, i.Discount, i.LocationId);
+                }
+
+                var p = new[]
+                {
+                    new SqlParameter("@CustomerName",  (object?)dto.CustomerName  ?? DBNull.Value),
+                    new SqlParameter("@CustomerPhone", (object?)dto.CustomerPhone ?? DBNull.Value),
+                    new SqlParameter("@CustomerEmail", (object?)dto.CustomerEmail ?? DBNull.Value),
+                    new SqlParameter("@AddressLine",   (object?)dto.AddressLine   ?? DBNull.Value),
+                    new SqlParameter("@SubDistrict",   (object?)dto.SubDistrict   ?? DBNull.Value),
+                    new SqlParameter("@District",      (object?)dto.District      ?? DBNull.Value),
+                    new SqlParameter("@Province",      (object?)dto.Province      ?? DBNull.Value),
+                    new SqlParameter("@ZipCode",       (object?)dto.ZipCode       ?? DBNull.Value),
+                    new SqlParameter("@Gender",        (object?)dto.Gender        ?? ""),
+                    new SqlParameter("@BirthDate",     (object?)dto.BirthDate     ?? DBNull.Value),
+                    new SqlParameter("@Occupation",    (object?)dto.Occupation    ?? ""),
+                    new SqlParameter("@Nationality",   (object?)dto.Nationality   ?? ""),
+                    new SqlParameter("@MayIAsk",       dto.MayIAsk),
+                    new SqlParameter("@PaymentMethod", (object?)dto.PaymentMethod ?? ""),
+                    new SqlParameter("@SlipImage",     (object?)dto.SlipImage     ?? DBNull.Value),
+                    new SqlParameter("@Social",        (object?)dto.Social        ?? DBNull.Value),
+
+                    new SqlParameter("@Items", tvp)
+                    {
+                        SqlDbType = System.Data.SqlDbType.Structured,
+                        TypeName = "dbo.OrderItemTYPE"
+                    },
+
+                    new SqlParameter("@OrderId", System.Data.SqlDbType.Int)
+                    { Direction = System.Data.ParameterDirection.Output },
+
+                    new SqlParameter("@OrderNo", System.Data.SqlDbType.NVarChar, 50)
+                    { Direction = System.Data.ParameterDirection.Output },
+                };
+
+                await _context.Database.ExecuteSqlRawAsync(
+                    "EXEC dbo.sp_Order_Create " +
+                    "@CustomerName,@CustomerPhone,@CustomerEmail,@AddressLine,@SubDistrict,@District,@Province,@ZipCode," +
+                    "@Gender,@BirthDate,@Occupation,@Nationality,@MayIAsk,@PaymentMethod,@SlipImage,@Social," +
+                    "@Items,@OrderId OUT,@OrderNo OUT", p);
+
+                await tx.CommitAsync();
+
+                var newId = (int)p[^2].Value;
+                var newNo = (string)p[^1].Value;
+                return Ok(new { Id = newId, OrderNo = newNo });
+            }
+            catch (SqlException ex)
+            {
+                await tx.RollbackAsync();
+                var errors = ex.Errors.Cast<SqlError>().Select(e => new {
+                    e.Number,
+                    e.State,
+                    e.Class,
+                    e.LineNumber,
+                    e.Procedure,
+                    e.Server,
+                    Message = e.Message
+                }).ToList();
+
+                // แม็พข้อความ stock เป็น 409
+                var msg = ex.Message.ToLowerInvariant();
+                var status = (msg.Contains("insufficient") || msg.Contains("not found")) ? 409 : 500;
+
+                return StatusCode(status, new
+                {
+                    message = "Create order failed (SqlException)",
+                    error = ex.Message,
+                    errors
+                });
+            }
+            catch (DbUpdateException ex)
+            {
+                await tx.RollbackAsync();
+                var root = ex.GetBaseException();
+                return StatusCode(500, new
+                {
+                    message = "Create order failed (DbUpdateException)",
+                    error = root?.Message ?? ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return StatusCode(500, new
+                {
+                    message = "Create order failed (Exception)",
+                    error = ex.Message
+                });
+            }
         }
+
+
 
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] OrderUpdateDto dto)
@@ -221,7 +313,8 @@ namespace miniApp.API.Controllers
             _context.OrderDt.RemoveRange(order.OrderDts);
 
             order.OrderDts = dto.Items.Select(i => new OrderDt
-            {
+            {   
+                LocationId = i.LocationId,
                 ProductId = i.ProductId,
                 ProductName = i.ProductName,
                 Quantity = i.Quantity,
@@ -279,7 +372,8 @@ namespace miniApp.API.Controllers
                 SlipImage = order.SlipImage,
                 Social = order.Social,
                 Items = order.OrderDts.Select(d => new OrderItemDto
-                {
+                {   
+                    LocationId = d.LocationId,
                     ProductId = d.ProductId,
                     ProductName = d.ProductName,
                     Quantity = d.Quantity,

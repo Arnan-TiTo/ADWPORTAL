@@ -1,10 +1,19 @@
 ﻿@page
 @model miniApp.WebOrders.Pages.ProductSearchModel
+@using Microsoft.AspNetCore.Antiforgery
+@using System.Text.Json
+@inject IAntiforgery Anti
+
 @{
     ViewData["Title"] = "Product";
+
     var apiBase = ViewData["APIBASEURL"];
     var token = ViewData["AUTHTOKEN"];
     var userId = ViewData["USERID"];
+
+    // ✅ Razor Pages ใช้ HttpContext
+    var antif = Anti.GetAndStoreTokens(HttpContext);
+
     var toastMsg = TempData["ShowToast"] as string;
 }
 
@@ -12,18 +21,12 @@
     string Img(string? url, string folder = "products")
     {
         if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
-
         var u = url.Replace("\\", "/").Trim();
-
         if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            return u;
-
+            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return u;
         while (u.StartsWith("/")) u = u[1..];
-
         if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
         if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
-
         return $"/images/{folder}/{u}";
     }
 }
@@ -33,12 +36,7 @@
     <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded shadow-lg z-50">
         @toastMsg
     </div>
-    <script>
-        setTimeout(function() {
-            var toastElement = document.getElementById("toast");
-            if (toastElement) toastElement.remove();
-        }, 2500);
-    </script>
+    <script> setTimeout(()=>document.getElementById("toast")?.remove(),2500); </script>
 }
 
 <div class="max-w-md w-full mx-auto my-auto px-2 py-2">
@@ -48,18 +46,13 @@
         <form id="searchForm" onsubmit="return doSearch(event)" class="flex-1 ml-4 relative">
             <input id="searchInput" type="text" placeholder="Search by name or SKU"
                    class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm pr-10" />
-            <button type="submit"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 text-sm">
-                🔍
-            </button>
+            <button type="submit" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 text-sm">🔍</button>
         </form>
     </div>
 
     @if (TempData["Message"] != null)
     {
-        <div class="bg-green-100 text-green-800 text-sm rounded px-3 py-2 mb-2">
-            @TempData["Message"]
-        </div>
+        <div class="bg-green-100 text-green-800 text-sm rounded px-3 py-2 mb-2">@TempData["Message"]</div>
     }
 
     <!-- Category -->
@@ -85,7 +78,7 @@
         </div>
     </div>
 
-    <!-- Product List (เฉพาะสินค้าใน location ที่ user ถูก assign) -->
+    <!-- Product List -->
     <div>
         <div class="flex items-center justify-between mb-1">
             <span class="text-sm font-semibold">All Product</span>
@@ -100,6 +93,7 @@
                     <div class="text-sm text-black font-bold">@p.Price.ToString("N0") Baht</div>
 
                     <form method="post" asp-page-handler="AddToCart">
+                        <input type="hidden" name="LocationId" value="@Model.LocationId" />
                         <input type="hidden" name="ProductId" value="@p.Id" />
                         <input type="hidden" name="ProductName" value="@p.Name" />
                         <input type="hidden" name="Price" value="@p.Price" />
@@ -118,90 +112,72 @@
 
 @section Scripts {
     <script>
-        const APIBASEURL = '@apiBase';
-        const AUTHTOKEN  = '@token';
-        const USERID     = @userId;
+        const APIBASEURL  = '@apiBase';
+        const AUTHTOKEN   = '@token';
+        const USERID      = @userId;
+        const LOCATION_ID = @Model.LocationId;
 
-        // ชุด product id ที่ user มองเห็น (ฝั่ง server filter มาแล้ว)
+        // ✅ ใช้ property จาก model (ต้องมีใน .cshtml.cs)
         const VISIBLE_IDS = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.VisibleProductIds));
 
-        function scrollCategory(dir) {
-          document.getElementById("categoryScroll").scrollLeft += dir * 120;
+        const AF_NAME  = '@antif.FormFieldName';
+        const AF_TOKEN = '@antif.RequestToken';
+
+        function scrollCategory(dir){ document.getElementById("categoryScroll").scrollLeft += dir * 120; }
+        function scrollProduct(dir){  document.getElementById("productScroll").scrollLeft  += dir * 300; }
+
+        function resolveImg(url, folder='products'){
+            if(!url) return `/images/${folder}/default.png`;
+            url = String(url).replace(/\\/g,'/').trim();
+            if(/^https?:\/\//i.test(url)) return url;
+            url = url.replace(/^\/+/, '');
+            if(/^images\//i.test(url)) return '/' + url;
+            if(new RegExp(`^${folder}/`,'i').test(url)) return `/images/${url}`;
+            return `/images/${folder}/${url}`;
         }
-        function scrollProduct(dir) {
-          document.getElementById("productScroll").scrollLeft += dir * 300;
-        }
 
-        function resolveImg(url, folder = 'products') {
-          if (!url) return `/images/${folder}/default.png`;
-          url = String(url).replace(/\\/g, '/').trim();
-          if (/^https?:\/\//i.test(url)) return url;
-          url = url.replace(/^\/+/, '');
-          if (/^images\//i.test(url)) return '/' + url;
-          if (new RegExp(`^${folder}/`, 'i').test(url)) return `/images/${url}`;
-          return `/images/${folder}/${url}`;
-        }
+        async function doSearch(e){
+            e.preventDefault();
+            const keyword = document.getElementById("searchInput").value.trim();
+            const container = document.getElementById("productScroll");
+            container.innerHTML = "";
+            if(!keyword){ container.innerHTML = `<p class="text-sm text-gray-400">Please enter keyword.</p>`; return; }
 
-        async function doSearch(event) {
-          event.preventDefault();
+            const url = `${APIBASEURL}api/product/ProductSearch?query=${encodeURIComponent(keyword)}`;
+            try{
+                const res = await fetch(url, { headers: { 'Authorization': `Bearer ${AUTHTOKEN}` }});
+                if(!res.ok){ container.innerHTML = `<p class="text-sm text-red-500">Search failed (${res.status})</p>`; return; }
 
-          const keyword = document.getElementById("searchInput").value.trim();
-          const container = document.getElementById("productScroll");
-          container.innerHTML = "";
+                const vis = new Set(VISIBLE_IDS || []);
+                let products = await res.json();
+                products = Array.isArray(products) ? products.filter(p => vis.has(p.id)) : [];
 
-          if (!keyword) {
-            container.innerHTML = `<p class="text-sm text-gray-400">Please enter keyword.</p>`;
-            return;
-          }
+                if(!products.length){ container.innerHTML = `<p class="text-sm text-gray-400">No products found.</p>`; return; }
 
-          // เรียก API เดิม แล้ว filter ด้วย VISIBLE_IDS
-          const url = `${APIBASEURL}api/product/ProductSearch?query=${encodeURIComponent(keyword)}`;
-
-          try {
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${AUTHTOKEN}` } });
-            if (!res.ok) {
-              container.innerHTML = `<p class="text-sm text-red-500">Search failed (${res.status})</p>`;
-              return;
+                products.forEach(p=>{
+                    const el = document.createElement("div");
+                    el.className = "border rounded-xl p-2 text-center shadow-sm min-w-[40%]";
+                    const imgSrc = resolveImg(p.imageUrl);
+                    el.innerHTML = `
+                        <img src="${imgSrc}" class="w-full aspect-square rounded mb-2 object-cover" />
+                        <div class="text-xs text-gray-500">${p.brandName || ''}</div>
+                        <div class="font-semibold text-sm">${p.name}</div>
+                        <div class="text-sm text-black font-bold">${p.price ? Number(p.price).toLocaleString() + ' Baht' : ''}</div>
+                        <form method="post" action="?handler=AddToCart">
+                            <input type="hidden" name="${AF_NAME}" value="${AF_TOKEN}" />
+                            <input type="hidden" name="LocationId"  value="${LOCATION_ID}" />
+                            <input type="hidden" name="ProductId"   value="${p.id}" />
+                            <input type="hidden" name="ProductName" value="${p.name}" />
+                            <input type="hidden" name="Price"       value="${p.price}" />
+                            <input type="hidden" name="ImageUrl"    value="${p.imageUrl || ''}" />
+                            <button type="submit" class="mt-2 w-full bg-yellow-500 text-white text-sm rounded-lg py-1 hover:bg-yellow-600">➕ เพิ่มลงตะกร้า</button>
+                        </form>`;
+                    container.appendChild(el);
+                });
+            }catch(err){
+                console.error(err);
+                container.innerHTML = `<p class="text-sm text-red-500">Something went wrong.</p>`;
             }
-
-            const vis = new Set(VISIBLE_IDS || []);
-            let products = await res.json();
-            products = Array.isArray(products) ? products.filter(p => vis.has(p.id)) : [];
-
-            if (!products.length) {
-              container.innerHTML = `<p class="text-sm text-gray-400">No products found.</p>`;
-              return;
-            }
-
-            products.forEach(p => {
-              const el = document.createElement("div");
-              el.className = "border rounded-xl p-2 text-center shadow-sm min-w-[40%]";
-              const imgSrc = resolveImg(p.imageUrl);
-
-              el.innerHTML = `
-                <img src="${imgSrc}" class="w-full aspect-square rounded mb-2 object-cover" />
-                <div class="text-xs text-gray-500">${p.brandName || ''}</div>
-                <div class="font-semibold text-sm">${p.name}</div>
-                <div class="text-sm text-black font-bold">
-                  ${p.price ? Number(p.price).toLocaleString() + ' Baht' : ''}
-                </div>
-                <form method="post" action="?handler=AddToCart">
-                  <input type="hidden" name="ProductId" value="${p.id}" />
-                  <input type="hidden" name="ProductName" value="${p.name}" />
-                  <input type="hidden" name="Price" value="${p.price}" />
-                  <input type="hidden" name="ImageUrl" value="${p.imageUrl || ''}" />
-                  <button type="submit"
-                          class="mt-2 w-full bg-yellow-500 text-white text-sm rounded-lg py-1 hover:bg-yellow-600">
-                    ➕ เพิ่มลงตะกร้า
-                  </button>
-                </form>
-              `;
-              container.appendChild(el);
-            });
-          } catch (err) {
-            console.error(err);
-            container.innerHTML = `<p class="text-sm text-red-500">Something went wrong.</p>`;
-          }
         }
     </script>
 }

@@ -1,11 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using miniApp.WebOrders.Models;
-using System.Collections.Generic;
-using System.Net.Http;
 using System.Net.Http.Json;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using System.Linq;
 
@@ -25,33 +21,36 @@ namespace miniApp.WebOrders.Pages
         [BindProperty(SupportsGet = true)]
         public int? CategoryId { get; set; }
 
+        // ใช้ทั้งตอน GET สำหรับแสดงค่า และตอน POST รับค่ากลับจากฟอร์ม
+        [BindProperty]
+        public int LocationId { get; set; }
+
         public List<ProductDto> Products { get; set; } = new();
         public List<ProductCategoryDto> Categories { get; set; } = new();
 
-        // ชุด product id ที่ user มองเห็น (สินค้าที่อยู่ใน ProductStocks ของทุก location ที่ user ถูก assign)
+        // ids ของสินค้าที่ user มองเห็น (มาจาก ProductStocks ของทุก location ที่ user ได้สิทธิ์)
         public HashSet<int> VisibleProductIds { get; set; } = new();
 
         public async Task OnGetAsync()
         {
             var client = _httpClientFactory.CreateClient();
 
-            // อ่านค่าจาก Session (มาจากหน้า Login)
+            // อ่านค่าจาก Session (ตั้งจากหน้า Login)
             var baseUrl = _config["ApiBaseUrl"] ?? "";
             var token = _config["AUTHTOKEN"] ?? "";
             var userId = HttpContext.Session.GetInt32("USERID") ?? 0;
 
             if (!string.IsNullOrWhiteSpace(token))
-            {
                 client.DefaultRequestHeaders.Authorization =
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            }
 
             ViewData["USERID"] = userId;
             ViewData["APIBASEURL"] = baseUrl;
             ViewData["AUTHTOKEN"] = token;
 
             // หมวดหมู่
-            Categories = await client.GetFromJsonAsync<List<ProductCategoryDto>>($"{baseUrl}api/productcategory") ?? new();
+            Categories = await client.GetFromJsonAsync<List<ProductCategoryDto>>(
+                $"{baseUrl}api/productcategory") ?? new();
 
             // 1) หา location ที่ user ได้สิทธิ์
             var allowLocations = new List<UserLocationDto>();
@@ -61,7 +60,6 @@ namespace miniApp.WebOrders.Pages
                     $"{baseUrl}api/userlocations/user/{userId}") ?? new();
             }
 
-            // ถ้าไม่มีสิทธิ์ที่ไหนเลย => มองไม่เห็นสินค้าใด ๆ
             if (allowLocations.Count == 0)
             {
                 Products = new();
@@ -69,20 +67,22 @@ namespace miniApp.WebOrders.Pages
                 return;
             }
 
-            // 2) รวม product ที่อยู่ใน ProductStocks ของแต่ละ location
+            // 2) รวม product ที่มี stock ในแต่ละ location
             var visible = new HashSet<int>();
             foreach (var loc in allowLocations)
             {
-                // ใช้ endpoint ที่มีอยู่แล้ว
                 var stocks = await client.GetFromJsonAsync<List<StockRow>>(
                     $"{baseUrl}api/ProductStock/location/{loc.LocationId}?userId={userId}") ?? new();
 
                 foreach (var s in stocks)
                     visible.Add(s.ProductId);
+
+                // ตั้งค่า LocationId ค่าเริ่มต้นเป็น location แรก
+                if (LocationId == 0) LocationId = loc.LocationId;
             }
             VisibleProductIds = visible;
 
-            // 3) โหลดสินค้า (ทั้งหมดหรือเฉพาะหมวด) แล้ว filter ด้วย VisibleProductIds
+            // 3) โหลดสินค้า (ตามหมวดหรือทั้งหมด) แล้ว filter ด้วย VisibleProductIds
             string url = CategoryId.HasValue
                 ? $"{baseUrl}api/product/ByCategory?categoryId={CategoryId.Value}"
                 : $"{baseUrl}api/product";
@@ -91,31 +91,41 @@ namespace miniApp.WebOrders.Pages
             Products = all.Where(p => visible.Contains(p.Id)).ToList();
         }
 
-        public IActionResult OnPostAddToCart(int productId)
+        [ValidateAntiForgeryToken]
+        public IActionResult OnPostAddToCart(int productId, int locationId)
         {
+            // รับ LocationId จากฟอร์ม (ถ้า 0 ให้ fallback เป็นค่าบน Model)
+            var loc = locationId > 0 ? locationId : LocationId;
+
             var productName = Request.Form["ProductName"].ToString();
             var imageUrl = Request.Form["ImageUrl"].ToString();
-            decimal.TryParse(Request.Form["Price"], out decimal price);
+            decimal.TryParse(Request.Form["Price"], out var price);
 
             var cart = GetCart();
-            var existing = cart.Find(p => p.ProductId == productId);
+            var existing = cart.Find(p => p.ProductId == productId && p.LocationId == loc);
             if (existing != null)
+            {
                 existing.Quantity += 1;
+            }
             else
+            {
                 cart.Add(new CartItemDto
                 {
+                    LocationId = loc,
                     ProductId = productId,
                     ProductName = productName,
                     Price = price,
                     ImageUrl = imageUrl,
                     Quantity = 1
                 });
+            }
 
             SaveCart(cart);
             TempData["ShowToast"] = $"เพิ่มสินค้า \"{productName}\" ลงตะกร้าเรียบร้อยแล้ว";
             return RedirectToPage();
         }
 
+        // ===== Helpers =====
         private List<CartItemDto> GetCart()
         {
             var cartJson = HttpContext.Session.GetString("Cart");
@@ -130,7 +140,7 @@ namespace miniApp.WebOrders.Pages
             HttpContext.Session.SetString("Cart", cartJson);
         }
 
-        // ==== DTOs สำหรับเรียก API ภายในหน้านี้ ====
+        // ==== DTOs สำหรับเรียก API เฉพาะที่หน้าจอนี้ต้องใช้ ====
         public class UserLocationDto
         {
             public int UserId { get; set; }
@@ -140,7 +150,7 @@ namespace miniApp.WebOrders.Pages
         public class StockRow
         {
             public int ProductId { get; set; }
-            public int QtyAvailable { get; set; } // ไม่ได้ใช้ filter ติดลบ/ศูนย์ในหน้าตอนนี้ แต่เผื่ออนาคต
+            public int QtyAvailable { get; set; }
         }
     }
 }

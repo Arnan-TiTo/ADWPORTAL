@@ -16,6 +16,7 @@ namespace miniApp.WebOrders.Pages.Orders
         [BindProperty] public string PaymentMethod { get; set; } = string.Empty;
         [BindProperty] public IFormFile? Slip { get; set; }
 
+        public int LocationId => Cart.FirstOrDefault()?.LocationId ?? 0;
         public int TotalItems => Cart.Sum(p => p.Quantity);
         public decimal Subtotal => Cart.Sum(p => p.Price * p.Quantity);
         public decimal DiscountTotal => Cart.Sum(p => p.Discount);
@@ -83,7 +84,8 @@ namespace miniApp.WebOrders.Pages.Orders
                 PaymentMethod = PaymentMethod ?? "",
                 SlipImage = slipImageFileName,
                 Items = Cart.Select(c => new OrderItemDto
-                {
+                {  
+                    LocationId = c.LocationId,
                     ProductId = c.ProductId,
                     ProductName = c.ProductName,
                     Quantity = c.Quantity,
