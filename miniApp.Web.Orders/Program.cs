@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.HttpOverrides;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.FileProviders;
 using miniApp.WebOrders.Middlewares;
 using miniApp.WebOrders.Services;
@@ -70,8 +71,38 @@ app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.Use(async (ctx, next) =>
+{
+    var hasAuth = ctx.User?.Identity?.IsAuthenticated == true;
+    var hasSessionJwt = !string.IsNullOrEmpty(ctx.Session.GetString("JWT"));
+
+    if (hasAuth && !hasSessionJwt)
+    {
+        ctx.Session.Clear();
+        await ctx.SignOutAsync("MyCookieAuth");
+
+        if (HttpMethods.IsGet(ctx.Request.Method) &&
+            !ctx.Request.Path.StartsWithSegments("/api"))
+        {
+            ctx.Response.Redirect("/Login");
+            return;
+        }
+    }
+
+    await next();
+});
+
 app.UseMiddleware<AuthGuardMiddleware>();
 
 app.MapRazorPages();
+
+app.MapPost("/session/close", async (HttpContext http) =>
+{
+    http.Session.Clear();
+    await http.SignOutAsync("MyCookieAuth");
+    return Results.NoContent();
+})
+.WithMetadata(new Microsoft.AspNetCore.Mvc.IgnoreAntiforgeryTokenAttribute());
+
 
 app.Run();

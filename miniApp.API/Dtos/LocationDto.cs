@@ -20,7 +20,9 @@ namespace miniApp.API.Dtos
         public string? Postcode { get; set; } = string.Empty;
         public string? ContractPerson { get; set; } = string.Empty;
         public string? ContractPhone { get; set; } = string.Empty;
-
+        public int isWarehouse { get; set; } = 0;
+        public int? isStorehouse { get; set; } = 0;
+        public int? isDamagehouse { get; set; } = 0;
     }
 
     public class LocationUpdateDto : LocationDto { }
@@ -50,6 +52,9 @@ namespace miniApp.API.Dtos
         public string? Postcode { get; set; }
         public string? ContractPerson { get; set; }
         public string? ContractPhone { get; set; }
+        public int isWarehouse { get; set; } = 0;
+        public int? isStorehouse { get; set; } = 0;
+        public int? isDamagehouse { get; set; } = 0;
         public List<LocationImageDto> Images { get; set; } = new();
     }
 

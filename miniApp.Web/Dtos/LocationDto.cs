@@ -1,8 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using System;
-using System.Collections.Generic;
-
-namespace miniApp.Web.Dtos
+﻿namespace miniApp.Web.Dtos
 {
     public class LocationDto
     {

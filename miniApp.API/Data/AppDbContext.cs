@@ -24,6 +24,7 @@ namespace miniApp.API.Data
         public DbSet<ProductStock> ProductStocks { get; set; }
         public DbSet<UserLocation> UserLocations { get; set; }
         public DbSet<StockTransactions> StockTransactions { get; set; }
+        public DbSet<DamageReturnDocs> DamageReturnDocs { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Globalization;
 
 namespace miniApp.API.Controllers
 {
@@ -147,6 +148,107 @@ namespace miniApp.API.Controllers
             return Ok(result);
         }
 
+
+        [HttpGet("history/by-location")]
+        public async Task<ActionResult<IEnumerable<OrderViewDto>>> GetHistoryByLocation(
+        [FromQuery] int userId,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] string? q,
+        [FromQuery] string? locations )
+        {
+            if (!IsAuthorized()) return Unauthorized();
+            if (userId <= 0) return BadRequest("userId is required.");
+
+            // 1) สิทธิ์ location ของผู้ใช้
+            var allowed = await _context.UserLocations
+                .Where(ul => ul.UserId == userId)
+                .Select(ul => ul.LocationId)
+                .ToListAsync();
+
+            if (allowed.Count == 0) return Ok(Array.Empty<OrderViewDto>());
+
+            // 2) ถ้าระบุ locations -> ตัดให้เหลือเฉพาะที่อยู่ในสิทธิ์
+            var requested = ParseCsvInt(locations);
+            var locFilter = (requested.Count > 0)
+                ? allowed.Intersect(requested).ToList()
+                : allowed;
+
+            if (locFilter.Count == 0) return Ok(Array.Empty<OrderViewDto>());
+
+            // 3) กำหนดช่วงวัน
+            var fromAt = (from?.Date) ?? DateTime.UtcNow.Date.AddDays(-90);
+            var toAt = (to?.Date.AddDays(1)) ?? DateTime.UtcNow.Date.AddDays(1); // exclusive
+
+            // 4) ดึงออเดอร์ + กรอง items ด้วย locFilter
+            var query = _context.OrderHd
+                .Where(h => h.OrderDate >= fromAt && h.OrderDate < toAt)
+                .Select(h => new
+                {
+                    Header = h,
+                    Items = h.OrderDts.Where(d => locFilter.Contains(d.LocationId))
+                });
+
+            // 5) ค้นหา (ถ้ามี q) — ค้นทั้ง OrderNo และชื่อสินค้าใน items
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var qq = q.Trim();
+                query = query.Where(x =>
+                    (x.Header.OrderNo ?? "").Contains(qq) ||
+                    x.Items.Any(i => (i.ProductName ?? "").Contains(qq))
+                );
+            }
+
+            var rows = await query.ToListAsync();
+
+            // 6) ทิ้งออเดอร์ที่ไม่มี item ที่อยู่ใน locFilter
+            rows = rows.Where(x => x.Items.Any()).ToList();
+
+            // 7) เติมรูปสินค้า
+            var allProdIds = rows.SelectMany(x => x.Items.Select(i => i.ProductId)).Distinct().ToList();
+            var prodMap = await _context.Products
+                .Where(p => allProdIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.ImageUrl ?? "");
+
+            // 8) map → DTO
+            var result = rows.Select(x => new OrderViewDto
+            {
+                OrderNo = x.Header.OrderNo,
+                OrderDate = x.Header.OrderDate,
+                CustomerName = x.Header.CustomerName,
+                AddressLine = x.Header.AddressLine,
+                SubDistrict = x.Header.SubDistrict,
+                District = x.Header.District,
+                Province = x.Header.Province,
+                ZipCode = x.Header.ZipCode,
+                CustomerPhone = x.Header.CustomerPhone,
+                CustomerEmail = x.Header.CustomerEmail,
+                Social = x.Header.Social,
+                Items = x.Items.Select(d => new OrderItemDto
+                {
+                    LocationId = d.LocationId,
+                    ProductId = d.ProductId,
+                    ProductName = d.ProductName,
+                    Quantity = d.Quantity,
+                    UnitPrice = d.UnitPrice,
+                    Discount = d.Discount,
+                    ImageUrl = prodMap.TryGetValue(d.ProductId, out var img) ? img : ""
+                }).ToList()
+            }).ToList();
+
+            return Ok(result);
+
+            static List<int> ParseCsvInt(string? csv)
+            {
+                var list = new List<int>();
+                if (string.IsNullOrWhiteSpace(csv)) return list;
+                foreach (var t in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    if (int.TryParse(t, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
+                        list.Add(v);
+                return list;
+            }
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
         {
@@ -276,8 +378,6 @@ namespace miniApp.API.Controllers
                 });
             }
         }
-
-
 
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] OrderUpdateDto dto)

@@ -11,7 +11,6 @@
     var token = ViewData["AUTHTOKEN"];
     var userId = ViewData["USERID"];
 
-    // ✅ Razor Pages ใช้ HttpContext
     var antif = Anti.GetAndStoreTokens(HttpContext);
 
     var toastMsg = TempData["ShowToast"] as string;
@@ -87,7 +86,7 @@
             @foreach (var p in Model.Products)
             {
                 <div class="border rounded-xl p-2 text-center shadow-sm min-w-[40%]">
-                    <img src="@Img(p.ImageUrl)" class="w-full aspect-square rounded mb-2 object-cover" />
+                    <img src="@Img(p.ImageUrl)" class="w-75 h-75  rounded mb-2 object-cover" />
                     <div class="text-xs text-gray-500">@p.BrandName</div>
                     <div class="font-semibold text-sm">@p.Name</div>
                     <div class="text-sm text-black font-bold">@p.Price.ToString("N0") Baht</div>
@@ -98,6 +97,11 @@
                         <input type="hidden" name="ProductName" value="@p.Name" />
                         <input type="hidden" name="Price" value="@p.Price" />
                         <input type="hidden" name="ImageUrl" value="@p.ImageUrl" />
+
+                        <!-- NEW: Available -->
+                        <div class="text-xs text-gray-600 mt-0.5">
+                            พร้อมขาย: <span class="font-semibold" data-avail-for="@p.Id">-</span>
+                        </div>
                         <button type="submit"
                                 class="mt-2 w-full bg-yellow-500 text-white text-sm rounded-lg py-1 hover:bg-yellow-600">
                             ➕ เพิ่มลงตะกร้า
@@ -117,7 +121,7 @@
         const USERID      = @userId;
         const LOCATION_ID = @Model.LocationId;
 
-        // ✅ ใช้ property จาก model (ต้องมีใน .cshtml.cs)
+        // property จาก model .cs
         const VISIBLE_IDS = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.VisibleProductIds));
 
         const AF_NAME  = '@antif.FormFieldName';
@@ -136,6 +140,100 @@
             return `/images/${folder}/${url}`;
         }
 
+        // ------- Toast -------
+        function showToast(message, variant = "error") {
+          let box = document.getElementById("__toast");
+          if (!box) {
+            box = document.createElement("div");
+            box.id = "__toast";
+            box.className = "fixed top-6 left-1/2 -translate-x-1/2 z-50";
+            document.body.appendChild(box);
+          }
+          const el = document.createElement("div");
+          el.className = "px-4 py-2 rounded shadow-lg text-white text-sm " +
+                         (variant==="success" ? "bg-green-600" :
+                          variant==="info" ? "bg-blue-600" :
+                          "bg-red-600");
+          el.textContent = message;
+          box.appendChild(el);
+          setTimeout(()=> el.remove(), 2200);
+        }
+
+        // ===== Available-for-sale (QtyAvailable) =====
+        let STOCK_MAP = {}; // { productId: available }
+
+        function getAvail(pid){
+          if (STOCK_MAP && (pid in STOCK_MAP)) return STOCK_MAP[pid];
+          const span = document.querySelector(`[data-avail-for="${pid}"]`);
+          if (span){
+            const n = parseInt(String(span.textContent).replace(/[^\d-]/g,''),10);
+            if (!isNaN(n)) return n;
+          }
+          return 0;
+        }
+
+        function updateButtonsByAvail(){
+          // ปุ่มเพิ่มสินค้าทั้งหมดในพื้นที่แสดงสินค้า
+          document.querySelectorAll('#productScroll form').forEach(f=>{
+            const pidInput = f.querySelector('input[name="ProductId"]');
+            const btn = f.querySelector('button[type="submit"]');
+            if (!pidInput || !btn) return;
+            const pid = parseInt(pidInput.value || '0',10) || 0;
+            const avail = getAvail(pid);
+            btn.disabled = (avail <= 0);
+            btn.classList.toggle('opacity-50', avail <= 0);
+            btn.classList.toggle('cursor-not-allowed', avail <= 0);
+          });
+        }
+
+        async function loadAvail() {
+          if (!LOCATION_ID || !USERID) return;
+          try {
+            const url = `${APIBASEURL}api/ProductStock/location/${LOCATION_ID}?userId=${USERID}`;
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${AUTHTOKEN}` } });
+            if (!res.ok) return;
+
+            const rows = await res.json();
+            for (const r of (rows || [])) {
+              const pid = r.productId ?? r.ProductId;
+              const oh  = Number(r.qtyOnHand    ?? r.QtyOnHand    ?? 0);
+              const rs  = Number(r.qtyReserved  ?? r.QtyReserved  ?? 0);
+              const dm  = Number(r.qtyDamaged   ?? r.QtyDamaged   ?? 0);
+              let avail = Number(r.qtyAvailable ?? r.QtyAvailable);
+              if (!Number.isFinite(avail)) avail = oh - rs - dm;
+              avail = Math.max(0, Math.trunc(avail));
+
+              STOCK_MAP[pid] = avail;
+
+              const span = document.querySelector(`[data-avail-for="${pid}"]`);
+              if (span) span.textContent = avail.toLocaleString();
+            }
+            updateButtonsByAvail();
+          } catch (e) {
+            console.error('loadAvail failed', e);
+          }
+        }
+
+        // ดัก submit ปุ่ม "เพิ่มลงตะกร้า" ทั้งของที่เรนเดอร์จาก Razor และที่เติมจาก JS
+        document.getElementById('productScroll')?.addEventListener('submit', (ev)=>{
+          const form = ev.target.closest('form');
+          if (!form) return;
+          const pidInput = form.querySelector('input[name="ProductId"]');
+          if (!pidInput) return;
+
+          const pid = parseInt(pidInput.value || '0',10) || 0;
+          const avail = getAvail(pid);
+
+          if (avail <= 0) {
+            ev.preventDefault();
+            showToast('จำนวนสินค้าไม่พอขาย');
+          }
+        });
+
+        // โหลดเมื่อเปิดหน้า
+        document.addEventListener('DOMContentLoaded', loadAvail);
+
+        // ===== ค้นหา =====
         async function doSearch(e){
             e.preventDefault();
             const keyword = document.getElementById("searchInput").value.trim();
@@ -158,22 +256,38 @@
                     const el = document.createElement("div");
                     el.className = "border rounded-xl p-2 text-center shadow-sm min-w-[40%]";
                     const imgSrc = resolveImg(p.imageUrl);
+                    const pid = p.id;
+                    const availNow = (pid in STOCK_MAP) ? STOCK_MAP[pid] : null;
+                    const availText = (availNow == null) ? '-' : Number(availNow).toLocaleString();
+
                     el.innerHTML = `
-                        <img src="${imgSrc}" class="w-full aspect-square rounded mb-2 object-cover" />
+                        <img src="${imgSrc}" class="w-75 h-75 aspect-square rounded mb-2 object-cover" />
                         <div class="text-xs text-gray-500">${p.brandName || ''}</div>
                         <div class="font-semibold text-sm">${p.name}</div>
                         <div class="text-sm text-black font-bold">${p.price ? Number(p.price).toLocaleString() + ' Baht' : ''}</div>
+
+                        <div class="text-xs text-gray-600 mt-0.5">
+                          พร้อมขาย: <span class="font-semibold" data-avail-for="${pid}">${availText}</span>
+                        </div>
+
                         <form method="post" action="?handler=AddToCart">
                             <input type="hidden" name="${AF_NAME}" value="${AF_TOKEN}" />
                             <input type="hidden" name="LocationId"  value="${LOCATION_ID}" />
-                            <input type="hidden" name="ProductId"   value="${p.id}" />
+                            <input type="hidden" name="ProductId"   value="${pid}" />
                             <input type="hidden" name="ProductName" value="${p.name}" />
                             <input type="hidden" name="Price"       value="${p.price}" />
                             <input type="hidden" name="ImageUrl"    value="${p.imageUrl || ''}" />
-                            <button type="submit" class="mt-2 w-full bg-yellow-500 text-white text-sm rounded-lg py-1 hover:bg-yellow-600">➕ เพิ่มลงตะกร้า</button>
+                            <button type="submit" class="mt-2 w-full bg-yellow-500 text-white text-sm rounded-lg py-1 hover:bg-yellow-600">
+                              ➕ เพิ่มลงตะกร้า
+                            </button>
                         </form>`;
+
                     container.appendChild(el);
                 });
+
+                //อัปเดตสถานะปุ่มตามสต็อกล่าสุด
+                updateButtonsByAvail();
+
             }catch(err){
                 console.error(err);
                 container.innerHTML = `<p class="text-sm text-red-500">Something went wrong.</p>`;
@@ -181,3 +295,4 @@
         }
     </script>
 }
+

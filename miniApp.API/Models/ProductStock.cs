@@ -9,6 +9,7 @@ namespace miniApp.API.Models
         public int LocationId { get; set; }
         public int QtyOnHand { get; set; } // >0
         public int QtyReserved { get; set; } // >0
+        public int QtyReceive { get; set; } // >0
         public int QtyDamaged { get; set; } // >0
         public int QtyAvailable { get; set; } // >0
         public int MinLevel { get; set; } // Minimum stock level
@@ -19,6 +20,7 @@ namespace miniApp.API.Models
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public Product? Product { get; set; }
         public Location? Location { get; set; }
+
     }
 }
 

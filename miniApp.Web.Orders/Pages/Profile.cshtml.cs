@@ -32,7 +32,7 @@ namespace miniApp.WebOrders.Pages
             client.BaseAddress = new Uri(APIBASEURL);
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", AUTHTOKEN);
 
-            var res = await client.GetAsync($"api/Users/profilebyid?userid={USERID}");
+            var res = await client.GetAsync($"api/Users/{USERID}");
             if (!res.IsSuccessStatusCode) return;
 
             var userJson = await res.Content.ReadAsStringAsync();

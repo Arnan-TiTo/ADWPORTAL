@@ -4,16 +4,7 @@
     ViewData["Title"] = "Purchase History";
 }
 
-@section Scripts {
-    <script>
-        function toggleFilter() {
-            var el = document.getElementById('filterForm');
-            if (el) el.classList.toggle('hidden');
-        }
-    </script>
-}
-
-<div class="max-w-md w-full mx-auto my-auto px-2 py-2">
+<div class="max-w-md w-full mx-auto px-2 pt-2 pb-2">
 
     <!-- Header -->
     <div class="flex items-center justify-between mb-2 py-2">
@@ -36,9 +27,9 @@
 
     <!-- Button bar -->
     <div class="flex flex-wrap items-center gap-2 mb-3">
-        <!-- List/Sort -->
+        <!-- Sort -->
         <form method="get" class="flex gap-2 items-center">
-            <select name="SortField" class="border rounded px-1 py-0 text-xs h-7 w-15">
+            <select name="SortField" class="border rounded px-1 py-0 text-xs h-7 w-24">
                 @foreach (var (value, label) in Model.SortFields)
                 {
                     <option value="@value" selected="@(Model.SortField == value ? "selected" : null)">
@@ -50,27 +41,41 @@
                 <option value="asc" selected="@(Model.SortDir == "asc" ? "selected" : null)">▲</option>
                 <option value="desc" selected="@(Model.SortDir == "desc" ? "selected" : null)">▼</option>
             </select>
-            <button type="submit" class="ml-1 text-xs bg-green-50 rounded px-1 py-0 border border-green-200 h-7">
+            <input type="hidden" name="Query" value="@Model.Query" />
+            <input type="hidden" name="ProductFilter" value="@Model.ProductFilter" />
+            <input type="hidden" name="OrderNoFilter" value="@Model.OrderNoFilter" />
+            <input type="hidden" name="UnitPriceFilter" value="@Model.UnitPriceFilter" />
+            <button type="submit" class="ml-1 text-xs bg-green-50 rounded px-2 py-0 border border-green-200 h-7">
                 Sort
             </button>
         </form>
 
         <!-- Filter -->
         <button type="button" onclick="toggleFilter()"
-                class="px-1 py-0 rounded border flex items-center gap-1 text-gray-700 text-sm bg-gray-50 h-7">
+                class="px-2 py-0 rounded border flex items-center gap-1 text-gray-700 text-sm bg-gray-50 h-7">
             <span>Filter</span>
         </button>
-
-        <!-- Download -->
-        <form method="post" asp-page-handler="Download" class="ml-auto">
-            <button type="submit" class="px-1 py-0 border rounded bg-blue-600 text-white text-xs h-7">
-                Download
-            </button>
-        </form>
     </div>
 
     <!-- Filter bar (Toggle) -->
     <form method="get" id="filterForm" class="mb-3 @(Model.ShowFilter ? "" : "hidden")">
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">From</label>
+            <input id="fromDate" name="FromDate" type="text"
+                   value="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                   class="w-full bg-gray-100 border border-gray-300 rounded-xl px-2 py-1 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">To</label>
+            <input id="toDate" name="ToDate" type="text"
+                   value="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                   class="w-full bg-gray-100 border border-gray-300 rounded-xl px-2 py-1 text-sm" />
+          </div>
+        </div>
+
+
+
         <div class="grid grid-cols-3 gap-2">
             <input type="text" name="ProductFilter" value="@Model.ProductFilter" placeholder="Product Name"
                    class="bg-gray-100 border border-gray-300 rounded-xl px-2 py-1 text-sm" />
@@ -79,38 +84,63 @@
             <input type="text" name="UnitPriceFilter" value="@Model.UnitPriceFilter" placeholder="Unit Price"
                    class="bg-gray-100 border border-gray-300 rounded-xl px-2 py-1 text-sm" />
         </div>
+
         <input type="hidden" name="Query" value="@Model.Query" />
         <input type="hidden" name="SortField" value="@Model.SortField" />
         <input type="hidden" name="SortDir" value="@Model.SortDir" />
-        <button type="submit" class="mt-2 px-4 py-1 rounded bg-green-500 text-white w-full text-sm">Apply Filter</button>
+
+        <div class="mt-2 flex gap-2">
+            <button type="submit" class="px-4 py-1 rounded bg-green-500 text-white w-full text-sm">
+                Apply Filter
+            </button>
+            <button type="button" onclick="clearFilter()"
+                    class="px-4 py-1 rounded border w-full text-sm">
+                Clear
+            </button>
+        </div>
     </form>
 
-    <!-- Scrollable Table -->
-    <div class="flex-1 min-h-0">
-        <div class="overflow-x-auto h-full max-h-[65vh]">
-            <table class="w-full table-auto text-sm">
-                <thead>
-                    <tr class="border-b bg-gray-100">
-                        <th class="py-1 px-2 font-semibold">Order No</th>
-                        <th class="py-1 px-2 font-semibold">Order Date</th>
-                        <th class="py-1 px-2 font-semibold">Customer</th>
-                        <th class="py-1 px-2 font-semibold">Address</th>
-                        <th class="py-1 px-2 font-semibold">Item</th>
-                        <th class="py-1 px-2 font-semibold text-center">Qty</th>
-                        <th class="py-1 px-2 font-semibold text-center">Unit Price</th>
-                        <th class="py-1 px-2 font-semibold text-center">Discount</th>
-                        <th class="py-1 px-2 font-semibold text-center">Total</th>
+    <!-- Scrollable Table (horizontal) -->
+    <div>
+        <!-- คอนเทนเนอร์เลื่อนซ้าย-ขวา -->
+        <div class="overflow-x-auto -mx-2 px-2">
+            <table class="min-w-[980px] w-full text-sm border-collapse">
+                <!-- กำหนดความกว้างคอลัมน์-->
+                <colgroup>
+                    <col style="width:110px" />
+                    <col style="width:110px" />
+                    <col style="width:140px" />
+                    <col style="width:260px" />
+                    <col style="width:140px" />
+                    <col style="width:72px" />
+                    <col style="width:100px" />
+                    <col style="width:90px" />
+                    <col style="width:110px" />
+                </colgroup>
+
+                <thead class="bg-gray-100 text-xs sticky top-0 z-10">
+                    <tr class="border-b">
+                        <th class="py-2 px-2 text-left whitespace-nowrap">Order No</th>
+                        <th class="py-2 px-2 text-left whitespace-nowrap">Order Date</th>
+                        <th class="py-2 px-2 text-left whitespace-nowrap">Customer</th>
+                        <th class="py-2 px-2 text-left">Address</th>
+                        <th class="py-2 px-2 text-left whitespace-nowrap">Item</th>
+                        <th class="py-2 px-2 text-center whitespace-nowrap">Qty</th>
+                        <th class="py-2 px-2 text-center whitespace-nowrap">Unit Price</th>
+                        <th class="py-2 px-2 text-center whitespace-nowrap">Discount</th>
+                        <th class="py-2 px-2 text-center whitespace-nowrap">Total</th>
                     </tr>
                 </thead>
+
                 <tbody>
                     @if (Model.Orders.Any())
                     {
                         foreach (var order in Model.Orders)
                         {
                             <tr class="bg-green-50 border-b-2 border-green-400">
-                                <td class="py-1 px-2 font-semibold">@order.OrderNo</td>
-                                <td class="py-1 px-2">@order.OrderDate.ToString("dd/MM/yyyy")</td>
-                                <td class="py-1 px-2">@order.CustomerName</td>
+                                <td class="py-1 px-2 font-semibold whitespace-nowrap">@order.OrderNo</td>
+                                <td class="py-1 px-2 whitespace-nowrap">@order.OrderDate.ToString("dd/MM/yyyy")</td>
+                                <td class="py-1 px-2 whitespace-nowrap">@order.CustomerName</td>
                                 <td class="py-1 px-2">
                                     @order.AddressLine
                                     @(string.IsNullOrWhiteSpace(order.AddressLine) ? "" : ", ")
@@ -121,18 +151,19 @@
                                 </td>
                                 <td class="py-1 px-2" colspan="5"></td>
                             </tr>
-                            foreach (var item in order.Items)
+
+                            @foreach (var item in order.Items)
                             {
                                 <tr class="border-b">
                                     <td class="py-1 px-2"></td>
                                     <td class="py-1 px-2"></td>
                                     <td class="py-1 px-2"></td>
                                     <td class="py-1 px-2"></td>
-                                    <td class="py-1 px-2">@item.ProductName</td>
-                                    <td class="py-1 px-2 text-center">@item.Quantity</td>
-                                    <td class="py-1 px-2 text-center">@item.UnitPrice.ToString("N0")</td>
-                                    <td class="py-1 px-2 text-center">@item.Discount.ToString("N0")</td>
-                                    <td class="py-1 px-2 text-center">@((item.UnitPrice - item.Discount).ToString("N0"))</td>
+                                    <td class="py-1 px-2 whitespace-nowrap">@item.ProductName</td>
+                                    <td class="py-1 px-2 text-center whitespace-nowrap">@item.Quantity</td>
+                                    <td class="py-1 px-2 text-center whitespace-nowrap">@item.UnitPrice.ToString("N0")</td>
+                                    <td class="py-1 px-2 text-center whitespace-nowrap">@item.Discount.ToString("N0")</td>
+                                    <td class="py-1 px-2 text-center whitespace-nowrap">@((item.UnitPrice - item.Discount).ToString("N0"))</td>
                                 </tr>
                             }
                         }
@@ -147,4 +178,60 @@
             </table>
         </div>
     </div>
+
+
 </div>
+
+@section Scripts {
+    <script>
+        flatpickr("#fromDate", {
+          altInput: true, 
+          altFormat: "d-m-Y",
+          dateFormat: "Y-m-d",
+          allowInput: true
+        });
+        flatpickr("#toDate", {
+          altInput: true,
+          altFormat: "d-m-Y",
+          dateFormat: "Y-m-d",
+          allowInput: true
+        });
+    </script>
+
+    <script>
+        function toggleFilter() {
+        var el = document.getElementById('filterForm');
+        if (el) el.classList.toggle('hidden');
+        }
+
+        function clearFilter() {
+            const setEmpty = (name) => {
+              const el = document.querySelector(`#filterForm [name="${name}"]`);
+              if (el) el.value = "";
+            };
+            setEmpty("ProductFilter");
+            setEmpty("OrderNoFilter");
+            setEmpty("UnitPriceFilter");
+
+            if (window.fromFp) {
+              fromFp.clear();
+              fromFp.set("maxDate", null);
+            }
+            if (window.toFp) {
+              toFp.clear();
+              toFp.set("minDate", null);
+            }
+          }
+
+        // Flatpickr dd-MM-yyyy (ส่งค่า yyyy-MM-dd)
+        if (window.flatpickr?.l10ns?.th) { flatpickr.localize(flatpickr.l10ns.th); }
+        window.fromFp = flatpickr("#fromDate", {
+          altInput:true, altFormat:"d-m-Y", dateFormat:"Y-m-d", allowInput:true,
+          maxDate:"today", onChange:(sel)=>{ if(sel && sel[0]) toFp.set("minDate", sel[0]); }
+        });
+        window.toFp = flatpickr("#toDate", {
+          altInput:true, altFormat:"d-m-Y", dateFormat:"Y-m-d", allowInput:true,
+          maxDate:"today", onChange:(sel)=>{ if(sel && sel[0]) fromFp.set("maxDate", sel[0]); }
+        });
+    </script>
+}

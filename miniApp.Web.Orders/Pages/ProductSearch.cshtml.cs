@@ -21,21 +21,18 @@ namespace miniApp.WebOrders.Pages
         [BindProperty(SupportsGet = true)]
         public int? CategoryId { get; set; }
 
-        // ใช้ทั้งตอน GET สำหรับแสดงค่า และตอน POST รับค่ากลับจากฟอร์ม
         [BindProperty]
         public int LocationId { get; set; }
 
         public List<ProductDto> Products { get; set; } = new();
         public List<ProductCategoryDto> Categories { get; set; } = new();
 
-        // ids ของสินค้าที่ user มองเห็น (มาจาก ProductStocks ของทุก location ที่ user ได้สิทธิ์)
         public HashSet<int> VisibleProductIds { get; set; } = new();
 
         public async Task OnGetAsync()
         {
             var client = _httpClientFactory.CreateClient();
 
-            // อ่านค่าจาก Session (ตั้งจากหน้า Login)
             var baseUrl = _config["ApiBaseUrl"] ?? "";
             var token = _config["AUTHTOKEN"] ?? "";
             var userId = HttpContext.Session.GetInt32("USERID") ?? 0;
@@ -48,7 +45,6 @@ namespace miniApp.WebOrders.Pages
             ViewData["APIBASEURL"] = baseUrl;
             ViewData["AUTHTOKEN"] = token;
 
-            // หมวดหมู่
             Categories = await client.GetFromJsonAsync<List<ProductCategoryDto>>(
                 $"{baseUrl}api/productcategory") ?? new();
 

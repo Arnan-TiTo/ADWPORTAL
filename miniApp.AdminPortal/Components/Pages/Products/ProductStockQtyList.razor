@@ -526,7 +526,6 @@ else
         {
             var http = await CreateClient();
 
-            // ✅ ใช้ endpoint ที่ถูกต้อง + ใส่ userId
             var url = $"api/ProductStock/location/{selectedLocationId}?userId={_userId}";
             all = await http.GetFromJsonAsync<List<StockRow>>(url) ?? new();
         }
@@ -645,9 +644,12 @@ else
 
     private async Task ConfirmAdjust()
     {
+        if (saving) return;// กันกดซ้ำ
         if (selectedRow is null) return;
-        if (adjustQty <= 0) { await JS.InvokeVoidAsync("showToast", "Quantity must be > 0", "warning"); return; }
+        if (adjustQty <= 0)
+        //{ await JS.InvokeVoidAsync("showToast", "Quantity must be > 0", "warning"); return; }
 
+        // Out ต้องไม่เกิน Available
         if (adjustSign < 0 && adjustQty > selectedRow.QtyAvailable)
         {
             await JS.InvokeVoidAsync("showToast", $"Max {selectedRow.QtyAvailable} (available).", "warning");
@@ -659,38 +661,34 @@ else
             saving = true;
             var http = await CreateClient();
 
-            // ✅ API ต้องการ QtyOnHand (มีเครื่องหมาย) + ReasonCode + PerformedByUserId
+            // บังคับทิศทางด้วย Abs แล้วค่อยใส่เครื่องหมาย
+            var qtySigned = adjustSign >= 0 ? Math.Abs(adjustQty) : -Math.Abs(adjustQty);
+            var reason = adjustSign >= 0 ? "ADJUST_IN" : "ADJUST_OUT";
+
             var payload = new
             {
                 ProductId = selectedRow.ProductId,
                 LocationId = selectedLocationId,
-                QtyOnHand = adjustSign > 0 ? adjustQty : -adjustQty,
-                ReasonCode = adjustSign > 0 ? "ADJUST_IN" : "ADJUST_OUT",
-                ReferenceType = adjustSign > 0 ? "ADJUST_IN" : "ADJUST_OUT",
-                ReferenceId = (string)"",
+                QtyOnHand = qtySigned,
+                ReasonCode = reason,
+                ReferenceType = "MANUAL",
+                ReferenceId = "",
                 PerformedByUserId = _userId,
-                Note = adjustNote ?? ""
+                Note = adjustNote?.Trim() ?? ""
             };
 
             var resp = await http.PostAsJsonAsync("api/ProductStock/adjust", payload);
             if (resp.IsSuccessStatusCode)
             {
-                if (adjustSign > 0)
-                {
-                    selectedRow.QtyOnHand += adjustQty;
-                    selectedRow.QtyAvailable += adjustQty;
-                }
-                else
-                {
-                    selectedRow.QtyOnHand -= adjustQty;
-                    selectedRow.QtyAvailable -= adjustQty;
-                }
+                if (qtySigned > 0) { selectedRow.QtyOnHand += qtySigned; selectedRow.QtyAvailable += qtySigned; }
+                else { selectedRow.QtyOnHand += qtySigned; selectedRow.QtyAvailable += qtySigned; }
                 await JS.InvokeVoidAsync("showToast", "Saved.", "success");
                 showAdjust = false;
             }
             else
             {
-                await JS.InvokeVoidAsync("showToast", $"Adjust failed: {await resp.Content.ReadAsStringAsync()}", "error");
+                var msg = await resp.Content.ReadAsStringAsync();
+                await JS.InvokeVoidAsync("showToast", $"Adjust failed: {msg}", "error");
             }
         }
         catch (Exception ex)

@@ -1,0 +1,434 @@
+﻿@page
+@model miniApp.Web.Pages.ProductModel
+@inject IHttpClientFactory HttpClientFactory
+
+@{
+    ViewData["Title"] = "สินค้า";
+
+    var authToken = Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg1
+        ? cfg1["AUTHTOKEN"] ?? ""
+        : "";
+    var apiBaseUrl = Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg2
+        ? cfg2["APIBASEURL"] ?? ""
+        : "";
+}
+
+@functions {
+    string Img(string? url, string folder = "products")
+    {
+        if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
+        var u = url.Replace("\\", "/").Trim();
+        if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return u;
+        while (u.StartsWith("/")) u = u[1..];
+        if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
+        if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
+        return $"/images/{folder}/{u}";
+    }
+}
+
+<div class="max-w-md w-full mx-auto my-auto px-2 py-2">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-3">
+        <button onclick="history.back()" class="text-xl">←</button>
+        <h1 class="text-lg font-semibold text-center flex-1">ตรวจนับปรับยอดสินค้า</h1>
+    </div>
+
+    <!-- Filter bar: Location + Search -->
+    <form method="get" class="grid grid-cols-1 gap-2 mb-3">
+        <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600 min-w-[72px]">สถานที่</label>
+            <select name="locationId"
+                    class="flex-1 bg-white border rounded-xl px-3 py-2 text-sm"
+                    onchange="this.form.submit()"
+                    @(Model.Locations.Count == 0 ? "disabled" : "")>
+                @if (Model.Locations.Count == 0)
+                {
+                    <option value="">(ยังไม่ได้รับสิทธิ์)</option>
+                }
+                else
+                {
+                    @foreach (var l in Model.Locations)
+                    {
+                        <option value="@l.Id" selected="@(l.Id == Model.LocationId)">@l.Name</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <div class="relative">
+            <input type="text" name="query" value="@Model.SearchQuery" placeholder="ค้นหาชื่อหรือ SKU"
+                   class="w-full bg-gray-100 rounded-xl px-4 py-2 text-sm pr-8" />
+            <input type="hidden" name="sort" value="@Model.SortOrder" />
+            <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</button>
+        </div>
+
+        <div class="flex gap-2">
+            <a href="?query=@Model.SearchQuery&locationId=@Model.LocationId&sort=asc"
+               class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm">
+                <img src="/images/icons/Alignment.PNG" class="w-5 h-5 inline" />
+            </a>
+            <a href="?query=@Model.SearchQuery&locationId=@Model.LocationId&sort=@(Model.SortOrder == "asc" ? "desc" : "asc")"
+               class="bg-white border rounded-xl px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+                <img src="/images/icons/Sort.png" alt="Sort Icon" class="w-5 h-5" />
+                เรียง @(Model.SortOrder == "asc" ? "🔽" : "🔼")
+            </a>
+        </div>
+    </form>
+
+    @if (Model.Locations.Count == 0)
+    {
+        <div class="bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-xl px-3 py-2 text-sm">
+            ยังไม่ได้รับสิทธิ์ Location ใด ๆ – ติดต่อผู้ดูแลระบบ
+        </div>
+    }
+
+    <!-- Results -->
+    @if (Model.Products != null && Model.Products.Count > 0)
+    {
+        <div class="space-y-6">
+            @foreach (var product in Model.Products)
+            {
+                var targetOptions = Model.Locations.Where(l => l.Id != Model.LocationId).ToList();
+                <div class="bg-white border rounded-2xl p-4 shadow-sm prod-card" data-pid="@product.Id">
+                    <div class="text-center mb-2">
+                        <img src="@Img(product.ImageUrl)" alt="Product" class="w-20 h-20 mx-auto mb-2 object-cover rounded" />
+                        <div class="text-sm text-gray-800 font-semibold">@product.Name</div>
+                        <div class="text-xs text-gray-500">@product.Sku</div>
+                    </div>
+
+                    <!-- Summary -->
+                    <div class="grid grid-cols-3 gap-2 text-xs text-gray-600 mb-3">
+                        <div>คงเหลือ: <span class="js-onhand">@product.OnHand</span></div>
+                        <div>รอรับ: <span class="js-receive">@product.Receive</span></div>
+                        <div>ของเสีย: <span class="js-damaged">@product.Damaged</span></div>
+                        <div class="col-span-3">พร้อมขาย: <span class="js-available">@product.Available</span></div>
+
+                        <!-- เก็บค่า Reserved แบบซ่อน (เพื่อคำนวน Available กรณีจำเป็น/จาก API) -->
+                        <span class="hidden js-reserved">@product.Reserved</span>
+                    </div>
+
+                    <!-- 0) Stocktake (ตรวจนับ) -->
+                    <form onsubmit="return submitStocktake(this, event);" class="space-y-2 border rounded-xl p-3 mb-3">
+                        <div class="text-sm font-semibold">ตรวจนับ/ปรับยอด</div>
+                        <input type="hidden" name="ProductId" value="@product.Id" />
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="number" name="CountQty"
+                                   value="@product.OnHand"
+                                   min="0" step="1"
+                                   class="w-full border rounded-xl px-3 py-2 text-sm"
+                                   placeholder="จำนวนที่นับได้" />
+                            <input type="text" name="Note" value=""
+                                   class="w-full border rounded-xl px-3 py-2 text-sm"
+                                   placeholder="เหตุผล (จำเป็นเมื่อจำนวนน้อยกว่า)" />
+                        </div>
+                        <div class="text-[11px] text-gray-500">
+                            ถ้านับได้ <b>น้อยกว่า</b> คงเหลือ ระบบจะโอนส่วนขาดกลับโกดังเป็นของเสีย<br />
+                            ถ้านับได้ <b>มากกว่า</b> คงเหลือ กรุณาทำ “รับเข้าบวกเพิ่ม”
+                        </div>
+                        <button type="submit" class="w-full bg-purple-600 text-white py-2 rounded-xl text-sm">บันทึกการตรวจนับ</button>
+                    </form>
+
+                    <!-- 1) Adjust In (เฉพาะสโตร์เฮาส์เท่านั้น) -->
+                    @if (Model.IsCurrentStorehouse)
+                    {
+                        <form onsubmit="return submitAdjust(this, event);" class="space-y-2 border rounded-xl p-3 mb-3">
+                            <div class="text-sm font-semibold">รับเข้าบวกเพิ่ม</div>
+                            <input type="hidden" name="ProductId" value="@product.Id" />
+                            <div class="grid grid-cols-2 gap-3">
+                                <input type="number" name="AddQty" value="0" step="1" min="0"
+                                       class="w-full border rounded-xl px-3 py-2 text-sm"
+                                       placeholder="จำนวนที่จะรับเข้า" />
+                                <input type="text" name="Note" value="" class="w-full border rounded-xl px-3 py-2 text-sm" placeholder="เหตุผล (จำเป็น)" />
+                            </div>
+                            <div class="text-[11px] text-gray-500">
+                                ระบบจะตัดยอด “รอรับ” เข้า “คงเหลือ” โปรดระบุจำนวนที่ได้รับจริงแล้ว
+                            </div>
+                            <button type="submit" class="w-full bg-black text-white py-2 rounded-xl text-sm">รับเข้าบวกเพิ่ม</button>
+                        </form>
+                    }
+
+                    <!-- 2) โอนย้าย -->
+                    <form onsubmit="return submitTransfer(this, event);" class="space-y-2 border rounded-xl p-3">
+                        <div class="text-sm font-semibold">โอนออก</div>
+                        <input type="hidden" name="ProductId" value="@product.Id" />
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="number" name="Qty" value="0" step="1" min="0"
+                                   class="w-full border rounded-xl px-3 py-2 text-sm"
+                                   placeholder="จำนวน (≤ พร้อมขาย)" />
+                            <select name="ToLocationId" class="w-full border rounded-xl px-3 py-2 text-sm">
+                                <option value="">-- เลือกปลายทาง --</option>
+                                @foreach (var loc in targetOptions)
+                                {
+                                    <option value="@loc.Id">@loc.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <input type="text" name="Note" value="" class="w-full border rounded-xl px-3 py-2 text-sm" placeholder="เหตุผล (ถ้ามี)" />
+                        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-xl text-sm">โอนย้าย</button>
+                    </form>
+                </div>
+            }
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(Model.SearchQuery))
+    {
+        <p class="text-center text-sm text-gray-500">ไม่พบสินค้าตามคำค้น "@Model.SearchQuery"</p>
+    }
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed top-5 right-5 z-50 hidden">
+    <div id="toastContent" class="px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium"></div>
+</div>
+
+<!-- Confirm Toast (no-scroll while open) -->
+<div id="confirmToast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 hidden">
+    <div class="bg-gray-900 text-white rounded-xl px-4 py-3 shadow-lg max-w-sm w-[90vw] sm:w-auto">
+        <div id="confirmMsg" class="text-sm mb-3"></div>
+        <div class="flex justify-end gap-2">
+            <button id="confirmNo" type="button" class="px-3 py-1 rounded-lg bg-gray-600">ยกเลิก</button>
+            <button id="confirmYes" type="button" class="px-3 py-1 rounded-lg bg-green-600">ยืนยัน</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const APIBASE = '@apiBaseUrl';
+        const TOKEN   = '@authToken';
+        const LOC_ID  = @Model.LocationId.GetValueOrDefault(0);
+        const USER_ID = @Model.CurrentUserId;
+        const IS_STOREHOUSE = @(Model.IsCurrentStorehouse ? "true" : "false");
+
+        /* ===== Helpers: Toasts & No-Scroll ===== */
+        function showToast(message, variant = "success") {
+          const toast = document.getElementById("toast");
+          const content = document.getElementById("toastContent");
+          const base = "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium";
+          const COLORS = { success:"bg-green-600", error:"bg-red-600", warn:"bg-yellow-500", info:"bg-blue-600" };
+          content.className = `${base} ${COLORS[variant] || "bg-gray-800"}`;
+          content.textContent = message;
+          document.activeElement && typeof document.activeElement.blur === 'function' && document.activeElement.blur();
+          toast.classList.remove("hidden");
+          setTimeout(() => toast.classList.add("hidden"), 3500);
+        }
+
+        let __scrollY = 0;
+        function freezeScroll(){
+            __scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+            document.body.style.position = 'fixed';
+            document.body.style.top = `-${__scrollY}px`;
+            document.body.style.width = '100%';
+        }
+        function unfreezeScroll(){
+            const y = Math.abs(parseInt(document.body.style.top || '0')) || 0;
+            document.body.style.position = '';
+            document.body.style.top = '';
+            document.body.style.width = '';
+            window.scrollTo(0, y);
+        }
+
+        function confirmToast(message){
+          return new Promise((resolve)=>{
+            const box   = document.getElementById('confirmToast');
+            const msgEl = document.getElementById('confirmMsg');
+            const yes   = document.getElementById('confirmYes');
+            const no    = document.getElementById('confirmNo');
+
+            msgEl.textContent = message;
+
+            const cleanup = () => {
+              yes.onclick = null;
+              no.onclick  = null;
+              box.classList.add('hidden');
+              unfreezeScroll();
+            };
+
+            yes.onclick = () => { cleanup(); resolve(true);  };
+            no.onclick  = () => { cleanup(); resolve(false); };
+
+            document.activeElement && typeof document.activeElement.blur === 'function' && document.activeElement.blur();
+            freezeScroll();
+            box.classList.remove('hidden');
+          });
+        }
+
+        /* ===== DOM helpers ===== */
+        function getCard(el){ return el.closest('.prod-card'); }
+        function num(val){ const n = parseInt(val); return isNaN(n) ? 0 : n; }
+
+        function updateFields(card, {onhandDelta=0, receiveDelta=0, damagedDelta=0, availableDelta=0, setOnHand=null}){
+            const elOn = card.querySelector('.js-onhand');
+            const elRc = card.querySelector('.js-receive');
+            const elDm = card.querySelector('.js-damaged');
+            const elAv = card.querySelector('.js-available');
+
+            let on  = num(elOn.textContent);
+            let rc  = num(elRc.textContent);
+            let dm  = num(elDm.textContent);
+            let av  = num(elAv.textContent);
+
+            if (setOnHand !== null) on = setOnHand;
+            on += onhandDelta;
+            rc += receiveDelta;
+            dm += damagedDelta;
+            av += availableDelta;
+
+            elOn.textContent = on.toString();
+            elRc.textContent = rc.toString();
+            elDm.textContent = dm.toString();
+            elAv.textContent = av.toString();
+        }
+
+        /* ===== 0) Stocktake ===== */
+        async function submitStocktake(form, ev){
+            ev?.preventDefault();
+            const card = getCard(form);
+            const pid  = parseInt(form.ProductId.value);
+            const counted = num(form.CountQty.value);
+            const note = (form.Note.value || "").trim();
+
+            const on  = num(card.querySelector('.js-onhand').textContent);
+
+            if (counted < 0){ showToast("จำนวนต้องไม่ติดลบ", "warn"); return false; }
+
+            if (counted > on){
+                showToast("นับได้มากกว่าคงเหลือ กรุณาทำ 'รับเข้าบวกเพิ่ม' แทน", "info");
+                return false;
+            }
+
+            if (counted === on){
+                showToast("จำนวนเท่าเดิม ไม่ต้องปรับ", "info");
+                return false;
+            }
+
+            if (!note){
+                showToast("กรุณาระบุเหตุผลสำหรับส่วนขาด", "warn");
+                return false;
+            }
+
+            const ok = await confirmToast(`ยืนยันบันทึกการตรวจนับจาก ${on} เป็น ${counted} ชิ้น?`);
+            if (!ok) return false;
+
+            const payload = {
+                ProductId: pid,
+                LocationId: LOC_ID,
+                CountedQty: counted,
+                ReasonCode: note || "STOCKTAKE_SHORT",
+                PerformedByUserId: USER_ID,
+                Note: note
+            };
+
+            try{
+                const resp = await fetch(APIBASE + 'api/ProductStock/cycle-count', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+                    body: JSON.stringify(payload)
+                });
+                if(!resp.ok){
+                    const t = await resp.text();
+                    console.warn(t);
+                    showToast("บันทึกตรวจนับไม่สำเร็จ", "error");
+                    return false;
+                }
+
+                const delta = counted - on; // negative
+                updateFields(card, { setOnHand: counted, availableDelta: delta });
+                form.Note.value = "";
+                showToast("บันทึกการตรวจนับแล้ว", "success");
+            }catch(e){ console.error(e); showToast("เกิดข้อผิดพลาด", "error"); }
+            return false;
+        }
+
+        /* ===== 1) Adjust In (รอรับ → คงเหลือ) ===== */
+        async function submitAdjust(form, ev){
+            ev?.preventDefault();
+            if (!IS_STOREHOUSE){ showToast("จุดเก็บนี้ไม่สามารถรับเข้าได้", "warn"); return false; }
+
+            const card = getCard(form);
+            const pid  = parseInt(form.ProductId.value);
+            const add  = num(form.AddQty.value);
+            const note = (form.Note.value || "").trim();
+            const rc   = num(card.querySelector('.js-receive').textContent);
+
+            if (!add || add <= 0){ showToast("กรุณาใส่จำนวนที่จะรับเข้า", "warn"); return false; }
+            if (add > rc){ showToast("จำนวนเกิน 'รอรับ'", "warn"); return false; }
+            if (!note){ showToast("กรุณาระบุเหตุผล", "warn"); return false; }
+
+            const ok = await confirmToast(`ยืนยันรับเข้า ${add} ชิ้น? ระบบจะย้ายจาก 'รอรับ' เป็น 'คงเหลือ' ตามจำนวนนี้`);
+            if (!ok) return false;
+
+            const payload = {
+                ProductId: pid,
+                LocationId: LOC_ID,
+                QtyOnHand: add,
+                ReasonCode: "ADJUST_IN",
+                ReferenceType: "RECEIVE_TO_ONHAND",
+                ReferenceId: "",
+                PerformedByUserId: USER_ID,
+                Note: note
+            };
+
+            try{
+                const resp = await fetch(APIBASE + 'api/ProductStock/adjust', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+                    body: JSON.stringify(payload)
+                });
+                if(!resp.ok){ const t = await resp.text(); console.warn(t); showToast("รับเข้าไม่สำเร็จ", "error"); return false; }
+
+                updateFields(card, { onhandDelta: add, receiveDelta: -add, availableDelta: add });
+                form.AddQty.value = "0"; form.Note.value = "";
+                showToast("รับเข้าบวกเพิ่มเรียบร้อย", "success");
+            }catch(e){ console.error(e); showToast("เกิดข้อผิดพลาด", "error"); }
+            return false;
+        }
+
+        /* ===== 2) Transfer ===== */
+        async function submitTransfer(form, ev){
+            ev?.preventDefault();
+            const card = getCard(form);
+            const pid  = parseInt(form.ProductId.value);
+            const qty  = num(form.Qty.value);
+            const toId = parseInt(form.ToLocationId.value || "0");
+            const avail= num(card.querySelector('.js-available').textContent);
+            const note = (form.Note.value || "").trim();
+
+            if (!toId){ showToast("โปรดเลือกปลายทาง", "warn"); return false; }
+            if (!qty || qty <= 0){ showToast("จำนวนต้องมากกว่า 0", "warn"); return false; }
+            if (qty > avail){ showToast("จำนวนเกิน 'พร้อมขาย'", "warn"); return false; }
+
+            const toName = form.ToLocationId.options[form.ToLocationId.selectedIndex]?.text || `ปลายทาง #${toId}`;
+            const ok = await confirmToast(`ยืนยันโอนย้าย ${qty} ชิ้น → ${toName} ?`);
+            if (!ok) return false;
+
+            const payload = {
+                ProductId: pid,
+                FromLocationId: LOC_ID,
+                ToLocationId: toId,
+                QtyOnHand: qty,
+                ReasonCode: "TRANSFER",
+                ReferenceType: "TRANSFER",
+                ReferenceId: "",
+                PerformedByUserId: USER_ID,
+                Note: note
+            };
+
+            try{
+                const resp = await fetch(APIBASE + 'api/ProductStock/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+                    body: JSON.stringify(payload)
+                });
+                if(!resp.ok){ const t = await resp.text(); console.warn(t); showToast("โอนย้ายไม่สำเร็จ", "error"); return false; }
+
+                updateFields(card, { onhandDelta: -qty, availableDelta: -qty });
+                form.Qty.value = "0"; form.ToLocationId.value = ""; form.Note.value = "";
+                showToast("โอนย้ายเรียบร้อย", "success");
+            }catch(e){ console.error(e); showToast("เกิดข้อผิดพลาด", "error"); }
+            return false;
+        }
+    </script>
+}
+

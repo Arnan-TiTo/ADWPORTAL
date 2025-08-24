@@ -62,6 +62,8 @@ namespace miniApp.API.Controllers
             [FromForm] string? Postcode,
             [FromForm] string? ContractPerson,
             [FromForm] string? ContractPhone,
+            [FromForm] int? isWarehouse,
+            [FromForm] int? isStorehouse,
 
             [FromForm] List<IFormFile>? Image,
             [FromForm] string Usernames)
@@ -87,6 +89,8 @@ namespace miniApp.API.Controllers
                 Postcode = Postcode,
                 ContractPerson = ContractPerson,
                 ContractPhone = ContractPhone,
+                isWarehouse = isWarehouse,
+                isStorehouse = isStorehouse,
 
                 CreatedAt = DateTime.UtcNow
             };
@@ -135,6 +139,8 @@ namespace miniApp.API.Controllers
             [FromForm] string? Postcode,
             [FromForm] string? ContractPerson,
             [FromForm] string? ContractPhone,
+            [FromForm] int? isWarehouse,
+            [FromForm] int? isStorehouse,
 
             [FromForm] List<IFormFile>? Image,
             [FromForm] string Usernames)
@@ -161,6 +167,8 @@ namespace miniApp.API.Controllers
             location.Postcode = Postcode;
             location.ContractPerson = ContractPerson;
             location.ContractPhone = ContractPhone;
+            location.isWarehouse = isWarehouse;
+            location.isStorehouse = isStorehouse;
 
             if (Image is { Count: > 0 })
             {

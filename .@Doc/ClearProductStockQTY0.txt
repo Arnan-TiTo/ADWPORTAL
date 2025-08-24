@@ -1,0 +1,48 @@
+/* Clear all stock quantities to zero (all products, all locations) */
+BEGIN TRY
+    BEGIN TRAN;
+
+    SELECT
+        COUNT(*)            AS RowsProductStocks,
+        SUM(QtyOnHand)      AS SumOnHand,
+        SUM(QtyReserved)    AS SumReserved,
+        SUM(QtyDamaged)     AS SumDamaged,
+        CASE WHEN COL_LENGTH('dbo.ProductStocks','QtyReceive') IS NOT NULL
+             THEN SUM(QtyReceive) END AS SumReceive
+    FROM dbo.ProductStocks WITH (NOLOCK);
+
+    UPDATE s
+       SET s.QtyOnHand   = 0,
+           s.QtyReserved = 0,
+           s.QtyDamaged  = 0,
+           s.UpdatedAt   = SYSUTCDATETIME()
+    FROM dbo.ProductStocks AS s WITH (TABLOCKX);
+
+    IF COL_LENGTH('dbo.ProductStocks','QtyReceive') IS NOT NULL
+    BEGIN
+        UPDATE s
+           SET s.QtyReceive = 0,
+               s.UpdatedAt  = SYSUTCDATETIME()
+        FROM dbo.ProductStocks AS s WITH (TABLOCKX);
+    END
+
+    IF COL_LENGTH('dbo.Products','Quantity') IS NOT NULL
+    BEGIN
+        UPDATE p
+           SET p.Quantity = 0
+        FROM dbo.Products p WITH (TABLOCKX);
+    END
+
+   TRUNCATE TABLE dbo.StockTransactions;
+
+    /* เปิดทริกเกอร์กลับ (ถ้าปิดไว้ด้านบน)
+    -- ALTER TABLE dbo.ProductStocks      ENABLE TRIGGER ALL;
+    -- ALTER TABLE dbo.StockTransactions  ENABLE TRIGGER ALL;
+    */
+
+    COMMIT;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0 ROLLBACK;
+    THROW;
+END CATCH;

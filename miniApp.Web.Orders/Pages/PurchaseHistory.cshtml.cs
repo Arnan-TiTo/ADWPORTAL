@@ -1,168 +1,123 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using miniApp.WebOrders.Models;
 using System.Net.Http.Headers;
-using System.Text.Json;
-using System.Text;
-using System.Linq;
+using miniApp.WebOrders.Models;
 
 namespace miniApp.WebOrders.Pages
 {
     public class PurchaseHistoryModel : PageModel
     {
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IHttpClientFactory _http;
         private readonly IConfiguration _config;
+
+        public PurchaseHistoryModel(IHttpClientFactory http, IConfiguration config)
+            => (_http, _config) = (http, config);
+
+        [BindProperty(SupportsGet = true)] public string? Query { get; set; }
+        [BindProperty(SupportsGet = true)] public string SortField { get; set; } = "OrderDate";
+        [BindProperty(SupportsGet = true)] public string SortDir { get; set; } = "desc";
+        [BindProperty(SupportsGet = true)] public bool ShowFilter { get; set; }
+        [BindProperty(SupportsGet = true)] public string? ProductFilter { get; set; }
+        [BindProperty(SupportsGet = true)] public string? OrderNoFilter { get; set; }
+        [BindProperty(SupportsGet = true)] public string? UnitPriceFilter { get; set; }
+        [BindProperty(SupportsGet = true)] public DateTime? FromDate { get; set; }
+        [BindProperty(SupportsGet = true)] public DateTime? ToDate { get; set; }
+
+        public List<(string value, string label)> SortFields { get; set; } =
+            new() { ("OrderDate", "Order Date"), ("OrderNo", "Order No"), ("CustomerName", "Customer") };
 
         public List<OrderHistoryViewDto> Orders { get; set; } = new();
 
-        [BindProperty(SupportsGet = true)]
-        public string Query { get; set; } = "";
-
-        [BindProperty(SupportsGet = true)]
-        public string ProductFilter { get; set; } = "";
-
-        [BindProperty(SupportsGet = true)]
-        public string OrderNoFilter { get; set; } = "";
-
-        [BindProperty(SupportsGet = true)]
-        public string UnitPriceFilter { get; set; } = "";
-
-        [BindProperty(SupportsGet = true)]
-        public string SortField { get; set; } = "OrderNo";
-
-        [BindProperty(SupportsGet = true)]
-        public string SortDir { get; set; } = "asc";
-
-        [BindProperty(SupportsGet = true)]
-        public bool ShowFilter { get; set; } = false;
-
-        public List<(string Value, string Label)> SortFields { get; set; } = new()
-        {
-            ("OrderNo", "Order No"),
-            ("OrderDate", "Order Date"),
-            ("CustomerName", "Customer Name"),
-            ("ProductName", "Product Name"),
-            ("UnitPrice", "Unit Price"),
-        };
-
-        public PurchaseHistoryModel(IHttpClientFactory httpClientFactory, IConfiguration config)
-        {
-            _httpClientFactory = httpClientFactory;
-            _config = config;
-        }
-
         public async Task OnGetAsync()
         {
-            var apiBase = _config["APIBASEURL"] ?? "";
-            var token = _config["AUTHTOKEN"] ?? "";
+            var data = await LoadOrdersAsync();
 
-            var client = _httpClientFactory.CreateClient();
-            if (!string.IsNullOrEmpty(token))
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            // filter ฝั่ง UI เพิ่มเติม (คำสั่ง/สินค้า/ราคา/ช่วงวัน)
+            if (!string.IsNullOrWhiteSpace(OrderNoFilter))
+                data = data.Where(o => (o.OrderNo ?? "")
+                    .Contains(OrderNoFilter.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
 
-            var response = await client.GetAsync($"{apiBase}api/Order/history");
-            if (response.IsSuccessStatusCode)
+            if (!string.IsNullOrWhiteSpace(ProductFilter))
+                data = data.Where(o => o.Items.Any(i => (i.ProductName ?? "")
+                    .Contains(ProductFilter.Trim(), StringComparison.OrdinalIgnoreCase))).ToList();
+
+            if (decimal.TryParse(UnitPriceFilter, out var up))
+                data = data.Where(o => o.Items.Any(i => i.UnitPrice == up)).ToList();
+
+            if (FromDate.HasValue)
+                data = data.Where(o => o.OrderDate >= FromDate.Value.Date).ToList();
+            if (ToDate.HasValue)
+                data = data.Where(o => o.OrderDate < ToDate.Value.Date.AddDays(1)).ToList();
+
+            // sort
+            data = (SortField, (SortDir ?? "desc").ToLower()) switch
             {
-                var json = await response.Content.ReadAsStringAsync();
-                var apiOrders = JsonSerializer.Deserialize<List<OrderHistoryViewDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+                ("OrderNo", "asc") => data.OrderBy(o => o.OrderNo).ToList(),
+                ("OrderNo", "desc") => data.OrderByDescending(o => o.OrderNo).ToList(),
+                ("CustomerName", "asc") => data.OrderBy(o => o.CustomerName).ToList(),
+                ("CustomerName", "desc") => data.OrderByDescending(o => o.CustomerName).ToList(),
+                ("OrderDate", "asc") => data.OrderBy(o => o.OrderDate).ToList(),
+                _ => data.OrderByDescending(o => o.OrderDate).ToList(),
+            };
 
-                // FILTER
-                IEnumerable<OrderHistoryViewDto> filteredOrders = apiOrders;
-
-                // Search by OrderNo
-                if (!string.IsNullOrWhiteSpace(Query))
-                    filteredOrders = filteredOrders.Where(o => (o.OrderNo ?? "").Contains(Query, StringComparison.OrdinalIgnoreCase));
-
-                // Filter by ProductName
-                if (!string.IsNullOrWhiteSpace(ProductFilter))
-                {
-                    filteredOrders = filteredOrders
-                        .Select(o => new OrderHistoryViewDto
-                        {
-                            OrderNo = o.OrderNo,
-                            OrderDate = o.OrderDate,
-                            CustomerName = o.CustomerName,
-                            AddressLine = o.AddressLine,
-                            SubDistrict = o.SubDistrict,
-                            District = o.District,
-                            Province = o.Province,
-                            ZipCode = o.ZipCode,
-                            Items = o.Items.Where(i => (i.ProductName ?? "").Contains(ProductFilter, StringComparison.OrdinalIgnoreCase)).ToList()
-                        })
-                        .Where(o => o.Items.Any());
-                }
-
-                // Filter by OrderNo
-                if (!string.IsNullOrWhiteSpace(OrderNoFilter))
-                    filteredOrders = filteredOrders.Where(o => (o.OrderNo ?? "").Contains(OrderNoFilter, StringComparison.OrdinalIgnoreCase));
-
-                // Filter by UnitPrice
-                if (!string.IsNullOrWhiteSpace(UnitPriceFilter) && decimal.TryParse(UnitPriceFilter, out var unitPrice))
-                {
-                    filteredOrders = filteredOrders
-                        .Select(o => new OrderHistoryViewDto
-                        {
-                            OrderNo = o.OrderNo,
-                            OrderDate = o.OrderDate,
-                            CustomerName = o.CustomerName,
-                            AddressLine = o.AddressLine,
-                            SubDistrict = o.SubDistrict,
-                            District = o.District,
-                            Province = o.Province,
-                            ZipCode = o.ZipCode,
-                            Items = o.Items.Where(i => i.UnitPrice == unitPrice).ToList()
-                        })
-                        .Where(o => o.Items.Any());
-                }
-
-                // ORDER BY
-                bool descending = SortDir == "desc";
-                switch (SortField?.ToLower())
-                {
-                    case "orderdate":
-                        filteredOrders = descending ? filteredOrders.OrderByDescending(o => o.OrderDate) : filteredOrders.OrderBy(o => o.OrderDate);
-                        break;
-                    case "customername":
-                        filteredOrders = descending ? filteredOrders.OrderByDescending(o => o.CustomerName ?? "") : filteredOrders.OrderBy(o => o.CustomerName ?? "");
-                        break;
-                    case "productname":
-                        filteredOrders = descending
-                            ? filteredOrders.OrderByDescending(o => o.Items.FirstOrDefault()?.ProductName ?? "")
-                            : filteredOrders.OrderBy(o => o.Items.FirstOrDefault()?.ProductName ?? "");
-                        break;
-                    case "unitprice":
-                        filteredOrders = descending
-                            ? filteredOrders.OrderByDescending(o => o.Items.FirstOrDefault()?.UnitPrice ?? 0)
-                            : filteredOrders.OrderBy(o => o.Items.FirstOrDefault()?.UnitPrice ?? 0);
-                        break;
-                    default:
-                        filteredOrders = descending ? filteredOrders.OrderByDescending(o => o.OrderNo ?? "") : filteredOrders.OrderBy(o => o.OrderNo ?? "");
-                        break;
-                }
-
-                Orders = filteredOrders.ToList();
-            }
+            Orders = data;
         }
 
-        public async Task<IActionResult> OnPostDownloadAsync()
+        private async Task<List<OrderHistoryViewDto>> LoadOrdersAsync()
         {
-            await OnGetAsync(); // อัปเดต Orders ให้ตรง filter/sort
+            var client = _http.CreateClient();
+            var api = (_config["APIBASEURL"] ?? "").TrimEnd('/') + "/";
+            var token = _config["AUTHTOKEN"] ?? "";
+            if (!string.IsNullOrWhiteSpace(token))
+                client.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", token);
 
-            var sb = new StringBuilder();
-            sb.AppendLine("OrderNo,OrderDate,CustomerName,Address,ProductName,Quantity,UnitPrice,Discount,Total");
+            var userId = HttpContext.Session.GetInt32("USERID") ?? 0;
+            if (userId <= 0) return new();
 
-            foreach (var order in Orders)
+            var from = (FromDate ?? DateTime.Today.AddDays(-90)).Date;
+            var to = (ToDate ?? DateTime.Today).Date;
+
+            var url = $"{api}api/order/history/by-location?userId={userId}" +
+                      $"&from={Uri.EscapeDataString(from.ToString("O"))}" +
+                      $"&to={Uri.EscapeDataString(to.ToString("O"))}";
+            if (!string.IsNullOrWhiteSpace(Query))
+                url += $"&q={Uri.EscapeDataString(Query!)}";
+
+            List<OrderDto>? raw;
+            try
             {
-                var address = $"{order.AddressLine}, {order.SubDistrict}, {order.District}, {order.Province}, {order.ZipCode}".Replace(", ,", ",").Trim(',', ' ');
-                foreach (var item in order.Items)
-                {
-                    sb.AppendLine($"\"{order.OrderNo}\",\"{order.OrderDate:dd/MM/yyyy}\",\"{order.CustomerName}\",\"{address}\",\"{item.ProductName}\",{item.Quantity},{item.UnitPrice},{item.Discount},{item.UnitPrice - item.Discount}");
-                }
+                raw = await client.GetFromJsonAsync<List<OrderDto>>(url);
+            }
+            catch
+            {
+                return new();
             }
 
-            var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
-            var fileName = $"purchase_history_{DateTime.Now:yyyyMMddHHmmss}.csv";
-            return File(bytes, "text/csv", fileName);
+            // map → VM
+            var result = (raw ?? new()).Select(o => new OrderHistoryViewDto
+            {
+                OrderNo = o.OrderNo,
+                OrderDate = o.OrderDate,
+                CustomerName = o.CustomerName,
+                AddressLine = o.AddressLine,
+                SubDistrict = o.SubDistrict,
+                District = o.District,
+                Province = o.Province,
+                ZipCode = o.ZipCode,
+                Items = (o.Items ?? new()).Select(i => new OrderItemHistoryDto
+                {
+                    ProductName = i.ProductName,
+                    Quantity = i.Quantity,
+                    UnitPrice = i.UnitPrice,
+                    Discount = i.Discount
+                }).ToList()
+            }).ToList();
+
+            return result;
         }
+
+        // ===== DTOs =====
+
     }
 }

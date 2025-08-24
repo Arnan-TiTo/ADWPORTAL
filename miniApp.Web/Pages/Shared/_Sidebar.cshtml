@@ -4,12 +4,16 @@
 </div>
 
 <nav class="space-y-2 px-4 mt-4">
-    <a asp-page="/Index" class="block px-3 py-2 rounded hover:bg-green-100">🏠 Home</a>
-    <a asp-page="/Locations" class="block px-3 py-2 rounded hover:bg-green-100">📍 Locations</a>
-    <a asp-page="/StockIn" class="block px-3 py-2 rounded hover:bg-green-100">📥 Stock In</a>
+    @* <a asp-page="/StockIn" class="block px-3 py-2 rounded hover:bg-green-100">📦 Stock In</a> *@
     @* <a asp-page="/StockAdjust" class="block px-3 py-2 rounded hover:bg-green-100">🔧 Adjust Stock</a> *@
-    <a asp-page="/StockCount" class="block px-3 py-2 rounded hover:bg-green-100">📊 Stock Count</a>
-    <a asp-page="/Product" class="block px-3 py-2 rounded hover:bg-green-100">🛒 Products</a>
+    @* <a asp-page="/StockCount" class="block px-3 py-2 rounded hover:bg-green-100">🧮 Stock Count</a> *@
+    
+    <a asp-page="/Index" class="block px-3 py-2 rounded hover:bg-green-100">🏠 Home</a>
+    <a asp-page="/StockControl" class="block px-3 py-2 rounded hover:bg-green-100">🗂️ Stock Control</a>
+    <a asp-page="/ReturnDamage" class="block px-3 py-2 rounded hover:bg-green-100">↩️ Return Damage</a>
+    <a asp-page="/Locations" class="block px-3 py-2 rounded hover:bg-green-100">🗺️ Locations</a>
+
+    
     <form method="post" asp-page="/Logout">
         <button type="submit" class="w-full text-left px-3 py-2 rounded hover:bg-red-100 text-red-600">
             🚪 Logout

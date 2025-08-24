@@ -10,9 +10,7 @@
     <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded shadow-lg z-50">
         @toastMsg
     </div>
-    <script>
-        setTimeout(() => document.getElementById("toast")?.remove(), 2500);
-    </script>
+    <script> setTimeout(()=>document.getElementById("toast")?.remove(),2500); </script>
 }
 
 <style>
@@ -55,19 +53,11 @@
     <div class="bg-white border rounded-2xl shadow p-4">
         <div class="font-semibold text-lg mb-2">Order Summary</div>
         <div class="text-sm">
-            <div class="flex justify-between py-1">
-                <span>Items</span><span>@Model.TotalItems</span>
-            </div>
-            <div class="flex justify-between py-1">
-                <span>Subtotal</span><span>@Model.Subtotal.ToString("N0") Baht</span>
-            </div>
-            <div class="flex justify-between py-1">
-                <span>Discount</span><span>@Model.DiscountTotal.ToString("N0") Baht</span>
-            </div>
+            <div class="flex justify-between py-1"><span>Items</span><span>@Model.TotalItems</span></div>
+            <div class="flex justify-between py-1"><span>Subtotal</span><span>@Model.Subtotal.ToString("N0") Baht</span></div>
+            <div class="flex justify-between py-1"><span>Discount</span><span>@Model.DiscountTotal.ToString("N0") Baht</span></div>
             <div class="border-t my-2"></div>
-            <div class="flex justify-between font-bold">
-                <span>Total</span><span>@Model.Total.ToString("N0") Baht</span>
-            </div>
+            <div class="flex justify-between font-bold"><span>Total</span><span>@Model.Total.ToString("N0") Baht</span></div>
         </div>
     </div>
 
@@ -80,26 +70,25 @@
             <div class="font-semibold text-base">Choose payment method</div>
 
             <label class="flex items-center cursor-pointer">
-                <input asp-for="PaymentMethod" type="radio" value="transfer" class="accent-yellow-400 mr-2" />
-                <span class="flex items-center">
-                    <span class="mr-1">💳</span> Transfer money
-                </span>
+                <input id="payTransfer" asp-for="PaymentMethod" type="radio" value="transfer" class="accent-yellow-400 mr-2" />
+                <span class="flex items-center"><span class="mr-1">💳</span> Transfer money <span class="text-red-600 ml-1" id="slipReqStar" style="display:none">*</span></span>
             </label>
 
             <label class="flex items-center cursor-pointer opacity-80">
-                <input asp-for="PaymentMethod" type="radio" value="cash" class="accent-yellow-400 mr-2" />
-                <span class="flex items-center">
-                    <span class="mr-1">🪙</span> Cash
-                </span>
+                <input id="payCash" asp-for="PaymentMethod" type="radio" value="cash" class="accent-yellow-400 mr-2" />
+                <span class="flex items-center"><span class="mr-1">🪙</span> Cash</span>
             </label>
         </div>
 
         <!-- Add payment slip -->
-        <div class="bg-white border rounded-2xl shadow p-4">
-            <div class="font-medium text-base mb-2">Add Payment slip</div>
+        <div id="slipBlock" class="bg-white border rounded-2xl shadow p-4">
+            <div class="flex items-center gap-2 mb-1">
+                <div class="font-medium text-base">Add Payment slip</div>
+                <div id="slipHint" class="text-xs text-gray-500"></div>
+            </div>
 
             <label class="flex items-center cursor-pointer space-x-2 py-2">
-                <input asp-for="Slip" type="file" accept="image/*" class="hidden" onchange="previewSlip(this)" />
+                <input id="slipInput" asp-for="Slip" type="file" accept="image/*" class="hidden" onchange="previewSlip(this)" />
                 <span class="flex items-center justify-center w-8 h-8 r05 border border-gray-400 text-2xl bg-gray-50 cursor-pointer">+</span>
                 <span class="text-gray-500 text-sm" id="slipFilename"></span>
             </label>
@@ -108,38 +97,62 @@
                 <img id="slipPreview" src="#" alt="Slip Preview"
                      style="display:none; max-width:220px; max-height:220px; border-radius:.5px; border:1px solid #ddd;" />
             </div>
+
+            <!-- client-side error -->
+            <div id="slipError" class="text-red-600 text-xs mt-2 hidden">กรุณาอัปโหลดสลิปเมื่อเลือกชำระแบบโอนเงิน</div>
+            <!-- server-side error -->
+            <span asp-validation-for="Slip" class="text-red-600 text-xs"></span>
         </div>
 
         <!-- SAVE Button -->
-        <button type="submit"
-                id="saveBtn"
-                class="w-full py-3 bg-black text-white r05 text-base font-bold mt-2 shadow-md">
-            SAVE
-        </button>
+        <button type="submit" id="saveBtn" class="w-full py-3 bg-black text-white r05 text-base font-bold mt-2 shadow-md">SAVE</button>
     </form>
 </div>
 
 @section Scripts {
     <script>
-        function previewSlip(input) {
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    const img = document.getElementById('slipPreview');
-                    img.src = e.target.result;
-                    img.style.display = 'block';
-                    document.getElementById('slipFilename').textContent = input.files[0].name;
-                };
-                reader.readAsDataURL(input.files[0]);
-            }
+        function previewSlip(input){
+          if(input.files && input.files[0]){
+            const reader=new FileReader();
+            reader.onload=function(e){
+              const img=document.getElementById('slipPreview');
+              img.src=e.target.result; img.style.display='block';
+              document.getElementById('slipFilename').textContent=input.files[0].name;
+            };
+            reader.readAsDataURL(input.files[0]);
+          }
         }
 
-        // กันกดซ้ำ
         const form = document.getElementById('paymentForm');
         const saveBtn = document.getElementById('saveBtn');
-        form.addEventListener('submit', () => {
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
+        const payTransfer = document.getElementById('payTransfer');
+        const payCash = document.getElementById('payCash');
+        const slipInput = document.getElementById('slipInput');
+        const slipError = document.getElementById('slipError');
+        const slipHint = document.getElementById('slipHint');
+        const slipReqStar = document.getElementById('slipReqStar');
+
+        function refreshSlipRequirement(){
+          const requireSlip = payTransfer.checked;
+          slipInput.required = requireSlip;
+          slipReqStar.style.display = requireSlip ? '' : 'none';
+          slipHint.textContent = requireSlip ? '(จำเป็นต้องแนบสลิป)' : '(ไม่จำเป็นเมื่อชำระเงินสด)';
+          if(!requireSlip){ slipError.classList.add('hidden'); }
+        }
+        payTransfer.addEventListener('change', refreshSlipRequirement);
+        payCash.addEventListener('change', refreshSlipRequirement);
+        refreshSlipRequirement(); // initial
+
+        // กันกดซ้ำ + ตรวจสลิปก่อนส่ง
+        form.addEventListener('submit', (e)=>{
+          if (payTransfer.checked && (!slipInput.files || slipInput.files.length === 0)) {
+            e.preventDefault();
+            slipError.classList.remove('hidden');
+            slipInput.focus();
+            return;
+          }
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
         });
     </script>
 }

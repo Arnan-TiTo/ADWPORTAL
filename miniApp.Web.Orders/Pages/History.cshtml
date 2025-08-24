@@ -8,18 +8,12 @@
     string Img(string? url, string folder = "products")
     {
         if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
-
         var u = url.Replace("\\", "/").Trim();
-
         if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            return u;
-
+            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return u;
         while (u.StartsWith("/")) u = u[1..];
-
         if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
         if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
-
         return $"/images/{folder}/{u}";
     }
 }
@@ -33,34 +27,75 @@
     </div>
 
     <!-- Search -->
-    <form method="get" class="relative">
+    <form method="get" class="relative mb-2">
         <input type="text" name="query" value="@Model.Query" placeholder="Search"
                class="w-full bg-gray-100 border border-gray-300 rounded-xl px-4 py-2 text-sm" />
+        <!-- keep filters -->
+        <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+        <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+        <input type="hidden" name="ShowFilter" value="@(Model.ShowFilter ? "true" : "false")" />
+        <input type="hidden" name="SortDir" value="@Model.SortDir" />
         <button type="submit"
                 class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
             🔍
         </button>
     </form>
 
-    <!-- Favorites / History Tab -->
-    <div class="flex justify-center items-center gap-2 my-2">
-        <a class="px-4 py-1 rounded-full border text-sm @(Model.ActiveTab == "Favorites" ? "bg-green-50 border-green-500 text-green-700" : "bg-white border-gray-300 text-gray-500")"
-           asp-page="/Orders/History" asp-route-tab="Favorites">♥ Favorites</a>
-        <a class="px-4 py-1 rounded-full border text-sm @(Model.ActiveTab == "History" ? "bg-green-50 border-green-500 text-green-700" : "bg-white border-gray-300 text-gray-500")"
-           asp-page="/Orders/History" asp-route-tab="History">⏲ History</a>
+    <!-- Button bar: Filter + Sort toggle -->
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+        <form method="get" class="ml-left">
+            <!-- คงค่าปัจจุบันทั้งหมด -->
+            <input type="hidden" name="query" value="@Model.Query" />
+            <input type="hidden" name="FromDate" value="@(Model.FromDate?.ToString("yyyy-MM-dd"))" />
+            <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
+            <!-- ส่งค่าถัดไป -->
+            <input type="hidden" name="SortDir" value="@Model.NextSortDir" />
+            <button type="submit" class="px-3 py-1 rounded border text-sm bg-gray-50">
+                Sort by date @((Model.SortDir?.Equals("asc", StringComparison.OrdinalIgnoreCase) ?? false) ? "▲" : "▼")
+            </button>
+        </form>
+
+        <button type="button" onclick="toggleFilter()"
+                class="px-3 py-1 rounded border text-sm bg-gray-50">
+            Filter
+        </button>
     </div>
 
-    <!-- My Order -->
-    <div>
-        <div class="flex items-center mb-2">
-            <span class="font-semibold text-sm flex-1">My Order</span>
-            <label class="flex items-center gap-1 text-sm">
-                <input type="checkbox" id="selectAll" onclick="toggleAll()" />
-                <span>Select all</span>
-            </label>
+    <!-- Filter (Toggle) -->
+    <form method="get" id="filterForm" class="mb-3 @(Model.ShowFilter ? "" : "hidden")">
+        <div class="grid grid-cols-2 gap-2">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">From</label>
+                <input id="fromDate" name="FromDate" type="text"
+                       value="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                       class="w-full bg-gray-100 border border-gray-300 rounded-xl px-2 py-1 text-sm" />
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">To</label>
+                <input id="toDate" name="ToDate" type="text"
+                       value="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                       class="w-full bg-gray-100 border border-gray-300 rounded-xl px-2 py-1 text-sm" />
+            </div>
         </div>
 
-        <div class="overflow-y-auto max-h-72 space-y-2 pr-2">
+        <input type="hidden" name="query" value="@Model.Query" />
+        <input type="hidden" name="ShowFilter" value="true" />
+        <input type="hidden" name="SortDir" value="@Model.SortDir" />
+
+        <div class="mt-2 flex gap-2">
+            <button type="submit" class="px-4 py-1 rounded bg-green-500 text-white w-full text-sm">
+                Apply Filter
+            </button>
+            <button type="button" onclick="clearFilter()"
+                    class="px-4 py-1 rounded border w-full text-sm">
+                Clear
+            </button>
+        </div>
+    </form>
+
+    <!-- List -->
+    <div>
+        <div class="overflow-x-auto h-full max-h-[65vh] space-y-2 pr-2">
             @if (Model.Orders != null && Model.Orders.Count > 0)
             {
                 @for (int orderIdx = 0; orderIdx < Model.Orders.Count; orderIdx++)
@@ -74,8 +109,6 @@
                         {
                             var item = order.Items[itemIdx];
                             <div class="flex items-center gap-2 border-b pb-2">
-                                <input type="checkbox" class="order-check"
-                                       data-order-idx="@orderIdx" data-item-idx="@itemIdx" />
                                 <img src="@Img(item.ImageUrl)"
                                      class="w-14 h-14 rounded bg-gray-100 border object-cover" />
                                 <div class="flex-1">
@@ -100,34 +133,28 @@
             }
         </div>
     </div>
-
-    <!-- Export Form -->
-    <form id="exportForm" method="post" asp-page-handler="ExportCsv">
-        <input type="hidden" id="selectedIds" name="selectedIds" />
-        <button type="button"
-                onclick="doExport()"
-                class="w-full border border-gray-400 rounded-lg bg-white text-black py-2 text-sm">
-            Export to csv.
-        </button>
-    </form>
 </div>
 
 @section Scripts {
     <script>
-        function toggleAll() {
-            const checked = document.getElementById('selectAll').checked;
-            document.querySelectorAll('.order-check').forEach(cb => cb.checked = checked);
+        function toggleFilter(){
+          const el = document.getElementById('filterForm');
+          if (!el) return; el.classList.toggle('hidden');
+        }
+        function clearFilter(){
+          if(window.fromFp){ fromFp.clear(); }
+          if(window.toFp){ toFp.clear(); }
         }
 
-        function doExport() {
-            const ids = [];
-            document.querySelectorAll('.order-check').forEach(cb => {
-                if (cb.checked) {
-                    ids.push(cb.dataset.orderIdx + '-' + cb.dataset.itemIdx);
-                }
-            });
-            document.getElementById('selectedIds').value = ids.join(',');
-            document.getElementById('exportForm').submit();
-        }
+        // Flatpickr dd-MM-yyyy (ส่งค่า yyyy-MM-dd)
+        if (window.flatpickr?.l10ns?.th) { flatpickr.localize(flatpickr.l10ns.th); }
+        window.fromFp = flatpickr("#fromDate", {
+          altInput:true, altFormat:"d-m-Y", dateFormat:"Y-m-d", allowInput:true,
+          maxDate:"today", onChange:(sel)=>{ if(sel && sel[0]) toFp.set("minDate", sel[0]); }
+        });
+        window.toFp = flatpickr("#toDate", {
+          altInput:true, altFormat:"d-m-Y", dateFormat:"Y-m-d", allowInput:true,
+          maxDate:"today", onChange:(sel)=>{ if(sel && sel[0]) fromFp.set("maxDate", sel[0]); }
+        });
     </script>
 }

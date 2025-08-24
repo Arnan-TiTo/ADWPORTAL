@@ -28,7 +28,10 @@ namespace miniApp.API.Models
         public string? Postcode { get; set; } = string.Empty;
         public string? ContractPerson { get; set; } = string.Empty;
         public string? ContractPhone { get; set; } = string.Empty;
-        public ICollection<UserLocation> UserLocations { get; set; } = new List<UserLocation>();
+        public int? isWarehouse { get; set; } = 0;
+        public int? isStorehouse { get; set; } = 0;
+        public int? isDamagehouse { get; set; } = 0;
 
+        public ICollection<UserLocation> UserLocations { get; set; } = new List<UserLocation>();
     }
 }

@@ -1,7 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Net.Http.Json;
-using System.Text.Json;
 
 namespace miniApp.Web.Pages
 {
@@ -20,6 +18,7 @@ namespace miniApp.Web.Pages
 
         // ===== View Data =====
         public int CurrentUserId { get; set; }
+        public bool IsCurrentStorehouse { get; set; }
         public List<LocationOption> Locations { get; set; } = new();
         public List<ProductDto> Products { get; set; } = new();
 
@@ -65,22 +64,25 @@ namespace miniApp.Web.Pages
                 return;
             }
 
-            // 3) อ่าน ProductStocks ของ location ที่เลือก → เอาค่า OnHand/Reserved/Damaged/Available
+            // 3) อ่าน ProductStocks ของ location ที่เลือก
             var stockMap = new Dictionary<int, StockRow>();
             HashSet<int> locProductIds = new();
             if (LocationId is int locId && locId > 0)
             {
                 var stocks = await client.GetFromJsonAsync<List<StockRow>>(
                     $"{apiBase}api/ProductStock/location/{locId}?userId={userId}") ?? new();
+
                 stockMap = stocks.ToDictionary(s => s.ProductId, s => s);
                 locProductIds = stocks.Select(s => s.ProductId).ToHashSet();
+
+                // ใช้ flag ของ Location จากผลลัพธ์นี้
+                IsCurrentStorehouse = stocks.FirstOrDefault()?.IsStoreHouse == 1;
             }
 
-            // 4) โหลดสินค้า → กรองเฉพาะที่มีในสต็อกของโลเคชันนี้ + ค้นหา + sort
+            // 4) โหลดสินค้า → กรองเฉพาะที่มีใน stock ของ location นี้ + ค้นหา + sort
             var all = await client.GetFromJsonAsync<List<ProductDto>>($"{apiBase}api/product") ?? new();
 
             IEnumerable<ProductDto> q = all;
-
             if (LocationId is int _l && _l > 0)
                 q = locProductIds.Count > 0 ? q.Where(p => locProductIds.Contains(p.Id))
                                             : Enumerable.Empty<ProductDto>();
@@ -106,18 +108,26 @@ namespace miniApp.Web.Pages
                 {
                     p.OnHand = s.QtyOnHand;
                     p.Available = s.QtyAvailable;
-                    p.Reserved = s.QtyReserved;
+                    p.Reserved = s.QtyReserved;   // เก็บไว้เป็นข้อมูลพื้นฐาน (ไม่แสดงหน้า UI)
                     p.Damaged = s.QtyDamaged;
+                    p.Receive = s.QtyReceive;    // แสดงแทน Reserved
                 }
                 else
                 {
-                    p.OnHand = p.Available = p.Reserved = p.Damaged = 0;
+                    p.OnHand = p.Available = p.Reserved = p.Damaged = p.Receive = 0;
                 }
             }
         }
 
         // ===== DTOs =====
-        public class LocationOption { public int Id { get; set; } public string Name { get; set; } = ""; }
+        public class LocationOption
+        {
+            public int Id { get; set; }
+            public string Name { get; set; } = "";
+            public int IsWareHouse { get; set; }    // optional: สำหรับอนาคต
+            public int IsStoreHouse { get; set; }   // optional: สำหรับอนาคต
+        }
+
         public class UserLocationDto { public int UserId { get; set; } public int LocationId { get; set; } }
 
         // ดึงจาก ProductStock/location
@@ -128,6 +138,9 @@ namespace miniApp.Web.Pages
             public int QtyReserved { get; set; }
             public int QtyDamaged { get; set; }
             public int QtyAvailable { get; set; }
+            public int QtyReceive { get; set; }     // NEW
+            public int IsWareHouse { get; set; }    // flag ของ location (มาจาก join)
+            public int IsStoreHouse { get; set; }   // flag ของ location (มาจาก join)
         }
 
         public class ProductDto
@@ -149,6 +162,7 @@ namespace miniApp.Web.Pages
             public int Available { get; set; }
             public int Reserved { get; set; }
             public int Damaged { get; set; }
+            public int Receive { get; set; }
         }
     }
 }

@@ -1,0 +1,120 @@
+﻿@page
+@model miniApp.WebOrders.Pages.ProductListModel
+@using System.Linq
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "รายการสินค้า";
+}
+
+<div class="max-w-md w-full mx-auto my-auto px-2 py-2">
+
+    <!-- เมนู -->
+    <div class="text-center space-y-1 mb-6">
+        <h1 class="text-2xl font-semibold tracking-tight">รายการสินค้า</h1>
+    </div>
+
+    <!-- ค้นหาแบบไม่รีเฟรชหน้า -->
+    <form id="searchForm" class="relative">
+        <input id="qInput" type="text" name="q" value="@Model.Query" placeholder="Search"
+               class="w-full bg-gray-100 border border-gray-300 rounded-xl px-4 py-2 text-sm" />
+        <button type="submit"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</button>
+    </form>
+
+    <!-- สถานที่ของผู้ใช้ (ไม่มี dropdown) -->
+    <div class="text-sm text-gray-600 px-1 py-3">
+        สถานที่: <span class="font-medium">@Model.LocationName</span>
+    </div>
+
+    <!-- ตารางรายการ -->
+    <div class="overflow-x-auto bg-white border rounded-2xl shadow-sm">
+        <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600">
+                <tr>
+                    <th class="text-left  px-4 py-3">สินค้า</th>
+                    <th class="text-left  px-4 py-3">SKU</th>
+                    <th class="text-right px-4 py-3">พร้อมขาย</th>
+                </tr>
+            </thead>
+            <tbody id="tbRows">
+                @* เรนเดอร์แถวด้วย JavaScript *@
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+  // ===== ข้อมูลทั้งหมดจาก Model (ไม่เรียก API) =====
+  const ALL = @Html.Raw(JsonSerializer.Serialize(
+    Model.Items.Select(r => new {
+      name      = r.Name,
+      sku       = r.Sku,
+      available = r.Available,
+      imageUrl  = r.ImageUrl
+    })
+  ));
+
+  // แปลงพาธรูปให้ใช้งานได้ (รองรับทั้ง URL และไฟล์ในโฟลเดอร์ /images/products)
+  function resolveImg(url, folder='products'){
+    if(!url) return `/images/${folder}/default.png`;
+    url = String(url).replace(/\\/g,'/').trim();
+    if(/^https?:\/\//i.test(url)) return url;
+    url = url.replace(/^\/+/, '');
+    if(/^images\//i.test(url)) return '/' + url;
+    if(new RegExp(`^${folder}/`,'i').test(url)) return `/images/${url}`;
+    return `/images/${folder}/${url}`;
+  }
+
+  // กรองข้อมูลแบบ %คำ% จาก name หรือ sku
+  function filterLocal(q){
+    q = (q||'').trim().toLowerCase();
+    if(!q) return ALL;
+    return ALL.filter(x =>
+      (x.name||'').toLowerCase().includes(q) ||
+      (x.sku ||'').toLowerCase().includes(q)
+    );
+  }
+
+  // เรนเดอร์แถวในตาราง
+  function renderRows(items){
+    const tb = document.getElementById('tbRows');
+    if(!items || !items.length){
+      tb.innerHTML = `<tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">ไม่มีข้อมูล</td></tr>`;
+      return;
+    }
+    tb.innerHTML = items.map(r=>{
+      const qtyCls = (r.available > 0) ? 'text-green-700' : 'text-gray-500';
+      return `
+        <tr class="border-t hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-3">
+              <img src="${resolveImg(r.imageUrl)}" alt="" class="w-10 h-10 rounded object-cover border" />
+              <div>${r.name || '-'}</div>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-gray-600">${r.sku || '-'}</td>
+          <td class="px-4 py-3 text-right font-semibold ${qtyCls}">${Number(r.available||0).toLocaleString()}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ค้นหาแบบไม่รีเฟรชหน้า
+  document.getElementById('searchForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const q = document.getElementById('qInput').value;
+    renderRows(filterLocal(q));
+  });
+
+  // พิมพ์แล้วกรองทันที
+  document.getElementById('qInput').addEventListener('input', (e)=>{
+    renderRows(filterLocal(e.target.value));
+  });
+
+  // โหลดครั้งแรก
+  document.addEventListener('DOMContentLoaded', ()=>{
+    renderRows(filterLocal(document.getElementById('qInput').value));
+  });
+</script>
+}

@@ -47,7 +47,14 @@ namespace miniApp.WebOrders.Pages
             var identity = new ClaimsIdentity(claims, "MyCookieAuth");
             var principal = new ClaimsPrincipal(identity);
 
-            await HttpContext.SignInAsync("MyCookieAuth", principal);
+            await HttpContext.SignInAsync(
+                "MyCookieAuth",
+                principal,
+                new AuthenticationProperties
+                {
+                    IsPersistent = false,      
+                    AllowRefresh = true        
+                });
 
             return new JsonResult(new { success = true });
         }

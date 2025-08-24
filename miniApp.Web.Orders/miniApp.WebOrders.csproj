@@ -29,10 +29,6 @@
 		<PackageReference Include="tailwindcss.cli.windows.x64" Version="3.4.0" />
 	</ItemGroup>
 
-	<ItemGroup>
-	  <Folder Include="wwwroot\js\" />
-	</ItemGroup>
-
   <Target Name="TailwindBuild" BeforeTargets="Build">
     <Exec Command="dotnet tailwindcss -i ./wwwroot/css/tailwind.input.css -o ./wwwroot/css/site.css --minify" />
   </Target>

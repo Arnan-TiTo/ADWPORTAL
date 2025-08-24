@@ -1,0 +1,388 @@
+﻿@page
+@model miniApp.Web.Pages.ReturnDamageModel
+@inject IHttpClientFactory HttpClientFactory
+
+@{
+    ViewData["Title"] = "บันทึกส่งคืนของเสีย";
+    var authToken = Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg1
+        ? cfg1["AUTHTOKEN"] ?? ""
+        : "";
+    var apiBaseUrl = Model?.HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) is IConfiguration cfg2
+        ? cfg2["APIBASEURL"] ?? ""
+        : "";
+}
+
+@functions {
+    string Img(string? url, string folder = "products")
+    {
+        if (string.IsNullOrWhiteSpace(url)) return $"/images/{folder}/default.png";
+        var u = url.Replace("\\", "/").Trim();
+        if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return u;
+        while (u.StartsWith("/")) u = u[1..];
+        if (u.StartsWith("images/", StringComparison.OrdinalIgnoreCase)) return "/" + u;
+        if (u.StartsWith($"{folder}/", StringComparison.OrdinalIgnoreCase)) return "/images/" + u;
+        return $"/images/{folder}/{u}";
+    }
+}
+
+<div class="max-w-md w-full mx-auto my-auto px-2 py-2">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-3">
+        <button onclick="history.back()" class="text-xl">←</button>
+        <h1 class="text-lg font-semibold text-center flex-1">บันทึกส่งคืนของเสีย</h1>
+    </div>
+
+    <!-- เลือก/แสดง Storehouse -->
+    <form method="get" class="grid grid-cols-1 gap-2 mb-3">
+        <div class="flex items-center gap-2">
+            <label class="text-sm text-gray-600 min-w-[90px]">  สถานที่</label>
+            <select name="locationId"
+                    class="flex-1 bg-white border rounded-xl px-3 py-2 text-sm"
+                    onchange="this.form.submit()"
+                    @(Model.Storehouses.Count == 0 ? "disabled" : "")>
+                @if (Model.Storehouses.Count == 0)
+                {
+                    <option value="">(ยังไม่ได้รับสิทธิ์ Storehouse)</option>
+                }
+                else
+                {
+                    @foreach (var l in Model.Storehouses)
+                    {
+                        <option value="@l.Id" selected="@(l.Id == Model.LocationId)">@l.Name</option>
+                    }
+                }
+            </select>
+        </div>
+    </form>
+
+    @if (Model.Storehouses.Count == 0)
+    {
+        <div class="bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-xl px-3 py-2 text-sm">
+            ยังไม่ได้รับสิทธิ์ Storehouse – ติดต่อผู้ดูแลระบบ
+        </div>
+    }
+    else
+    {
+        <!-- เลือกสินค้า (เฉพาะที่มีของเสียในสาขานี้) -->
+        <div class="border rounded-2xl p-3 mb-3 bg-white shadow-sm">
+            <div class="text-sm font-semibold mb-2">เพิ่มสินค้าที่จะส่งคืน (ของเสีย)</div>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <select id="ddlProduct" class="sm:col-span-2 bg-white border rounded-xl px-3 py-2 text-sm">
+                    <option value="">-- เลือกสินค้า --</option>
+                    @foreach (var p in Model.ProductChoices)
+                    {
+                        <option value="@p.ProductId"
+                                data-name="@p.Name"
+                                data-sku="@p.Sku"
+                                data-dm="@p.QtyDamaged"
+                                data-oh="@p.QtyOnHand">
+                            @p.Name (@p.Sku) • ของเสีย @p.QtyDamaged • คงเหลือ @p.QtyOnHand
+                        </option>
+                    }
+                </select>
+                <button type="button" onclick="addItem()" class="bg-blue-600 text-white rounded-xl px-4 py-2 text-sm">เพิ่ม</button>
+            </div>
+            <div class="text-[11px] text-gray-500 mt-1">
+                * เลือกได้เฉพาะสินค้าที่ “มีของเสีย (&gt;0)” ที่อยู่ในโกดัง
+            </div>
+        </div>
+
+        <!-- ตะกร้ารายการที่จะส่งคืน -->
+        <div class="border rounded-2xl p-3 mb-3 bg-white shadow-sm">
+            <div class="text-sm font-semibold mb-2">รายการที่จะส่งคืน</div>
+            <div id="emptyCart" class="text-xs text-gray-500">ยังไม่มีรายการ</div>
+            <div id="cartList" class="space-y-2"></div>
+
+            <div class="mt-3 flex gap-2">
+                <button type="button" onclick="clearCart()" class="flex-1 bg-gray-100 border rounded-xl px-4 py-2 text-sm">ล้างรายการ</button>
+                <button type="button" onclick="submitAll()" class="flex-1 bg-green-600 text-white rounded-xl px-4 py-2 text-sm">บันทึกส่งคืนทั้งหมด</button>
+            </div>
+        </div>
+
+        <!-- ผลการบันทึก -->
+        <div id="resultPanel" class="hidden border rounded-2xl p-3 bg-white shadow-sm">
+            <div class="text-sm font-semibold mb-2">ผลการบันทึกส่งคืน</div>
+            <div id="resultList" class="text-sm space-y-2"></div>
+        </div>
+
+        <!-- ประวัติการส่งคืนล่าสุด -->
+        <div id="historyPanel" class="border rounded-2xl p-3 bg-white shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+                <div class="text-sm font-semibold">ประวัติการส่งคืน</div>
+                <button type="button" class="text-xs px-3 py-1 border rounded-lg" onclick="loadHistory()">รีเฟรช</button>
+            </div>
+            <div class="text-xs text-gray-500 mb-2">แสดงเอกสารสถานะ PENDING/CONFIRMED ของโกดัง</div>
+            <div id="historyEmpty" class="text-xs text-gray-500">ไม่มีข้อมูล</div>
+            <div id="historyList" class="space-y-2"></div>
+        </div>
+    }
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed top-5 right-5 z-50 hidden">
+    <div id="toastContent" class="px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium"></div>
+</div>
+
+<!-- Confirm Toast (no-scroll while open) -->
+<div id="confirmToast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 hidden">
+    <div class="bg-gray-900 text-white rounded-xl px-4 py-3 shadow-lg max-w-sm w-[90vw] sm:w-auto">
+        <div id="confirmMsg" class="text-sm mb-3"></div>
+        <div class="flex justify-end gap-2">
+            <button id="confirmNo" type="button" class="px-3 py-1 rounded-lg bg-gray-600">ยกเลิก</button>
+            <button id="confirmYes" type="button" class="px-3 py-1 rounded-lg bg-green-600">ยืนยัน</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const APIBASE = '@apiBaseUrl';
+        const TOKEN   = '@authToken';
+        const LOC_ID  = @Model.LocationId.GetValueOrDefault(0);
+        const USER_ID = @Model.CurrentUserId;
+
+        // แผนที่สินค้า (id -> {id,name,sku,dm,oh})
+        const PRODUCTS = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                Model.ProductChoices.ToDictionary(
+                    p => p.ProductId.ToString(),
+                    p => new { id = p.ProductId, name = p.Name ?? "", sku = p.Sku ?? "", dm = p.QtyDamaged, oh = p.QtyOnHand }
+                )
+            ));
+
+    // ---------- Utils ----------
+    function fmtDate(iso){
+      if(!iso) return "-";
+      const d = new Date(iso);
+      const pad = (n)=>n.toString().padStart(2,'0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    function showToast(message, variant = "success") {
+      const toast = document.getElementById("toast");
+      const content = document.getElementById("toastContent");
+      const base = "px-4 py-2 rounded-xl shadow-lg text-white text-sm font-medium";
+      const COLORS = { success:"bg-green-600", error:"bg-red-600", warn:"bg-yellow-500", info:"bg-blue-600" };
+      content.className = `${base} ${COLORS[variant] || "bg-gray-800"}`;
+      content.textContent = message;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
+    }
+    let __scrollY = 0;
+    function freezeScroll(){ __scrollY = window.pageYOffset||0; document.body.style.position='fixed'; document.body.style.top=`-${__scrollY}px`; document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%'; }
+    function unfreezeScroll(){ document.body.style.position=''; document.body.style.top=''; document.body.style.left=''; document.body.style.right=''; document.body.style.width=''; window.scrollTo(0,__scrollY||0); }
+    function confirmToast(message){
+      return new Promise((resolve)=>{
+        const box = document.getElementById('confirmToast');
+        const msg = document.getElementById('confirmMsg');
+        const yes = document.getElementById('confirmYes');
+        const no  = document.getElementById('confirmNo');
+        msg.textContent = message;
+        const cleanup = ()=>{ yes.onclick=null; no.onclick=null; box.classList.add('hidden'); unfreezeScroll(); };
+        yes.onclick=()=>{ cleanup(); resolve(true); };
+        no.onclick =()=>{ cleanup(); resolve(false); };
+        document.activeElement && document.activeElement.blur && document.activeElement.blur();
+        freezeScroll();
+        box.classList.remove('hidden');
+      });
+    }
+
+        // ---------- Cart ----------
+        let cart = []; // {id, name, sku, dmAvail, ohAvail, qty, note}
+
+        window.addItem = function(){
+          const ddl = document.getElementById('ddlProduct');
+          const pid = parseInt(ddl.value || "0");
+          if (!pid){ showToast("กรุณาเลือกสินค้า", "warn"); return; }
+          if (cart.some(x => x.id === pid)){ showToast("รายการนี้ถูกเพิ่มแล้ว", "info"); return; }
+          const info = PRODUCTS[pid];
+          if (!info){ showToast("ไม่พบข้อมูลสินค้า", "error"); return; }
+          const dmAvail = parseInt(info.dm || 0);
+          const ohAvail = parseInt(info.oh || 0);
+          if (dmAvail <= 0){ showToast("สินค้านี้ไม่มีของเสียคงค้าง", "warn"); return; }
+          cart.push({ id: pid, name: info.name, sku: info.sku, dmAvail, ohAvail, qty: Math.min(dmAvail, ohAvail), note: "" });
+          renderCart(); ddl.value = "";
+        };
+        window.removeItem = function(pid){ cart = cart.filter(x => x.id !== pid); renderCart(); };
+        window.clearCart   = function(){ cart = []; renderCart(); };
+        window.updateItemQty  = function(pid, val){ const it = cart.find(x => x.id===pid); if(!it) return; let v = parseInt(val||"0"); if(isNaN(v)||v<0) v=0; const max=Math.min(it.dmAvail,it.ohAvail); it.qty = Math.min(v,max); };
+        window.updateItemNote = function(pid, val){ const it = cart.find(x => x.id===pid); if(!it) return; it.note = (val||"").trim(); };
+
+        window.renderCart = function(){
+          const wrap = document.getElementById('cartList');
+          const empty= document.getElementById('emptyCart');
+          wrap.innerHTML = "";
+          if (cart.length===0){ empty.classList.remove('hidden'); return; }
+          empty.classList.add('hidden');
+          for (const it of cart){
+            const maxAllowed = Math.min(it.dmAvail, it.ohAvail);
+            const row = document.createElement('div');
+            row.className = "border rounded-xl p-3";
+            row.innerHTML = `
+              <div class="flex justify-between items-center">
+                <div class="text-sm font-medium">${it.name} <span class="text-xs text-gray-500">(${it.sku || "-"})</span></div>
+                <button type="button" class="text-rose-600 text-xs" onclick="removeItem(${it.id})">ลบ</button>
+              </div>
+              <div class="grid grid-cols-3 gap-2 mt-2 text-xs text-gray-600">
+                <div>ของเสียคงค้าง: <b>${it.dmAvail}</b></div>
+                <div>คงเหลือ: <b>${it.ohAvail}</b></div>
+                <div>ส่งคืนสูงสุด: <b>${maxAllowed}</b></div>
+              </div>
+              <div class="grid grid-cols-3 gap-2 mt-2">
+                <input type="number" min="0" step="1" value="${it.qty}" class="border rounded-xl px-3 py-2 text-sm" oninput="updateItemQty(${it.id}, this.value)" />
+                <input type="text" placeholder="หมายเหตุ (ถ้ามี)" value="${it.note || ""}" class="col-span-2 border rounded-xl px-3 py-2 text-sm" oninput="updateItemNote(${it.id}, this.value)" />
+              </div>`;
+            wrap.appendChild(row);
+          }
+        };
+
+        // ---------- เรียก API เอกสาร ----------
+        async function apiRequest(url, body){
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+            body: JSON.stringify(body)
+          });
+          return resp;
+        }
+
+        async function getDocDetail(id){
+          // ดึงข้อมูลประวัติล่าสุด
+          try{
+            const resp = await fetch(APIBASE + `api/ProductStock/damage-return/${id}`, {
+              headers: { 'Authorization': 'Bearer ' + TOKEN }
+            });
+            if (resp.ok) return await resp.json();
+          }catch(_){}
+          return null; // fallback ใช้ข้อมูล local
+        }
+
+        async function loadHistory(){
+          const listEl = document.getElementById('historyList');
+          const emptyEl= document.getElementById('historyEmpty');
+          listEl.innerHTML = "";
+          emptyEl.classList.add('hidden');
+          try{
+            // ดึงข้อมูลประวัติทั้งหมด
+            const resp = await fetch(APIBASE + `api/ProductStock/damage-return/list?fromLocationId=${LOC_ID}&top=50`, {
+              headers: { 'Authorization': 'Bearer ' + TOKEN }
+            });
+            if (!resp.ok){ emptyEl.classList.remove('hidden'); return; }
+            const arr = await resp.json(); //[{id,docNo,productId,qty,note,status,createdAt,...}]
+            if (!arr || arr.length===0){ emptyEl.classList.remove('hidden'); return; }
+            for (const d of arr){
+              const prod = PRODUCTS[d.productId] || {};
+              const badge = d.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' : (d.status==='PENDING'?'bg-yellow-100 text-yellow-700':'bg-gray-100 text-gray-700');
+              const item = document.createElement('div');
+              item.className = "border rounded-xl p-3";
+              item.innerHTML = `
+                <div class="flex justify-between items-center">
+                  <div class="text-sm font-semibold">Doc: ${d.docNo || d.id}</div>
+                  <span class="text-[10px] px-2 py-1 rounded ${badge}">${d.status}</span>
+                </div>
+                <div class="mt-1 text-xs text-gray-600">${fmtDate(d.createdAt)}</div>
+                <div class="mt-2 text-sm">สินค้า: ${prod.name || ('#'+d.productId)} (${prod.sku||'-'})</div>
+                <div class="text-sm">จำนวน: <b>${d.qty}</b></div>
+                <div class="text-xs text-gray-600">หมายเหตุ: ${d.note || '-'}</div>
+              `;
+              listEl.appendChild(item);
+            }
+          }catch(_){
+            emptyEl.classList.remove('hidden');
+          }
+        }
+
+        // ---------- Save All (สร้างเอกสาร → ยืนยัน → แสดงผลจากเอกสาร) ----------
+        window.submitAll = async function(){
+          if (cart.length === 0){ showToast("ยังไม่มีรายการที่จะบันทึก", "warn"); return; }
+          for (const it of cart){
+            const maxAllowed = Math.min(it.dmAvail, it.ohAvail);
+            if (!it.qty || it.qty <= 0){ showToast(`กรุณาใส่จำนวนส่งคืนของ '${it.name}'`, "warn"); return; }
+            if (it.qty > maxAllowed){ showToast(`จำนวน '${it.name}' เกินของเสีย/คงเหลือที่อนุญาต`, "warn"); return; }
+          }
+
+          const ok = await confirmToast("ยืนยันบันทึกส่งคืนของเสียทั้งหมด?");
+          if (!ok) return;
+
+          showToast("กำลังบันทึก...", "info");
+
+          const resultPanel = document.getElementById('resultPanel');
+          const resultList  = document.getElementById('resultList');
+          const results = [];
+
+          for (const it of cart){
+            const reqBody = {
+              ProductId: it.id,
+              FromLocationId: LOC_ID,
+              Qty: it.qty,
+              PerformedByUserId: USER_ID,
+              Note: it.note || ""
+            };
+
+            try{
+              const r1 = await fetch(APIBASE + 'api/ProductStock/damage-return/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+                body: JSON.stringify(reqBody)
+              });
+
+              if (!r1.ok){
+                const t = await r1.text();
+                results.push({ ok:false, name:it.name, sku:it.sku, err: t || 'สร้างเอกสารไม่สำเร็จ' });
+                continue;
+              }
+
+              const created = await r1.json(); // {id,docNo,productId,qty,status,createdAt,...}
+
+              it.dmAvail -= it.qty;
+              it.ohAvail -= it.qty;
+
+              results.push({
+                ok:true,
+                id: created.id,
+                docNo: created.docNo,
+                createdAt: created.createdAt,
+                status: created.status, // PENDING
+                productId: created.productId,
+                productName: PRODUCTS[created.productId]?.name || it.name,
+                sku: PRODUCTS[created.productId]?.sku || it.sku,
+                qty: created.qty,
+                note: created.note || it.note || ""
+              });
+
+            }catch(e){
+              results.push({ ok:false, name:it.name, sku:it.sku, err: e?.message || 'สร้างเอกสารไม่สำเร็จ' });
+            }
+          }
+
+          // แสดงผลลัพธ์
+          resultList.innerHTML = results.map(r => {
+            if (!r.ok){
+              return `<div class="border border-rose-200 bg-rose-50 rounded-xl p-3 text-rose-700">
+                        ${r.name || '-'} — ${r.err || ''}
+                      </div>`;
+            }
+            return `<div class="border border-yellow-200 bg-yellow-50 rounded-xl p-3">
+                      <div class="flex items-center justify-between">
+                        <div class="text-sm font-semibold">สร้างเอกสารสำเร็จ • Doc: ${r.docNo || r.id}</div>
+                        <span class="text-[10px] px-2 py-1 rounded bg-yellow-100 text-yellow-700">${r.status || 'PENDING'}</span>
+                      </div>
+                      <div class="text-xs text-gray-600 mt-1">${fmtDate(r.createdAt)}</div>
+                      <div class="text-sm mt-2">สินค้า: ${r.productName || ('#'+r.productId)} (${r.sku || '-'})</div>
+                      <div class="text-sm">จำนวน: <b>${r.qty}</b></div>
+                      <div class="text-xs text-gray-600">หมายเหตุ: ${r.note || '-'}</div>
+                    </div>`;
+          }).join("");
+          resultPanel.classList.remove('hidden');
+
+          // ล้างเฉพาะที่สำเร็จ
+          const okIds = new Set(results.filter(x => x.ok).map(x => x.productId));
+          cart = cart.filter(x => !okIds.has(x.id));
+          renderCart();
+
+          // โหลดประวัติ
+          loadHistory();
+
+          showToast("บันทึกเสร็จสิ้น", "success");
+        };
+    </script>
+  }

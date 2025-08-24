@@ -4,6 +4,9 @@ namespace miniApp.WebOrders.Models
 {
     public class OrderDto
     {
+
+        public string? OrderNo { get; set; }
+        public DateTime OrderDate { get; set; }
         public string CustomerName { get; set; } = "";
         public string Gender { get; set; } = "";
         public DateTime? BirthDate { get; set; }
@@ -78,12 +81,12 @@ namespace miniApp.WebOrders.Models
 
     public class OrderItemHistoryDto
     {
+        public int LocationId { get; set; }
         public int ProductId { get; set; }
         public string? ProductName { get; set; }
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal Discount { get; set; }
-        public decimal Total { get; set; }
         public string? ImageUrl { get; set; }
     }
 

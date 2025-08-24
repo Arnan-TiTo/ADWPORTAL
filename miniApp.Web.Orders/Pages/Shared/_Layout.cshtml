@@ -18,6 +18,8 @@
     @* <script src="https://cdn.tailwindcss.com"></script> *@
     <link rel="stylesheet" href="/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="/css/tailwind.input.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="/css/flatpickr.min.css">
+    <script src="~/js/flatpickr.js"></script>
 
     <script>
         function toggleSidebar() {
@@ -34,8 +36,12 @@
             }
         }
     </script>
+
+
+
 </head>
-<body class="h-full min-h-screen bg-white text-black">
+@* <body class="h-full min-h-screen bg-white text-black"> *@
+<body class="h-full min-h-[100svh] bg-white text-black">
 
     @if (isAuthenticated)
     {
@@ -71,25 +77,71 @@
                     </div>
                 </div>
 
+                <script>
+                    (function () {
+                      const KEY = '__open_tabs_ids__';
+                      // gen tab id ต่อแท็บ
+                      const myId = sessionStorage.getItem('TAB_ID') ||
+                                   (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+                      sessionStorage.setItem('TAB_ID', myId);
+
+                      function getSet() {
+                        const raw = localStorage.getItem(KEY) || '';
+                        return new Set(raw.split(',').filter(Boolean));
+                      }
+                      function saveSet(set) {
+                        localStorage.setItem(KEY, Array.from(set).join(','));
+                      }
+
+                      // mark opened
+                      const open = getSet(); open.add(myId); saveSet(open);
+
+                      function onClosing() {
+                        const s = getSet(); s.delete(myId); saveSet(s);
+
+                        // หน่วงให้หน้าใหม่มีเวลาบันทึกไอดี
+                        setTimeout(() => {
+                          const remain = (localStorage.getItem(KEY) || '').split(',').filter(Boolean).length;
+                          if (remain === 0) {
+                            try {
+                              const blob = new Blob([], { type: 'application/octet-stream' });
+                              navigator.sendBeacon('/session/close', blob);
+                            } catch {
+                              fetch('/session/close', { method: 'POST', keepalive: true, credentials: 'include' });
+                            }
+                          }
+                        }, 700);
+                      }
+
+                      window.addEventListener('pagehide', (ev) => { if (!ev.persisted) onClosing(); });
+                    })();
+                </script>
+
+
                 <!-- Content and Footer -->
                 <div class="flex flex-col flex-1 relative">
                     <!-- Page Content -->
-                    <main class="flex-1 px-0 py-8 min-h-screen pb-14 overflow-y-auto w-full">
+                    @* <main class="flex-1 px-0 py-8 pb-[88px] overflow-y-auto w-full min-h-0 overscroll-contain"> *@
+                    <main class="flex-1 px-0 py-2 overflow-y-auto w-full min-h-0 overscroll-contain"
+                          + style="padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));">
                         @RenderBody()
                     </main>
 
                     <!-- Footer -->
-                    <footer class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-md">
+                    <footer class="fixed left-0 right-0 bg-white border-t shadow-md z-50 h-16"
+                            + style="bottom: env(safe-area-inset-bottom, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);">
                         @await Html.PartialAsync("_FooterMenu")
                     </footer>
                 </div>
             </div>
         </div>
+
+
     }
     else
     {
         <!-- Layout สำหรับหน้า Login/Register -->
-        <main class="flex-1 px-0 py-8 min-h-screen pb-14 overflow-y-auto w-full">
+        <main class="flex-1 px-0 py-8 pb-[88px] overflow-y-auto w-full min-h-0 overscroll-contain">
             @RenderBody()
         </main>
     }
@@ -97,3 +149,4 @@
     @RenderSection("Scripts", required: false)
 </body>
 </html>
+
