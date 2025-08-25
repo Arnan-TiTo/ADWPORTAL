@@ -25,7 +25,7 @@ namespace miniApp.API.Models
         public int Qty { get; set; }
 
         [Required, MaxLength(20)]
-        public string Status { get; set; } = "PENDING"; // PENDING | CONFIRMED | CANCELLED
+        public string Status { get; set; } = "PENDING"; // PENDING | CONFIRMED | OVERDUE
 
         [MaxLength(500)]
         public string? Note { get; set; }
@@ -35,12 +35,21 @@ namespace miniApp.API.Models
         public DateTime CreatedAt { get; set; }
 
         public int? ConfirmedByUserId { get; set; }
+
         public DateTime? ConfirmedAt { get; set; }
+        
+        public int QtyReceive { get; set; }
+        
+        public string? NoteReceive { get; set; }
 
         public Product? Product { get; set; }
+        
         public Location? FromLocation { get; set; }
+        
         public Location? ToLocation { get; set; }
+        
         public User? CreatedByUser { get; set; }
+        
         public User? ConfirmedByUser { get; set; }
     }
 }

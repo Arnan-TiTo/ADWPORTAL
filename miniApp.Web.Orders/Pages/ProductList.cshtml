@@ -22,7 +22,6 @@
                 class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</button>
     </form>
 
-    <!-- สถานที่ของผู้ใช้ (ไม่มี dropdown) -->
     <div class="text-sm text-gray-600 px-1 py-3">
         สถานที่: <span class="font-medium">@Model.LocationName</span>
     </div>
@@ -46,7 +45,7 @@
 
 @section Scripts {
 <script>
-  // ===== ข้อมูลทั้งหมดจาก Model (ไม่เรียก API) =====
+  // ===== ข้อมูลทั้งหมดจาก Model ไม่เรียก API ใหม่ =====
   const ALL = @Html.Raw(JsonSerializer.Serialize(
     Model.Items.Select(r => new {
       name      = r.Name,

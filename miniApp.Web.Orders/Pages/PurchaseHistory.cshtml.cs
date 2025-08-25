@@ -57,7 +57,7 @@ namespace miniApp.WebOrders.Pages
                 ("CustomerName", "asc") => data.OrderBy(o => o.CustomerName).ToList(),
                 ("CustomerName", "desc") => data.OrderByDescending(o => o.CustomerName).ToList(),
                 ("OrderDate", "asc") => data.OrderBy(o => o.OrderDate).ToList(),
-                _ => data.OrderByDescending(o => o.OrderDate).ToList(),
+                ("OrderDate", "desc") => data.OrderByDescending(o => o.OrderDate).ToList(),
             };
 
             Orders = data;
@@ -94,7 +94,6 @@ namespace miniApp.WebOrders.Pages
                 return new();
             }
 
-            // map → VM
             var result = (raw ?? new()).Select(o => new OrderHistoryViewDto
             {
                 OrderNo = o.OrderNo,
@@ -116,8 +115,5 @@ namespace miniApp.WebOrders.Pages
 
             return result;
         }
-
-        // ===== DTOs =====
-
     }
 }

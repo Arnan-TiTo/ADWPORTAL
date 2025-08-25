@@ -1,0 +1,4 @@
+BEGIN TRAN;
+UPDATE dbo.OrderHd
+   SET OrderDate = DATEADD(HOUR, 7, OrderDate)
+COMMIT;

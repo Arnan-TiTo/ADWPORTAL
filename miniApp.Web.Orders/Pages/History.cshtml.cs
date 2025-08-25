@@ -82,9 +82,6 @@ namespace miniApp.WebOrders.Pages
             }
             catch { return new(); }
         }
-
-
-
         private sealed class UserLocDto
         {
             public int UserId { get; set; }

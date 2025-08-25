@@ -97,7 +97,7 @@ else
                         Available @SortIcon(nameof(StockRow.QtyAvailable))
                     </th>
 
-                    <th class="text-end" style="width:380px;">Action</th>
+                    <th class="text-end" style="width:520px;">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -127,12 +127,23 @@ else
                         <td class="text-end fw-bold">@r.QtyAvailable</td>
                         <td class="text-end">
                             <div class="btn-group btn-group-sm">
+
                                 <button class="btn btn-outline-success" title="รับเข้า (+)" @onclick="() => OpenAdjust(r, +1)">+ In</button>
-                                <button class="btn btn-outline-warning" title="ตัดออก (−)" @onclick="() => OpenAdjust(r, -1)">− Out</button>
-                                <button class="btn btn-outline-primary" title="จองสินค้า" @onclick="() => OpenReserve(r)">Reserve</button>
-                                <button class="btn btn-outline-secondary" title="คืนจอง" @onclick="() => OpenRelease(r)">Release</button>
-                                <button class="btn btn-outline-danger" title="ชำรุด" @onclick="() => OpenDamage(r)">Damage</button>
-                                <button class="btn btn-outline-dark" title="โอนย้าย" @onclick="() => OpenTransfer(r)">Move</button>
+                                <button class="btn btn-outline-dark" title="โอนย้าย" @onclick="() => OpenTransfer(r)">Transfer</button>
+
+                                @if (locationIsWarehouse)
+                                {
+                                    <button class="btn btn-outline-danger" title="รับคืนของเสียเข้าคลังใหญ่ (ทยอยรับได้)"
+                                            @onclick="() => OpenReceiveDamage(r)">
+                                        Receive Damage
+                                    </button>
+
+                                    <button class="btn btn-outline-warning" title="โอนของเสียไป Damagehouse"
+                                            @onclick="() => OpenTransferDamage(r)">
+                                        Transfer Damage
+                                    </button>
+                                }
+
                                 <button class="btn btn-outline-info" title="ประวัติ" @onclick="() => OpenHistory(r)">History</button>
                             </div>
                         </td>
@@ -171,6 +182,7 @@ else
     }
 }
 
+@* ========== Modal: Adjust In (Storehouse only) ========== *@
 @if (showAdjust)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.3);">
@@ -178,7 +190,7 @@ else
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        @(adjustSign > 0 ? "รับเข้า (+)" : "ตัดออก (−)") — @selectedRow?.Name (@selectedRow?.Sku)
+                        รับเข้า (+) — @selectedRow?.Name (@selectedRow?.Sku)
                     </h5>
                     <button type="button" class="btn-close" @onclick="@(() => CloseAdjust())"></button>
                 </div>
@@ -187,12 +199,6 @@ else
                         <label class="form-label">Quantity</label>
                         <input type="number" class="form-control" min="1" step="1"
                                @bind="adjustQty" @bind:event="oninput" />
-                        @if (adjustSign < 0)
-                        {
-                            <small class="text-muted">
-                                Max: @selectedRow?.QtyAvailable (จะไม่ให้ติดลบ)
-                            </small>
-                        }
                     </div>
                     <div class="mb-0">
                         <label class="form-label">Note (optional)</label>
@@ -210,102 +216,7 @@ else
     </div>
 }
 
-@if (showReserve)
-{
-    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.3);">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Reserve — @selectedRow?.Name (@selectedRow?.Sku)</h5>
-                    <button type="button" class="btn-close" @onclick="@(() => CloseReserve())"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-2">
-                        <label class="form-label">Quantity</label>
-                        <input type="number" class="form-control" min="1" step="1"
-                               @bind="reserveQty" @bind:event="oninput" />
-                        <small class="text-muted">Max: @selectedRow?.QtyAvailable</small>
-                    </div>
-                    <div class="mb-0">
-                        <label class="form-label">Note (optional)</label>
-                        <textarea class="form-control" rows="2" @bind="reserveNote"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="@(() => CloseReserve())">Cancel</button>
-                    <button class="btn btn-primary" @onclick="ConfirmReserve" disabled="@saving">
-                        @(saving ? "Saving..." : "Save")
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
-
-@if (showRelease)
-{
-    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.3);">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Release — @selectedRow?.Name (@selectedRow?.Sku)</h5>
-                    <button type="button" class="btn-close" @onclick="@(() => CloseRelease())"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-2">
-                        <label class="form-label">Quantity</label>
-                        <input type="number" class="form-control" min="1" step="1"
-                               @bind="releaseQty" @bind:event="oninput" />
-                        <small class="text-muted">Max: @selectedRow?.QtyReserved</small>
-                    </div>
-                    <div class="mb-0">
-                        <label class="form-label">Note (optional)</label>
-                        <textarea class="form-control" rows="2" @bind="releaseNote"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="@(() => CloseRelease())">Cancel</button>
-                    <button class="btn btn-primary" @onclick="ConfirmRelease" disabled="@saving">
-                        @(saving ? "Saving..." : "Save")
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
-
-@if (showDamage)
-{
-    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.3);">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Damage — @selectedRow?.Name (@selectedRow?.Sku)</h5>
-                    <button type="button" class="btn-close" @onclick="(MouseEventArgs e) => CloseDamage()"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-2">
-                        <label class="form-label">Quantity</label>
-                        <input type="number" class="form-control" min="1" step="1"
-                               @bind="damageQty" @bind:event="oninput" />
-                        <small class="text-muted">Max: @selectedRow?.QtyAvailable</small>
-                    </div>
-                    <div class="mb-0">
-                        <label class="form-label">Note (optional)</label>
-                        <textarea class="form-control" rows="2" @bind="damageNote"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" @onclick="@(() => CloseDamage())">Cancel</button>
-                    <button class="btn btn-primary" @onclick="ConfirmDamage" disabled="@saving">
-                        @(saving ? "Saving..." : "Save")
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
-
+@* ========== Modal: Transfer (ทั่วไป) ========== *@
 @if (showTransfer)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.3);">
@@ -352,6 +263,126 @@ else
     </div>
 }
 
+@* ========== Modal: Receive Damage (Warehouse only, ทยอยรับได้) ========== *@
+@if (showReceiveDamage)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.3);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Receive Damage — @selectedRow?.Name (@selectedRow?.Sku)</h5>
+                    <button type="button" class="btn-close" @onclick="@(() => showReceiveDamage = false)"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label mb-0">Damage Return Document (Status ≠ CONFIRMED)</label>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="ReloadPendingDamageDocs" disabled="@pendingDamageLoading">
+                                @(pendingDamageLoading ? "Loading..." : "Reload")
+                            </button>
+                        </div>
+                        <select class="form-select mt-1" @bind="SelectedPendingDamageId">
+                            <option value="">-- เลือกเอกสาร --</option>
+                            @foreach (var o in pendingDamageOptions)
+                            {
+                                <option value="@o.Id">@o.Label</option>
+                            }
+                        </select>
+                        <small class="text-muted">จะแสดงเอกสารที่ยังไม่ Confirm เท่านั้น</small>
+                    </div>
+
+                    @if (receiveDamageDoc != null)
+                    {
+                        var outstanding = Math.Max(0, receiveDamageDoc.Qty - receiveDamageDoc.QtyReceive);
+                        <div class="border rounded p-2 mb-2">
+                            <div><strong>DocNo:</strong> @receiveDamageDoc.DocNo</div>
+                            <div><strong>Create date:</strong> @receiveDamageDoc.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+                            <div><strong>Create by:</strong> @(receiveDamageDoc.CreatedByUserId?.ToString() ?? "-")</div>
+                            <div><strong>Return Damage From:</strong> @FromLocationName(receiveDamageDoc.FromLocationId)</div>
+                            <div><strong>Product:</strong> @receiveDamageDoc.ProductName (@receiveDamageDoc.Sku)</div>
+                            <div><strong>Qty (ในเอกสาร):</strong> @receiveDamageDoc.Qty</div>
+                            <div><strong>QtyReceive (รวมแล้ว):</strong> @receiveDamageDoc.QtyReceive</div>
+                            <div><strong>ค้างรับ:</strong> @outstanding</div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label">จำนวนที่รับจริง (ครั้งนี้)</label>
+                            <input type="number" class="form-control" min="1" step="1"
+                                   @bind="receiveQtyThisTime" @bind:event="oninput" />
+                            <small class="text-muted">
+                                ต้องไม่เกินค้างรับ @(receiveDamageDoc is null ? 0 : (receiveDamageDoc.Qty - receiveDamageDoc.QtyReceive))
+                            </small>
+                        </div>
+                    }
+
+                    <div class="mb-0">
+                        <label class="form-label">Note (optional)</label>
+                        <textarea class="form-control" rows="2" @bind="receiveDamageNote"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="@(() => showReceiveDamage = false)">Cancel</button>
+                    <button type="button"
+                            class="btn btn-primary"
+                            @onclick="ConfirmReceiveDamage"
+                            disabled="@(saving || !CanConfirmReceive)">
+                        @(saving ? "Saving..." : "Confirm")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ========== Modal: Transfer Damage (Warehouse -> Damagehouse) ========== *@
+@if (showTransferDamage)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.3);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Transfer Damage — @selectedRow?.Name (@selectedRow?.Sku)</h5>
+                    <button type="button" class="btn-close" @onclick="@(() => showTransferDamage = false)"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">From (Warehouse)</label>
+                        <input class="form-control" value="@CurrentLocationName()" disabled />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">To Damagehouse</label>
+                        <select class="form-select" @bind="transferDamageToId">
+                            <option value="">-- Select --</option>
+                            @foreach (var l in locations.Where(x => x.Id != selectedLocationId))
+                            {
+                                <option value="@l.Id">@l.Name</option>
+                            }
+                        </select>
+                        <small class="text-muted">ปลายทางต้องเป็นคลัง Damagehouse (ระบบจะตรวจสอบที่ API)</small>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" class="form-control" min="1" step="1"
+                               @bind="transferDamageQty" @bind:event="oninput" />
+                        <small class="text-muted">Max (Damaged ที่คลังนี้): @selectedRow?.QtyDamaged</small>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Note (optional)</label>
+                        <textarea class="form-control" rows="2" @bind="transferDamageNote"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="@(() => showTransferDamage = false)">Cancel</button>
+                    <button class="btn btn-primary" @onclick="ConfirmTransferDamage" disabled="@saving">
+                        @(saving ? "Saving..." : "Transfer")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ========== Modal: History ========== *@
 @if (showHistory)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.3);">
@@ -379,7 +410,7 @@ else
                                 <thead>
                                     <tr>
                                         <th style="width:160px;">When</th>
-                                        <th style="width:110px;">Action</th>
+                                        <th style="width:140px;">Action</th>
                                         <th class="text-end" style="width:90px;">Qty</th>
                                         <th>Note</th>
                                         <th style="width:160px;">By</th>
@@ -426,6 +457,11 @@ else
 
     private PaginationState _pager = new();
 
+    // location flags
+    private bool locationIsWarehouse = false;
+    private bool locationIsStorehouse = false;
+    private bool locationIsDamagehouse = false;
+
     // auth
     private int _userId = 0;
 
@@ -433,31 +469,53 @@ else
     private StockRow? selectedRow;
     private bool saving;
 
+    // Adjust In
     private bool showAdjust;
-    private int adjustSign = +1;   // +1 in, -1 out
     private int adjustQty = 1;
     private string? adjustNote;
 
-    private bool showReserve;
-    private int reserveQty = 1;
-    private string? reserveNote;
-
-    private bool showRelease;
-    private int releaseQty = 1;
-    private string? releaseNote;
-
-    private bool showDamage;
-    private int damageQty = 1;
-    private string? damageNote;
-
+    // Transfer
     private bool showTransfer;
     private int? transferToLocationId;
     private int transferQty = 1;
     private string? transferNote;
 
+    // Receive Damage (dropdown)
+    private bool showReceiveDamage;
+    private bool pendingDamageLoading;
+    private List<DamageReturnOption> pendingDamageOptions = new();
+    private int? selectedPendingDamageId;
+    private DamageReturnDocView? receiveDamageDoc;
+    private string? receiveDamageNote;
+
+    // Transfer Damage (Warehouse -> Damagehouse)
+    private bool showTransferDamage;
+    private int? transferDamageToId;
+    private int transferDamageQty = 1;
+    private string? transferDamageNote;
+
+    // History
     private bool showHistory;
     private bool auditLoading;
     private List<AuditEntry>? audit;
+
+    // ===== Receive Damage helper =====
+    private bool CanConfirmReceive =>
+        receiveDamageDoc != null
+        && receiveQtyThisTime > 0
+        && (receiveDamageDoc.QtyReceive + receiveQtyThisTime) <= receiveDamageDoc.Qty;
+
+    private int _receiveQtyThisTime = 1;
+    private int receiveQtyThisTime
+    {
+        get => _receiveQtyThisTime;
+        set
+        {
+            var max = receiveDamageDoc is null ? int.MaxValue
+                                               : Math.Max(0, receiveDamageDoc.Qty - receiveDamageDoc.QtyReceive);
+            _receiveQtyThisTime = Math.Clamp(value, 0, max);
+        }
+    }
 
     private string ApiBase => Options.Value.ApiBaseUrl;
 
@@ -525,9 +583,20 @@ else
         try
         {
             var http = await CreateClient();
-
             var url = $"api/ProductStock/location/{selectedLocationId}?userId={_userId}";
             all = await http.GetFromJsonAsync<List<StockRow>>(url) ?? new();
+
+            // set flags by first row
+            if (all.Count > 0)
+            {
+                locationIsWarehouse = all[0].isWarehouse == 1;
+                locationIsStorehouse = all[0].isStorehouse == 1;
+                locationIsDamagehouse = all[0].isDamagehouse == 1;
+            }
+            else
+            {
+                locationIsWarehouse = locationIsStorehouse = locationIsDamagehouse = false;
+            }
         }
         catch (Exception ex)
         {
@@ -635,7 +704,6 @@ else
     private void OpenAdjust(StockRow r, int sign)
     {
         selectedRow = r;
-        adjustSign = sign;
         adjustQty = 1;
         adjustNote = null;
         showAdjust = true;
@@ -644,16 +712,11 @@ else
 
     private async Task ConfirmAdjust()
     {
-        if (saving) return;// กันกดซ้ำ
+        if (saving) return;
         if (selectedRow is null) return;
         if (adjustQty <= 0)
-        //{ await JS.InvokeVoidAsync("showToast", "Quantity must be > 0", "warning"); return; }
-
-        // Out ต้องไม่เกิน Available
-        if (adjustSign < 0 && adjustQty > selectedRow.QtyAvailable)
         {
-            await JS.InvokeVoidAsync("showToast", $"Max {selectedRow.QtyAvailable} (available).", "warning");
-            return;
+            await JS.InvokeVoidAsync("showToast", "Quantity must be > 0", "warning"); return;
         }
 
         try
@@ -661,16 +724,12 @@ else
             saving = true;
             var http = await CreateClient();
 
-            // บังคับทิศทางด้วย Abs แล้วค่อยใส่เครื่องหมาย
-            var qtySigned = adjustSign >= 0 ? Math.Abs(adjustQty) : -Math.Abs(adjustQty);
-            var reason = adjustSign >= 0 ? "ADJUST_IN" : "ADJUST_OUT";
-
             var payload = new
             {
                 ProductId = selectedRow.ProductId,
                 LocationId = selectedLocationId,
-                QtyOnHand = qtySigned,
-                ReasonCode = reason,
+                QtyOnHand = Math.Abs(adjustQty),
+                ReasonCode = "ADJUST_IN",
                 ReferenceType = "MANUAL",
                 ReferenceId = "",
                 PerformedByUserId = _userId,
@@ -680,8 +739,8 @@ else
             var resp = await http.PostAsJsonAsync("api/ProductStock/adjust", payload);
             if (resp.IsSuccessStatusCode)
             {
-                if (qtySigned > 0) { selectedRow.QtyOnHand += qtySigned; selectedRow.QtyAvailable += qtySigned; }
-                else { selectedRow.QtyOnHand += qtySigned; selectedRow.QtyAvailable += qtySigned; }
+                selectedRow.QtyOnHand += adjustQty;
+                selectedRow.QtyAvailable += adjustQty;
                 await JS.InvokeVoidAsync("showToast", "Saved.", "success");
                 showAdjust = false;
             }
@@ -694,150 +753,6 @@ else
         catch (Exception ex)
         {
             await JS.InvokeVoidAsync("showToast", $"Adjust failed: {ex.Message}", "error");
-        }
-        finally { saving = false; }
-    }
-
-    private void OpenReserve(StockRow r) { selectedRow = r; reserveQty = 1; reserveNote = null; showReserve = true; }
-    private void CloseReserve() => showReserve = false;
-
-    private async Task ConfirmReserve()
-    {
-        if (selectedRow is null) return;
-        if (reserveQty <= 0) { await JS.InvokeVoidAsync("showToast", "Quantity must be > 0", "warning"); return; }
-        if (reserveQty > selectedRow.QtyAvailable)
-        {
-            await JS.InvokeVoidAsync("showToast", $"Max {selectedRow.QtyAvailable}.", "warning");
-            return;
-        }
-
-        try
-        {
-            saving = true;
-            var http = await CreateClient();
-            var payload = new
-            {
-                LocationId = selectedLocationId,
-                ProductId = selectedRow.ProductId,
-                QtyOnHand = reserveQty,
-                ReasonCode = "RESERVE",
-                ReferenceType = "RESERVE",
-                ReferenceId = (string)"",
-                PerformedByUserId = _userId,
-                Note = reserveNote ?? ""
-            };
-            var resp = await http.PostAsJsonAsync("api/ProductStock/reserve", payload);
-            if (resp.IsSuccessStatusCode)
-            {
-                selectedRow.QtyReserved += reserveQty;
-                selectedRow.QtyAvailable -= reserveQty;
-                await JS.InvokeVoidAsync("showToast", "Reserved.", "success");
-                showReserve = false;
-            }
-            else
-            {
-                await JS.InvokeVoidAsync("showToast", $"Reserve failed: {await resp.Content.ReadAsStringAsync()}", "error");
-            }
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("showToast", $"Reserve failed: {ex.Message}", "error");
-        }
-        finally { saving = false; }
-    }
-
-    private void OpenRelease(StockRow r) { selectedRow = r; releaseQty = 1; releaseNote = null; showRelease = true; }
-    private void CloseRelease() => showRelease = false;
-
-    private async Task ConfirmRelease()
-    {
-        if (selectedRow is null) return;
-        if (releaseQty <= 0) { await JS.InvokeVoidAsync("showToast", "Quantity must be > 0", "warning"); return; }
-        if (releaseQty > selectedRow.QtyReserved)
-        {
-            await JS.InvokeVoidAsync("showToast", $"Max {selectedRow.QtyReserved}.", "warning");
-            return;
-        }
-
-        try
-        {
-            saving = true;
-            var http = await CreateClient();
-            var payload = new
-            {
-                LocationId = selectedLocationId,
-                ProductId = selectedRow.ProductId,
-                QtyOnHand = releaseQty,
-                ReasonCode = "RESERVE_CANCEL",
-                ReferenceType = "RESERVE_CANCEL",
-                ReferenceId = (string)"",
-                PerformedByUserId = _userId,
-                Note = releaseNote ?? ""
-            };
-            var resp = await http.PostAsJsonAsync("api/ProductStock/release-reserve", payload);
-            if (resp.IsSuccessStatusCode)
-            {
-                selectedRow.QtyReserved -= releaseQty;
-                selectedRow.QtyAvailable += releaseQty;
-                await JS.InvokeVoidAsync("showToast", "Released.", "success");
-                showRelease = false;
-            }
-            else
-            {
-                await JS.InvokeVoidAsync("showToast", $"Release failed: {await resp.Content.ReadAsStringAsync()}", "error");
-            }
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("showToast", $"Release failed: {ex.Message}", "error");
-        }
-        finally { saving = false; }
-    }
-
-    private void OpenDamage(StockRow r) { selectedRow = r; damageQty = 1; damageNote = null; showDamage = true; }
-    private void CloseDamage() => showDamage = false;
-
-    private async Task ConfirmDamage()
-    {
-        if (selectedRow is null) return;
-        if (damageQty <= 0) { await JS.InvokeVoidAsync("showToast", "Quantity must be > 0", "warning"); return; }
-        if (damageQty > selectedRow.QtyAvailable)
-        {
-            await JS.InvokeVoidAsync("showToast", $"Max @selectedRow?.QtyAvailable.", "warning");
-            return;
-        }
-
-        try
-        {
-            saving = true;
-            var http = await CreateClient();
-            var payload = new
-            {
-                LocationId = selectedLocationId,
-                ProductId = selectedRow.ProductId,
-                QtyOnHand = damageQty,
-                ReasonCode = "DAMAGE_ADD",
-                ReferenceType = "DAMAGE_ADD",
-                ReferenceId = (string)"",
-                PerformedByUserId = _userId,
-                Note = damageNote ?? ""
-            };
-            var resp = await http.PostAsJsonAsync("api/ProductStock/damage-add", payload);
-            if (resp.IsSuccessStatusCode)
-            {
-                selectedRow.QtyDamaged += damageQty;
-                selectedRow.QtyAvailable -= damageQty;
-                await JS.InvokeVoidAsync("showToast", "Damaged recorded.", "success");
-                showDamage = false;
-            }
-            else
-            {
-                await JS.InvokeVoidAsync("showToast", $"Damage failed: {await resp.Content.ReadAsStringAsync()}", "error");
-            }
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("showToast", $"Damage failed: {ex.Message}", "error");
         }
         finally { saving = false; }
     }
@@ -888,7 +803,6 @@ else
             {
                 selectedRow.QtyOnHand -= transferQty;
                 selectedRow.QtyAvailable -= transferQty;
-
                 await JS.InvokeVoidAsync("showToast", "Transferred.", "success");
                 showTransfer = false;
             }
@@ -904,6 +818,243 @@ else
         finally { saving = false; }
     }
 
+    // ===== Receive Damage =====
+    private async Task OpenReceiveDamage(StockRow r)
+    {
+        if (!locationIsWarehouse)
+        {
+            await JS.InvokeVoidAsync("showToast", "Receive Damage ใช้ได้เฉพาะที่ Warehouse", "warning");
+            return;
+        }
+        selectedRow = r;
+        receiveDamageDoc = null;
+        selectedPendingDamageId = null;
+        receiveDamageNote = null;
+        receiveQtyThisTime = 1;
+        showReceiveDamage = true;
+
+        await ReloadPendingDamageDocs();
+    }
+
+    private async Task ReloadPendingDamageDocs()
+    {
+        if (selectedRow is null) return;
+
+        pendingDamageLoading = true;
+        pendingDamageOptions = new();
+        try
+        {
+            var http = await CreateClient();
+
+            // ค้นทุก location ที่ไม่ใช่คลังนี้
+            foreach (var l in locations.Where(x => x.Id != selectedLocationId))
+            {
+                var list = await http.GetFromJsonAsync<List<DamageReturnListItem>>(
+                    $"api/ProductStock/damage-return/list?fromLocationId={l.Id}&top=200") ?? new();
+
+                var candidates = list.Where(x =>
+                    !string.Equals(x.Status, "CONFIRMED", StringComparison.OrdinalIgnoreCase) &&
+                    x.ProductId == selectedRow!.ProductId);
+
+                foreach (var c in candidates)
+                {
+                    var doc = await http.GetFromJsonAsync<DamageReturnDocView>($"api/ProductStock/damage-return/{c.Id}");
+                    if (doc is null) continue;
+                    if (doc.ToLocationId != selectedLocationId) continue;
+
+                    var fromName = FromLocationName(doc.FromLocationId);
+                    pendingDamageOptions.Add(new DamageReturnOption
+                    {
+                        Id = doc.Id,
+                        Label = $"{doc.DocNo} — {fromName}",
+                        FromLocationId = doc.FromLocationId,
+                        FromLocationName = fromName,
+                        Qty = doc.Qty
+                    });
+                }
+            }
+
+            pendingDamageOptions = pendingDamageOptions.OrderByDescending(o => o.Id).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"โหลดรายการเอกสารล้มเหลว: {ex.Message}", "error");
+        }
+        finally { pendingDamageLoading = false; }
+    }
+
+    private int? _selectedPendingDamageId;
+    private int? SelectedPendingDamageId
+    {
+        get => _selectedPendingDamageId;
+        set
+        {
+            if (_selectedPendingDamageId == value) return;
+            _selectedPendingDamageId = value;
+            _ = OnPendingDamageSelected(value);
+        }
+    }
+
+    private async Task OnPendingDamageSelected(int? id)
+    {
+        receiveDamageDoc = null;
+        if (id is int v)
+        {
+            await FetchAndBindDamageDoc(v);
+        }
+        StateHasChanged();
+    }
+
+    private async Task FetchAndBindDamageDoc(int id)
+    {
+        try
+        {
+            var http = await CreateClient();
+            var doc = await http.GetFromJsonAsync<DamageReturnDocView>($"api/ProductStock/damage-return/{id}");
+            if (doc == null) { receiveDamageDoc = null; await JS.InvokeVoidAsync("showToast", "ไม่พบเอกสาร", "warning"); return; }
+
+            if (string.Equals(doc.Status, "CONFIRMED", StringComparison.OrdinalIgnoreCase))
+            { receiveDamageDoc = null; await JS.InvokeVoidAsync("showToast", "เอกสารถูกยืนยันแล้ว", "warning"); return; }
+
+            if (selectedRow is null || doc.ProductId != selectedRow.ProductId)
+            { receiveDamageDoc = null; await JS.InvokeVoidAsync("showToast", "เอกสารนี้เป็นคนละสินค้า", "warning"); return; }
+
+            if (doc.ToLocationId != selectedLocationId)
+            { receiveDamageDoc = null; await JS.InvokeVoidAsync("showToast", "เอกสารนี้ปลายทางไม่ตรงคลังปัจจุบัน", "warning"); return; }
+
+            receiveDamageDoc = doc;
+            var outstanding = Math.Max(0, doc.Qty - doc.QtyReceive);
+            receiveQtyThisTime = Math.Clamp(receiveQtyThisTime <= 0 ? 1 : receiveQtyThisTime,
+                                            1, Math.Max(1, outstanding));
+        }
+        catch (Exception ex)
+        {
+            receiveDamageDoc = null;
+            await JS.InvokeVoidAsync("showToast", $"โหลดเอกสารล้มเหลว: {ex.Message}", "error");
+        }
+    }
+
+    private async Task ConfirmReceiveDamage()
+    {
+        if (selectedRow is null) return;
+        if (!locationIsWarehouse) { await JS.InvokeVoidAsync("showToast", "ใช้ได้เฉพาะที่ Warehouse", "warning"); return; }
+        if (receiveDamageDoc is null) { await JS.InvokeVoidAsync("showToast", "กรุณาเลือกเอกสาร", "warning"); return; }
+
+        var outstanding = Math.Max(0, receiveDamageDoc.Qty - receiveDamageDoc.QtyReceive);
+        var qty = receiveQtyThisTime;
+
+        if (qty <= 0 || qty > outstanding)
+        {
+            await JS.InvokeVoidAsync("showToast", $"จำนวนที่รับจริงต้องอยู่ระหว่าง 1 ถึง {outstanding}", "warning");
+            return;
+        }
+
+        try
+        {
+            saving = true;
+            var http = await CreateClient();
+
+            // ส่งชื่อฟิลด์ให้ตรงกับ DTO: QtyReceive
+            var payload = new
+            {
+                Id = receiveDamageDoc.Id,
+                QtyReceive = qty,
+                PerformedByUserId = _userId,
+                Note = receiveDamageNote
+            };
+
+            var resp = await http.PostAsJsonAsync("api/ProductStock/damage-return/confirm", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                // ที่คลังใหญ่: OnHand สุทธิเท่าเดิม, Damaged + qty
+                selectedRow.QtyDamaged += qty;
+                selectedRow.QtyAvailable = selectedRow.QtyOnHand - selectedRow.QtyReserved - selectedRow.QtyDamaged;
+
+                await JS.InvokeVoidAsync("showToast", "Receive Damage recorded.", "success");
+                showReceiveDamage = false;
+            }
+            else
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                var msg = string.IsNullOrWhiteSpace(body) ? resp.StatusCode.ToString() : body;
+                await JS.InvokeVoidAsync("showToast", $"Receive Damage failed: {msg}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Receive Damage failed: {ex.Message}", "error");
+        }
+        finally { saving = false; }
+    }
+
+    // ===== Transfer Damage (Warehouse -> Damagehouse) =====
+    private async Task OpenTransferDamage(StockRow r)
+    {
+        if (!locationIsWarehouse)
+        {
+            await JS.InvokeVoidAsync("showToast", "Transfer Damage ใช้ได้เฉพาะที่ Warehouse", "warning");
+            return;
+        }
+
+        selectedRow = r;
+        transferDamageToId = null;
+        transferDamageQty = 1;
+        transferDamageNote = null;
+        showTransferDamage = true;
+    }
+
+    private async Task ConfirmTransferDamage()
+    {
+        if (selectedRow is null) return;
+        if (transferDamageToId is null || transferDamageToId <= 0)
+        {
+            await JS.InvokeVoidAsync("showToast", "Please select destination Damagehouse.", "warning");
+            return;
+        }
+        if (transferDamageQty <= 0) { await JS.InvokeVoidAsync("showToast", "Quantity must be > 0", "warning"); return; }
+        if (transferDamageQty > selectedRow.QtyDamaged)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Max damaged at this warehouse: {selectedRow.QtyDamaged}.", "warning");
+            return;
+        }
+
+        try
+        {
+            saving = true;
+            var http = await CreateClient();
+            var payload = new
+            {
+                ProductId = selectedRow.ProductId,
+                FromWarehouseId = selectedLocationId,
+                ToDamagehouseId = transferDamageToId.Value,
+                Qty = transferDamageQty,
+                PerformedByUserId = _userId,
+                Note = transferDamageNote ?? ""
+            };
+            var resp = await http.PostAsJsonAsync("api/ProductStock/warehouse-to-damagehouse", payload);
+            if (resp.IsSuccessStatusCode)
+            {
+                // ที่คลังใหญ่: Damaged -qty, OnHand -qty
+                selectedRow.QtyDamaged -= transferDamageQty;
+                selectedRow.QtyOnHand -= transferDamageQty;
+                selectedRow.QtyAvailable = selectedRow.QtyOnHand - selectedRow.QtyReserved - selectedRow.QtyDamaged;
+
+                await JS.InvokeVoidAsync("showToast", "Transferred to Damagehouse.", "success");
+                showTransferDamage = false;
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("showToast", $"Transfer failed: {await resp.Content.ReadAsStringAsync()}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Transfer failed: {ex.Message}", "error");
+        }
+        finally { saving = false; }
+    }
+
+    // ===== History =====
     private async Task OpenHistory(StockRow r)
     {
         selectedRow = r;
@@ -913,7 +1064,6 @@ else
         try
         {
             var http = await CreateClient();
-            // ✅ endpoint ใหม่สำหรับดึงประวัติ
             var url = $"api/ProductStock/audit?locationId={selectedLocationId}&productId={r.ProductId}&top=50";
             audit = await http.GetFromJsonAsync<List<AuditEntry>>(url) ?? new();
         }
@@ -939,6 +1089,9 @@ else
     private string CurrentLocationName()
         => locations.FirstOrDefault(x => x.Id == selectedLocationId)?.Name ?? $"#{selectedLocationId}";
 
+    private string FromLocationName(int id)
+        => locations.FirstOrDefault(x => x.Id == id)?.Name ?? $"#{id}";
+
     // ===== DTOs =====
     public class LocationOption { public int Id { get; set; } public string Name { get; set; } = ""; }
     public class UserLocationDto { public int UserId { get; set; } public int LocationId { get; set; } }
@@ -957,6 +1110,11 @@ else
         public int QtyReserved { get; set; }
         public int QtyDamaged { get; set; }
         public int QtyAvailable { get; set; }
+        public int QtyReceive { get; set; }      // ถ้า API เติมมาก็โชว์/ใช้ได้
+
+        public int isWarehouse { get; set; }
+        public int isStorehouse { get; set; }
+        public int isDamagehouse { get; set; }
     }
 
     public class AuditEntry
@@ -966,5 +1124,47 @@ else
         public int Qty { get; set; }
         public string? Note { get; set; }
         public string? ByUser { get; set; }
+    }
+
+    // สำหรับ Receive Damage dropdown/list + doc view
+    public class DamageReturnListItem
+    {
+        public int Id { get; set; }
+        public string DocNo { get; set; } = "";
+        public int ProductId { get; set; }
+        public int Qty { get; set; }
+        public int QtyReceive { get; set; }
+        public string Status { get; set; } = "";
+        public string? Note { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class DamageReturnDocView
+    {
+        public int Id { get; set; }
+        public string DocNo { get; set; } = "";
+        public int ProductId { get; set; }
+        public string? ProductName { get; set; }
+        public string? Sku { get; set; }
+        public int FromLocationId { get; set; }
+        public int ToLocationId { get; set; }
+        public int Qty { get; set; }
+        public int QtyReceive { get; set; }
+        public string? NoteReceive { get; set; }
+        public string Status { get; set; } = "";
+        public string? Note { get; set; }
+        public int? CreatedByUserId { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public int? ConfirmedByUserId { get; set; }
+        public DateTime? ConfirmedAt { get; set; }
+    }
+
+    public class DamageReturnOption
+    {
+        public int Id { get; set; }
+        public string Label { get; set; } = "";
+        public int FromLocationId { get; set; }
+        public string FromLocationName { get; set; } = "";
+        public int Qty { get; set; }
     }
 }

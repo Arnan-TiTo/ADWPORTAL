@@ -75,7 +75,6 @@ namespace miniApp.Web.Pages
                 stockMap = stocks.ToDictionary(s => s.ProductId, s => s);
                 locProductIds = stocks.Select(s => s.ProductId).ToHashSet();
 
-                // ใช้ flag ของ Location จากผลลัพธ์นี้
                 IsCurrentStorehouse = stocks.FirstOrDefault()?.IsStoreHouse == 1;
             }
 
@@ -101,16 +100,16 @@ namespace miniApp.Web.Pages
 
             Products = q.ToList();
 
-            // 5) อัดค่าจาก ProductStocks ลง ProductDto
+            // 5) ProductStocks -> ProductDto
             foreach (var p in Products)
             {
                 if (stockMap.TryGetValue(p.Id, out var s))
                 {
                     p.OnHand = s.QtyOnHand;
                     p.Available = s.QtyAvailable;
-                    p.Reserved = s.QtyReserved;   // เก็บไว้เป็นข้อมูลพื้นฐาน (ไม่แสดงหน้า UI)
+                    p.Reserved = s.QtyReserved;
                     p.Damaged = s.QtyDamaged;
-                    p.Receive = s.QtyReceive;    // แสดงแทน Reserved
+                    p.Receive = s.QtyReceive;
                 }
                 else
                 {
@@ -124,13 +123,12 @@ namespace miniApp.Web.Pages
         {
             public int Id { get; set; }
             public string Name { get; set; } = "";
-            public int IsWareHouse { get; set; }    // optional: สำหรับอนาคต
-            public int IsStoreHouse { get; set; }   // optional: สำหรับอนาคต
+            public int IsWareHouse { get; set; }
+            public int IsStoreHouse { get; set; }
         }
 
         public class UserLocationDto { public int UserId { get; set; } public int LocationId { get; set; } }
 
-        // ดึงจาก ProductStock/location
         public class StockRow
         {
             public int ProductId { get; set; }
@@ -138,9 +136,9 @@ namespace miniApp.Web.Pages
             public int QtyReserved { get; set; }
             public int QtyDamaged { get; set; }
             public int QtyAvailable { get; set; }
-            public int QtyReceive { get; set; }     // NEW
-            public int IsWareHouse { get; set; }    // flag ของ location (มาจาก join)
-            public int IsStoreHouse { get; set; }   // flag ของ location (มาจาก join)
+            public int QtyReceive { get; set; }
+            public int IsWareHouse { get; set; }
+            public int IsStoreHouse { get; set; }
         }
 
         public class ProductDto
@@ -156,8 +154,6 @@ namespace miniApp.Web.Pages
             public int LocationId { get; set; }
             public int UserId { get; set; }
             public string? UserFullname { get; set; }
-
-            // From ProductStocks
             public int OnHand { get; set; }
             public int Available { get; set; }
             public int Reserved { get; set; }

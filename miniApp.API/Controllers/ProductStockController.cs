@@ -1,14 +1,19 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Humanizer;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.CodeAnalysis;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Data.SqlClient;
 using miniApp.API.Data;
-using miniApp.API.Models;
 using miniApp.API.Dtos;
+using miniApp.API.Models;
 using System;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace miniApp.API.Controllers
 {
@@ -75,8 +80,6 @@ namespace miniApp.API.Controllers
                 return headGlobal > 0 ? headGlobal : 0;
         }
 
-
-
         private async Task EnsureStockRowAsync(int productId, int locationId)
         {
             var exists = await _context.ProductStocks
@@ -90,6 +93,15 @@ namespace miniApp.API.Controllers
                     VALUES
                       ({productId}, {locationId}, 0, 0, 0, NULL, NULL, NULL, 0, SYSUTCDATETIME(), 0);");
             }
+        }
+        private static string MakeIdemRefId(
+        string reason, int productId, int locationId, int qty, int? userId, string? salt = null)
+        {
+            var raw = $"{reason}|-P{productId}|-L{locationId}|-Q{qty}|-U{(userId ?? 0)}|{salt ?? ""}";
+            using var sha = SHA256.Create();
+            var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
+            var hex = Convert.ToHexString(hash).Substring(0, 8);
+            return $"API-{hex}";
         }
 
         // ====== GET: api/productstock (paged) ======
@@ -261,8 +273,6 @@ namespace miniApp.API.Controllers
                     .FirstOrDefaultAsync();
 
                 if (flags == null) return NotFound("Location not found.");
-                if (flags.isStorehouse != 1)
-                    return BadRequest("Adjust IN ทำได้เฉพาะที่ Storehouse เท่านั้น.");
             }
 
             await using var tx = await _context.Database.BeginTransactionAsync();
@@ -402,7 +412,6 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== POST: api/productstock/ship-from-reserved ======
         [HttpPost("ship-from-reserved")]
         public async Task<IActionResult> ShipFromReserved([FromBody] ReserveDto dto)
         {
@@ -411,14 +420,16 @@ namespace miniApp.API.Controllers
             if (dto.ProductId <= 0 || dto.LocationId <= 0 || dto.QtyOnHand <= 0)
                 return BadRequest("ProductId, LocationId, positive Qty are required.");
 
+            await SetUserSessionContextAsync(dto.PerformedByUserId ?? 0);
+
             await using var tx = await _context.Database.BeginTransactionAsync();
 
             var affected = await _context.Database.ExecuteSqlRawAsync(@"
-                UPDATE dbo.ProductStocks
-                   SET QtyReserved = QtyReserved - {2}, UpdatedAt = SYSUTCDATETIME()
-                 WHERE ProductId = {0} AND LocationId = {1}
-                   AND QtyReserved >= {2};",
-                dto.ProductId, dto.LocationId, dto.QtyOnHand);
+            UPDATE dbo.ProductStocks
+            SET QtyReserved = QtyReserved - {2}, UpdatedAt = SYSUTCDATETIME()
+            WHERE ProductId = {0} AND LocationId = {1}
+            AND QtyReserved >= {2};",
+            dto.ProductId, dto.LocationId, dto.QtyOnHand);
 
             if (affected == 0)
             {
@@ -446,7 +457,7 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== POST: api/productstock/damage-add ======
+
         [HttpPost("damage-add")]
         public async Task<IActionResult> DamageAdd([FromBody] DamageDto dto)
         {
@@ -455,31 +466,32 @@ namespace miniApp.API.Controllers
             if (dto.ProductId <= 0 || dto.LocationId <= 0 || dto.QtyOnHand <= 0)
                 return BadRequest("ProductId, LocationId, positive Qty are required.");
 
+            await SetUserSessionContextAsync(dto.PerformedByUserId ?? 0);
+
+            const string reason = "DAMAGE_ADD";
+            var refType = string.IsNullOrWhiteSpace(dto.ReferenceType) ? "API_DAMAGE" : dto.ReferenceType!.Trim();
+
+            var refId = string.IsNullOrWhiteSpace(dto.ReferenceId)
+                ? MakeIdemRefId(reason, dto.ProductId, dto.LocationId, dto.QtyOnHand, dto.PerformedByUserId, dto.Note)
+                : dto.ReferenceId!.Trim();
+
             await using var tx = await _context.Database.BeginTransactionAsync();
 
-            var affected = await _context.Database.ExecuteSqlRawAsync(@"
-                UPDATE dbo.ProductStocks
-                   SET QtyDamaged = QtyDamaged + {2}, UpdatedAt = SYSUTCDATETIME()
-                 WHERE ProductId = {0} AND LocationId = {1}
-                   AND (QtyOnHand - QtyReserved - QtyDamaged) >= {2};",
-                dto.ProductId, dto.LocationId, dto.QtyOnHand);
-
-            if (affected == 0)
-            {
-                await tx.RollbackAsync();
-                return Conflict("Insufficient available quantity to mark as damaged.");
-            }
-
-            await _context.Database.ExecuteSqlRawAsync(@"
-                INSERT INTO dbo.StockTransactions
-                    (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
-                VALUES
-                    ({0}, {1}, NULL, {2}, 'DAMAGE_ADD', {3}, {4}, {5}, {6});",
-                dto.ProductId, dto.LocationId, dto.QtyOnHand,
-                (object?)dto.ReferenceType ?? DBNull.Value,
-                (object?)dto.ReferenceId ?? DBNull.Value,
-                (object?)dto.PerformedByUserId ?? DBNull.Value,
-                (object?)dto.Note ?? DBNull.Value);
+            // SP จัดการอัปเดต + ลง log + เช็คกันซ้ำ
+            await _context.Database.ExecuteSqlRawAsync(
+                "EXEC dbo.sp_AdjustOrTransferStock " +
+                "@ProductId, @FromLocationId, @ToLocationId, @Qty, @ReasonCode, " +
+                "@ReferenceType, @ReferenceId, @PerformedByUserId, @Note",
+                new SqlParameter("@ProductId", dto.ProductId),
+                new SqlParameter("@FromLocationId", dto.LocationId),
+                new SqlParameter("@ToLocationId", DBNull.Value),
+                new SqlParameter("@Qty", dto.QtyOnHand),
+                new SqlParameter("@ReasonCode", reason),
+                new SqlParameter("@ReferenceType", (object)refType),
+                new SqlParameter("@ReferenceId", (object)refId),
+                new SqlParameter("@PerformedByUserId", (object?)dto.PerformedByUserId ?? DBNull.Value),
+                new SqlParameter("@Note", (object?)dto.Note ?? DBNull.Value)
+            );
 
             await tx.CommitAsync();
             return NoContent();
@@ -524,36 +536,119 @@ namespace miniApp.API.Controllers
             return NoContent();
         }
 
-        // ====== GET: api/productstock/audit ======
+
         [HttpGet("audit")]
         public async Task<IActionResult> Audit([FromQuery] int locationId, [FromQuery] int productId, [FromQuery] int top = 50)
         {
-            if (!IsAuthorized()) return Unauthorized();
-            if (locationId <= 0 || productId <= 0) return BadRequest("locationId and productId are required.");
+        if (!IsAuthorized()) return Unauthorized();
+        if (locationId <= 0 || productId <= 0) return BadRequest("locationId and productId are required.");
 
-            var q = from st in _context.StockTransactions
-                    join u in _context.Users on st.PerformedByUserId equals u.Id into uj
-                    from u in uj.DefaultIfEmpty()
-                    where st.ProductId == productId
-                          && (st.FromLocationId == locationId || st.ToLocationId == locationId
-                              || (st.FromLocationId == null && st.ToLocationId == null))
-                    orderby st.CreatedAt descending
-                    select new
-                    {
+        top = Math.Clamp(top, 1, 500);
+
+        try
+        {
+            await using var conn = (SqlConnection)_context.Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+                await conn.OpenAsync();
+
+                const string sql = @"
+                    SELECT TOP(@Top)
                         st.CreatedAt,
-                        Action = st.ReasonCode,
-                        Qty = Math.Abs(st.QtyChange),
+                        st.ReasonCode AS Action,
+                        CASE
+                            WHEN st.ReasonCode IN('RESERVE','RESERVE_CANCEL','RESERVE_SHIP') THEN 0
+                            WHEN st.FromLocationId = @LocationId AND st.ToLocationId IS NULL THEN -ABS(st.QtyChange)
+                            WHEN st.FromLocationId IS NULL AND st.ToLocationId = @LocationId THEN + ABS(st.QtyChange)
+                            WHEN st.FromLocationId = @LocationId AND st.ToLocationId IS NOT NULL THEN - ABS(st.QtyChange)
+                            WHEN st.ToLocationId = @LocationId AND st.FromLocationId IS NOT NULL THEN + ABS(st.QtyChange)
+                            ELSE 0
+                        END AS MovementQty,
+                        CASE
+                            WHEN st.ReasonCode = 'RESERVE'        THEN + ABS(st.QtyChange)
+                            WHEN st.ReasonCode = 'RESERVE_CANCEL' THEN - ABS(st.QtyChange)
+                            ELSE 0
+                        END AS ReserveDelta,
                         st.Note,
-                        ByUser = (u.Fullname ?? u.Username)
-                    };
+                        COALESCE(NULLIF(u.Fullname, ''), NULLIF(u.Username, ''), '(system)') AS ByUser
+                    FROM dbo.StockTransactions st
+                    LEFT JOIN dbo.Users u ON st.PerformedByUserId = u.Id
+                    WHERE st.ProductId = @ProductId
+                      AND(st.FromLocationId = @LocationId
+                           OR st.ToLocationId = @LocationId
+                           OR(st.FromLocationId IS NULL AND st.ToLocationId IS NULL))
+                    ORDER BY st.CreatedAt DESC;
+                ";
 
-            var items = await q.Take(Math.Clamp(top, 1, 500)).ToListAsync();
+                await using var cmd = new SqlCommand(sql, conn);
+                cmd.Parameters.Add(new SqlParameter("@Top", top));
+                cmd.Parameters.Add(new SqlParameter("@ProductId", productId));
+                cmd.Parameters.Add(new SqlParameter("@LocationId", locationId));
 
-            return Ok(items.Select(x => new { x.CreatedAt, x.Action, x.Qty, x.Note, x.ByUser }));
+                var list = new List<object>();
+                await using var rd = await cmd.ExecuteReaderAsync();
+
+                int iCreatedAt = rd.GetOrdinal("CreatedAt");
+                int iAction = rd.GetOrdinal("Action");
+                int iMovementQty = rd.GetOrdinal("MovementQty");
+                int iReserveDelta = rd.GetOrdinal("ReserveDelta");
+                int iNote = rd.GetOrdinal("Note");
+                int iByUser = rd.GetOrdinal("ByUser");
+
+                while (await rd.ReadAsync())
+                {
+                    var movement = rd.IsDBNull(iMovementQty) ? 0 : rd.GetInt32(iMovementQty);
+                    var reserve = rd.IsDBNull(iReserveDelta) ? 0 : rd.GetInt32(iReserveDelta);
+
+                    list.Add(new
+                    {
+                        CreatedAt = rd.GetDateTime(iCreatedAt),
+                        Action = rd.IsDBNull(iAction) ? "" : rd.GetString(iAction),
+                        Qty = movement,
+                        ReserveDelta = reserve, 
+                        Note = rd.IsDBNull(iNote) ? null : rd.GetString(iNote),
+                        ByUser = rd.IsDBNull(iByUser) ? "(system)" : rd.GetString(iByUser)
+                    });
+                }
+            return Ok(list);
         }
+        catch (SqlException ex)
+        {
+            return StatusCode(500, new
+            {
+                message = "Audit failed (SqlException)",
+                error = ex.Message,
+                ex.Number,
+                ex.State,
+                ex.Class,
+                ex.Procedure,
+                ex.LineNumber,
+                ex.Server,
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+        catch (DbUpdateException ex)
+        {
+            var root = ex.GetBaseException();
+            return StatusCode(500, new
+            {
+                message = "Audit failed (DbUpdateException)",
+                error = root?.Message ?? ex.Message,
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                message = "Audit failed (Exception)",
+                error = ex.Message,
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+    }
 
-        // ====== POST: api/productstock/add-row ======
-        [HttpPost("add-row")]
+    // ====== POST: api/productstock/add-row ======
+    [HttpPost("add-row")]
         public async Task<IActionResult> AddRow([FromBody] AddStockRowDto dto)
         {
             if (!IsAuthorized()) return Unauthorized();
@@ -728,7 +823,8 @@ namespace miniApp.API.Controllers
 
         private static string NewDocNo() => $"DR{DateTime.UtcNow:yyyyMMddHHmmssfff}";
 
-        // ====== POST: api/productstock/damage-return/request  (สร้างเอกสาร PENDING + DocNo และเพิ่ม QtyReceive ที่ Warehouse) ======
+        // ====== POST: api/productstock/damage-return/request ======// 
+        // สร้างเอกสาร PENDING + DocNo และเพิ่ม QtyReceive ที่ Warehouse ======//
         [HttpPost("damage-return/request")]
         public async Task<IActionResult> DamageReturnRequest([FromBody] DamageReturnCreateDto dto)
         {
@@ -779,21 +875,21 @@ namespace miniApp.API.Controllers
                 CreatedAt = DateTime.UtcNow
             };
             _context.DamageReturnDocs.Add(doc);
-            await _context.SaveChangesAsync(); // ต้องเซฟก่อนเพื่อจะได้ doc.Id ใช้อ้างอิงใน log
+            await _context.SaveChangesAsync(); // get doc.Id
 
             // 4) เพิ่ม QtyReceive ให้ Warehouse ปลายทาง
             await EnsureStockRowAsync(dto.ProductId, toId);
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
-        UPDATE dbo.ProductStocks
-           SET QtyReceive = QtyReceive + {dto.Qty}, UpdatedAt = SYSUTCDATETIME()
-         WHERE ProductId = {dto.ProductId} AND LocationId = {toId};");
+            UPDATE dbo.ProductStocks
+            SET QtyReceive = QtyReceive + {dto.Qty}, UpdatedAt = SYSUTCDATETIME()
+            WHERE ProductId = {dto.ProductId} AND LocationId = {toId};");
 
-            // (ออปชัน) บันทึกทรานแซกชันกำกับเหตุผล REQUEST
+            // บันทึกทรานแซกชันกำกับเหตุผล REQUEST
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
-        INSERT INTO dbo.StockTransactions
-          (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
-        VALUES
-          ({dto.ProductId}, {dto.FromLocationId}, {toId}, {dto.Qty}, 'DAMAGE_RETURN_REQUEST', N'DAMAGE_RETURN_DOC', {doc.Id}, {dto.PerformedByUserId}, {dto.Note});");
+            INSERT INTO dbo.StockTransactions
+            (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
+            VALUES
+            ({dto.ProductId}, {dto.FromLocationId}, {toId}, {dto.Qty}, 'DAMAGE_RETURN_REQUEST', N'DAMAGE_RETURN_DOC', {doc.Id}, {dto.PerformedByUserId}, {dto.Note});");
 
             await tx.CommitAsync();
 
@@ -837,7 +933,9 @@ namespace miniApp.API.Controllers
                         d.CreatedByUserId,
                         d.CreatedAt,
                         d.ConfirmedByUserId,
-                        d.ConfirmedAt
+                        d.ConfirmedAt,
+                        d.QtyReceive,
+                        d.NoteReceive,
                     };
 
             var doc = await q.FirstOrDefaultAsync();
@@ -861,6 +959,7 @@ namespace miniApp.API.Controllers
                         d.DocNo,
                         d.ProductId,
                         d.Qty,
+                        d.QtyReceive,
                         d.Status,
                         d.Note,
                         d.CreatedAt
@@ -870,87 +969,123 @@ namespace miniApp.API.Controllers
             return Ok(items);
         }
 
-        // ====== POST: api/productstock/damage-return/confirm
         [HttpPost("damage-return/confirm")]
         public async Task<IActionResult> DamageReturnConfirm([FromBody] DamageReturnConfirmDto dto)
         {
             if (!IsAuthorized()) return Unauthorized();
-            if (dto is null || dto.Id <= 0) return BadRequest();
+            if (dto is null || dto.Id <= 0 || dto.QtyReceive <= 0) return BadRequest();
 
             await SetUserSessionContextAsync(dto.PerformedByUserId ?? 0);
 
             var doc = await _context.DamageReturnDocs.FirstOrDefaultAsync(x => x.Id == dto.Id);
             if (doc == null) return NotFound("Document not found.");
-            if (!string.Equals(doc.Status, "PENDING", StringComparison.OrdinalIgnoreCase))
-                return Conflict("Document is not in PENDING state.");
+            if (string.Equals(doc.Status, "CONFIRMED", StringComparison.OrdinalIgnoreCase))
+                return Conflict("Document already CONFIRMED.");
 
-            // ปลายทางต้องเป็น Warehouse
-            var flags = await _context.Locations.Where(l => l.Id == doc.ToLocationId)
-                .Select(l => new { l.isWarehouse, l.isStorehouse, l.isDamagehouse })
-                .FirstOrDefaultAsync();
-            if (flags == null) return NotFound("To location not found.");
-            if (flags.isWarehouse != 1) return BadRequest("Confirm must be done at Warehouse.");
+            var toIsWh = await _context.Locations.Where(l => l.Id == doc.ToLocationId)
+                .Select(l => l.isWarehouse).FirstOrDefaultAsync();
+            if (toIsWh != 1) return BadRequest("Confirm must be done at Warehouse.");
+
+            var outstanding = doc.Qty - doc.QtyReceive;
+            if (outstanding <= 0) return Conflict("Nothing left to receive.");
+            var qty = Math.Min(dto.QtyReceive, outstanding);
+
+            // สร้าง sub-ref ต่อรอบแบบ deterministic: รับสะสม “ถึง” เท่านี้
+            var refType = "DAMAGE_RETURN_DOC";
+            var subRef = $"DRCONF-{doc.Id}-UPTO-{doc.QtyReceive + qty}";
+
+            // กันกดซ้ำ (ไอดีเดียวกันถือว่าทำสำเร็จไปแล้ว)
+            var dup = await _context.StockTransactions.AnyAsync(st =>
+                st.ProductId == doc.ProductId &&
+                st.ReferenceType == refType &&
+                st.ReferenceId == subRef &&
+                st.ReasonCode == "WH_RECEIVE_DAMAGE");
+            if (dup) return NoContent();
 
             await using var tx = await _context.Database.BeginTransactionAsync();
-            await EnsureStockRowAsync(doc.ProductId, doc.ToLocationId);
+            try
+            {
+                await EnsureStockRowAsync(doc.ProductId, doc.FromLocationId);
+                await EnsureStockRowAsync(doc.ProductId, doc.ToLocationId);
 
-            // 1) รับของ: QtyReceive -> OnHand
-            var recv = await _context.Database.ExecuteSqlRawAsync(@"
-            UPDATE dbo.ProductStocks
-            SET QtyReceive = QtyReceive - {2},
-            QtyOnHand  = QtyOnHand  + {2},
-            UpdatedAt  = SYSUTCDATETIME()
-            WHERE ProductId = {0} AND LocationId = {1}
-            AND QtyReceive >= {2};",
-                doc.ProductId, doc.ToLocationId, doc.Qty);
-            if (recv == 0)
+                // 0) ต้นทาง (STOREHOUSE): OnHand -qty, Damaged -qty
+                var decOn = await _context.Database.ExecuteSqlRawAsync(@"
+                UPDATE dbo.ProductStocks
+                SET QtyOnHand = QtyOnHand - {2}, UpdatedAt = SYSUTCDATETIME()
+                WHERE ProductId = {0} AND LocationId = {1} AND QtyOnHand >= {2};",
+                doc.ProductId, doc.FromLocationId, qty);
+                if (decOn == 0) { await tx.RollbackAsync(); return Conflict("Not enough OnHand at storehouse."); }
+
+                var decDam = await _context.Database.ExecuteSqlRawAsync(@"
+                UPDATE dbo.ProductStocks
+                SET QtyDamaged = QtyDamaged - {2}, UpdatedAt = SYSUTCDATETIME()
+                WHERE ProductId = {0} AND LocationId = {1} AND QtyDamaged >= {2};",
+                doc.ProductId, doc.FromLocationId, qty);
+                if (decDam == 0) { await tx.RollbackAsync(); return Conflict("Not enough Damaged at storehouse."); }
+
+                await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO dbo.StockTransactions
+                (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
+                VALUES ({doc.ProductId}, {doc.FromLocationId}, {doc.ToLocationId}, {qty},
+                'DAMAGE_RETURN_OUT', N'{refType}', {subRef}, {dto.PerformedByUserId}, {dto.Note ?? doc.Note});");
+
+                // 1) ปลายทาง (WAREHOUSE): ต้องมี QtyReceive พอ แล้วค่อย +OnHand และ -QtyReceive
+                var recv = await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE dbo.ProductStocks
+                SET QtyOnHand = QtyOnHand + {qty},
+                QtyReceive = QtyReceive - {qty},
+                UpdatedAt  = SYSUTCDATETIME()
+                WHERE ProductId = {doc.ProductId} AND LocationId = {doc.ToLocationId}
+                AND QtyReceive >= {qty};");
+                if (recv == 0) { await tx.RollbackAsync(); return Conflict("Not enough QtyReceive at warehouse."); }
+
+                await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO dbo.StockTransactions
+                (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
+                VALUES ({doc.ProductId}, NULL, {doc.ToLocationId}, {qty},
+                'WH_RECEIVE_DAMAGE', N'{refType}', {subRef}, {dto.PerformedByUserId}, {dto.Note ?? doc.Note});");
+
+                // 2) Mark เป็นของเสียที่ Warehouse
+                await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE dbo.ProductStocks
+                SET QtyDamaged = QtyDamaged + {qty}, UpdatedAt = SYSUTCDATETIME()
+                WHERE ProductId = {doc.ProductId} AND LocationId = {doc.ToLocationId};");
+
+                await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO dbo.StockTransactions
+                (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
+                VALUES ({doc.ProductId}, {doc.ToLocationId}, NULL, {qty},
+                'WH_DAMAGE_ADD', N'{refType}', {subRef}, {dto.PerformedByUserId}, {dto.Note ?? doc.Note});");
+
+                // 3) อัปเดตเอกสาร
+                doc.QtyReceive += qty;
+                doc.NoteReceive = dto.Note ?? doc.NoteReceive;
+                doc.Status = (doc.QtyReceive == doc.Qty) ? "CONFIRMED" : "OVERDUE";
+                if (doc.Status == "CONFIRMED")
+                {
+                    doc.ConfirmedByUserId = dto.PerformedByUserId;
+                    doc.ConfirmedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+
+                await tx.CommitAsync();
+                return NoContent();
+            }
+            catch (SqlException ex)
             {
                 await tx.RollbackAsync();
-                return Conflict("Insufficient QtyReceive at Warehouse.");
+                return StatusCode(409, new { message = "Confirm failed (SqlException)", error = ex.Message });
             }
-
-            // บันทึก transaction
-            await _context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO dbo.StockTransactions
-            (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
-            VALUES
-            ({doc.ProductId}, NULL, {doc.ToLocationId}, {doc.Qty}, 'WH_RECEIVE_DAMAGE', N'DAMAGE_RETURN_DOC', {doc.Id}, {dto.PerformedByUserId}, {dto.Note ?? doc.Note});");
-
-            // 2) Mark เป็นของเสียที่ Warehouse: OnHand -> Damaged
-            var mark = await _context.Database.ExecuteSqlRawAsync(@"
-            UPDATE dbo.ProductStocks
-            SET QtyOnHand   = QtyOnHand   - {2},
-            QtyDamaged  = QtyDamaged  + {2},
-            UpdatedAt   = SYSUTCDATETIME()
-            WHERE ProductId = {0} AND LocationId = {1}
-            AND QtyOnHand  >= {2};",
-            doc.ProductId, doc.ToLocationId, doc.Qty);
-            if (mark == 0)
+            catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                return Conflict("Insufficient OnHand at Warehouse after receive.");
+                return StatusCode(500, new { message = "Confirm failed (Exception)", error = ex.Message });
             }
-
-            // บันทึก transaction
-            await _context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO dbo.StockTransactions
-            (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
-            VALUES
-            ({doc.ProductId}, {doc.ToLocationId}, NULL, {doc.Qty}, 'WH_ONHAND_TO_DAMAGE', N'DAMAGE_RETURN_DOC', {doc.Id}, {dto.PerformedByUserId}, {dto.Note ?? doc.Note});");
-
-            // 3) ปิดเอกสาร
-            doc.Status = "CONFIRMED";
-            doc.ConfirmedByUserId = dto.PerformedByUserId;
-            doc.ConfirmedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
-            await tx.CommitAsync();
-            return NoContent();
         }
 
 
         // ====== POST: api/productstock/warehouse-to-damagehouse (Admin) ======
-        // ลบที่ Warehouse: OnHand -qty, Damaged -qty
+        // ลบที่ Warehouse: Damaged -qty (ต้องพอ) และโอน OnHand จาก Warehouse -> Damagehouse
         // เพิ่มที่ Damagehouse: OnHand +qty, Damaged +qty
         [HttpPost("warehouse-to-damagehouse")]
         public async Task<IActionResult> WarehouseToDamagehouse([FromBody] MoveToDamagehouseDto dto)
@@ -1001,17 +1136,20 @@ namespace miniApp.API.Controllers
                 new SqlParameter("@Note", (object?)dto.Note ?? DBNull.Value)
             );
 
-            // 2) เพิ่ม Damaged ที่ Damagehouse
+            // 2) เพิ่ม Damaged ที่ Damagehouse + LOG คนละเหตุผล เพื่อบอก state change คนละอย่าง
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
             UPDATE dbo.ProductStocks
             SET QtyDamaged = QtyDamaged + {dto.Qty}, UpdatedAt = SYSUTCDATETIME()
             WHERE ProductId = {dto.ProductId} AND LocationId = {dto.ToDamagehouseId};");
 
+            var refId = MakeIdemRefId("DH_DAMAGE_ADD", dto.ProductId, dto.FromWarehouseId, dto.Qty, dto.PerformedByUserId,"");
+
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
             INSERT INTO dbo.StockTransactions
             (ProductId, FromLocationId, ToLocationId, QtyChange, ReasonCode, ReferenceType, ReferenceId, PerformedByUserId, Note)
             VALUES
-            ({dto.ProductId}, {dto.FromWarehouseId}, {dto.ToDamagehouseId}, {dto.Qty}, 'WH_TO_DAMAGEHOUSE', NULL, NULL, {dto.PerformedByUserId}, {dto.Note});");
+            ({dto.ProductId}, NULL, {dto.ToDamagehouseId}, {dto.Qty},
+            'DH_DAMAGE_ADD', 'DAMAGE_WH_TO_DH', {refId}, {dto.PerformedByUserId}, {dto.Note});");
 
             await tx.CommitAsync();
             return NoContent();

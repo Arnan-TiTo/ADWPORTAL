@@ -8,14 +8,10 @@ namespace miniApp.API.Dtos
         public int LocationId { get; set; }
 
     }
-
     public class AdjustStockDto
     {
         public int ProductId { get; set; }
         public int LocationId { get; set; }
-        /// <summary>
-        /// >0 รับเข้า, <0 ตัดออก (single-leg)
-        /// </summary>
         public int QtyOnHand { get; set; }
         public string? ReasonCode { get; set; }
         public string? ReferenceType { get; set; }
@@ -48,7 +44,6 @@ namespace miniApp.API.Dtos
         public int? PerformedByUserId { get; set; }
         public string? Note { get; set; }
     }
-
     public class DamageDto
     {
         public int ProductId { get; set; }
@@ -72,7 +67,6 @@ namespace miniApp.API.Dtos
         public string? Note { get; set; }
         public decimal? Cost { get; set; }
     }
-
     public class IssueFromHeadDto
     {
         public int ProductId { get; set; }
@@ -107,7 +101,6 @@ namespace miniApp.API.Dtos
         public int? PerformedByUserId { get; set; }
         public string? Note { get; set; }
     }
-
     public class DamageReturnCreateDto
     {
         [Required] public int ProductId { get; set; }
@@ -117,12 +110,11 @@ namespace miniApp.API.Dtos
 
         public string? Note { get; set; }
         public int? PerformedByUserId { get; set; }
-        }
-
-
+    }
     public class DamageReturnConfirmDto
     {
         public int Id { get; set; }
+        public int QtyReceive { get; set; }
         public int? PerformedByUserId { get; set; }
         public string? Note { get; set; }
     }
@@ -136,4 +128,13 @@ namespace miniApp.API.Dtos
         public int? PerformedByUserId { get; set; }
         public string? Note { get; set; }
     }
+    public class WhReceiveDamageDto
+    {
+        public int ProductId { get; set; }
+        public int WarehouseId { get; set; }
+        public int Qty { get; set; }
+        public int? PerformedByUserId { get; set; }
+        public string? Note { get; set; }
+    }
+
 }

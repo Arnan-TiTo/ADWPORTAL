@@ -43,7 +43,7 @@
                     @(Model.Storehouses.Count == 0 ? "disabled" : "")>
                 @if (Model.Storehouses.Count == 0)
                 {
-                    <option value="">(ยังไม่ได้รับสิทธิ์ Storehouse)</option>
+                    <option value="">(ยังไม่ได้รับสิทธิ์โกดัง)</option>
                 }
                 else
                 {
@@ -59,7 +59,7 @@
     @if (Model.Storehouses.Count == 0)
     {
         <div class="bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-xl px-3 py-2 text-sm">
-            ยังไม่ได้รับสิทธิ์ Storehouse – ติดต่อผู้ดูแลระบบ
+            ยังไม่ได้รับสิทธิ์โกดัง – ติดต่อผู้ดูแลระบบ
         </div>
     }
     else
@@ -142,7 +142,7 @@
         const LOC_ID  = @Model.LocationId.GetValueOrDefault(0);
         const USER_ID = @Model.CurrentUserId;
 
-        // แผนที่สินค้า (id -> {id,name,sku,dm,oh})
+        // MAP (id -> {id,name,sku,dm,oh})
         const PRODUCTS = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
                 Model.ProductChoices.ToDictionary(
                     p => p.ProductId.ToString(),
@@ -235,7 +235,7 @@
           }
         };
 
-        // ---------- เรียก API เอกสาร ----------
+        // ---------- เรียก API ReturnDoc ----------
         async function apiRequest(url, body){
           const resp = await fetch(url, {
             method: 'POST',
@@ -331,7 +331,7 @@
                 continue;
               }
 
-              const created = await r1.json(); // {id,docNo,productId,qty,status,createdAt,...}
+              const created = await r1.json();
 
               it.dmAvail -= it.qty;
               it.ohAvail -= it.qty;
