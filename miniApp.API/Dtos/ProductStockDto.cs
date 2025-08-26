@@ -19,6 +19,16 @@ namespace miniApp.API.Dtos
         public int QtyReserved { get; set; }
         public int QtyDamaged { get; set; }
         public int QtyAvailable { get; set; }
+        public int QtyReceive { get; set; }
+        public int LocationId { get; set; }
+        public string LocationName { get; set; } = "";
+        public int isWarehouse { get; set; }
+        public int isStorehouse { get; set; }
+        public int isDamagehouse { get; set; }
+        public string? CategoryName { get; set; }
+        public string? BrandName { get; set; }
+        public int TotalQtyAllLocations { get; set; }
+
     }
     public class AdjustStockDto
     {

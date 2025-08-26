@@ -10,6 +10,7 @@ using miniApp.API.Dtos;
 using miniApp.API.Models;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -157,28 +158,7 @@ namespace miniApp.API.Controllers
             return Ok(new { total, page, pageSize, items });
         }
 
-        [HttpGet("location/{locationId:int}")]
-        public async Task<ActionResult<IEnumerable<ProductStockRowDto>>> GetByLocation(int locationId, [FromQuery] int? userId)
-        {
-            var rows = await (from s in _context.ProductStocks
-                              join p in _context.Products on s.ProductId equals p.Id
-                              where s.LocationId == locationId
-                              orderby p.Name
-                              select new ProductStockRowDto
-                              {
-                                  ProductId = p.Id,
-                                  Name = p.Name,
-                                  Sku = p.Sku,
-                                  ImageUrl = p.ImageUrl,
-                                  Price = (decimal?)p.Price ?? 0,
-                                  QtyOnHand = s.QtyOnHand,
-                                  QtyReserved = s.QtyReserved,
-                                  QtyDamaged = s.QtyDamaged,
-                                  QtyAvailable = s.QtyAvailable
-                              }).ToListAsync();
 
-            return Ok(rows);
-        }
 
         [HttpGet("dropdown-not-in-location")]
         public async Task<ActionResult<IEnumerable<ProductResponseDto>>> DropdownNotInLocation(
@@ -251,34 +231,46 @@ namespace miniApp.API.Controllers
         {
             if (!IsAuthorized()) return Unauthorized();
             if (userId <= 0) return BadRequest("userId is required.");
-
             await SetUserSessionContextAsync(userId);
 
-            var q = from ps in _context.ProductStocks
-                    join p in _context.Products on ps.ProductId equals p.Id
-                    join l in _context.Locations on ps.LocationId equals l.Id
-                    where ps.LocationId == locationId
-                    select new
-                    {
-                        ps.ProductId,
-                        p.Name,
-                        p.Sku,
-                        p.ImageUrl,
-                        ps.LocationId,
-                        LocationName = l.Name,
-                        ps.QtyOnHand,
-                        ps.QtyReserved,
-                        ps.QtyDamaged,
-                        ps.QtyAvailable,
-                        ps.QtyReceive,
-                        l.isWarehouse,
-                        l.isStorehouse,
-                        l.isDamagehouse,            // NEW
-                        p.Price,
-                        TotalQtyAllLocations = p.Quantity,
-                        CategoryName = (string?)null,
-                        BrandName = (string?)null
-                    };
+            var q =
+                from ps in _context.ProductStocks.AsNoTracking()
+                where ps.LocationId == locationId
+                join p in _context.Products.AsNoTracking() on ps.ProductId equals p.Id
+                join l in _context.Locations.AsNoTracking() on ps.LocationId equals l.Id
+                // LEFT JOIN (ถ้ามี)
+                join c0 in _context.ProductCategories.AsNoTracking() on p.CategoryId equals c0.Id into gc
+                from c in gc.DefaultIfEmpty()
+                join b0 in _context.ProductBrands.AsNoTracking() on p.BrandId equals b0.Id into gb
+                from b in gb.DefaultIfEmpty()
+                select new ProductStockRowDto
+                {
+                    ProductId = ps.ProductId,
+                    Name = p.Name,
+                    Sku = p.Sku,
+                    ImageUrl = p.ImageUrl,
+                    Price = p.Price,
+
+                    LocationId = ps.LocationId,
+                    LocationName = l.Name,
+
+                    QtyOnHand = ps.QtyOnHand,
+                    QtyReserved = ps.QtyReserved,
+                    QtyDamaged = ps.QtyDamaged,
+                    QtyAvailable = ps.QtyAvailable,
+                    QtyReceive = ps.QtyReceive,      // << อ่านตรงจากคอลัมน์ NOT NULL
+
+                    isWarehouse = l.isWarehouse ?? 0,
+                    isStorehouse = l.isStorehouse ?? 0,
+                    isDamagehouse = l.isDamagehouse ?? 0,
+
+                    CategoryName = c != null ? c.Name : null,
+                    BrandName = b != null ? b.Name : null,
+
+                    TotalQtyAllLocations = _context.ProductStocks
+                        .Where(s => s.ProductId == ps.ProductId)
+                        .Sum(s => (int?)s.QtyOnHand) ?? 0
+                };
 
             var items = await q.OrderBy(x => x.Name).ToListAsync();
             return Ok(items);
