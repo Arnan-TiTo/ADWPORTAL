@@ -8,6 +8,18 @@ namespace miniApp.API.Dtos
         public int LocationId { get; set; }
 
     }
+    public class ProductStockRowDto
+    {
+        public int ProductId { get; set; }
+        public string Name { get; set; } = "";
+        public string? Sku { get; set; }
+        public string? ImageUrl { get; set; }
+        public decimal Price { get; set; }
+        public int QtyOnHand { get; set; }
+        public int QtyReserved { get; set; }
+        public int QtyDamaged { get; set; }
+        public int QtyAvailable { get; set; }
+    }
     public class AdjustStockDto
     {
         public int ProductId { get; set; }

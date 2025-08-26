@@ -249,6 +249,113 @@ namespace miniApp.API.Controllers
             }
         }
 
+        [HttpGet("history/bydateft")]
+        public async Task<ActionResult<IEnumerable<OrderViewDto>>> GetHistoryByDateFT(
+            [FromQuery] int userId,
+            [FromQuery] DateTime? from,
+            [FromQuery] DateTime? to,
+            [FromQuery] string? q,
+            [FromQuery] string? locations,
+            [FromQuery] bool includeAll = false
+        )
+        {
+            if (!IsAuthorized()) return Unauthorized();
+            if (userId <= 0) return BadRequest("userId is required.");
+
+            // --- resolve date range (date-only, inclusive) ---
+            var startDate = (from?.Date) ?? DateTime.Today.AddDays(-90);
+            var endDate = (to?.Date) ?? DateTime.Today;
+            if (endDate < startDate) (startDate, endDate) = (endDate, startDate);
+
+            // --- user allowed locations ---
+            List<int> allowed = includeAll
+                ? new() // not used
+                : await _context.UserLocations
+                    .Where(ul => ul.UserId == userId)
+                    .Select(ul => ul.LocationId)
+                    .ToListAsync();
+
+            // requested locations (CSV)
+            List<int> requested = ParseCsvInt(locations);
+
+            // decide final location filter
+            // - includeAll == true  -> no location filter (ดึงทุกสาขา)
+            // - includeAll == false -> ถ้ามี allowed -> allowed ∩ requested(ถ้ามี) ; ถ้าไม่มี allowed เลย -> คืนว่าง
+            List<int>? locFilter = null;
+            if (!includeAll)
+            {
+                if (allowed.Count == 0) return Ok(Array.Empty<OrderViewDto>());
+                locFilter = requested.Count > 0 ? allowed.Intersect(requested).ToList() : allowed;
+                if (locFilter.Count == 0) return Ok(Array.Empty<OrderViewDto>());
+            }
+
+            // --- query: by date (day-only) + filter items by locations (if any) ---
+            var query = _context.OrderHd
+                .Where(h => h.OrderDate.Date >= startDate && h.OrderDate.Date <= endDate)
+                .Select(h => new
+                {
+                    Header = h,
+                    Items = locFilter == null
+                        ? h.OrderDts
+                        : h.OrderDts.Where(d => locFilter.Contains(d.LocationId))
+                });
+
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var qq = q.Trim();
+                query = query.Where(x =>
+                    (x.Header.OrderNo ?? "").Contains(qq) ||
+                    x.Items.Any(i => (i.ProductName ?? "").Contains(qq))
+                );
+            }
+
+            var rows = await query.ToListAsync();
+            rows = rows.Where(x => x.Items.Any()).ToList();
+
+            // images
+            var allProdIds = rows.SelectMany(x => x.Items.Select(i => i.ProductId)).Distinct().ToList();
+            var prodMap = await _context.Products
+                .Where(p => allProdIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.ImageUrl ?? "");
+
+            var result = rows.Select(x => new OrderViewDto
+            {
+                OrderNo = x.Header.OrderNo,
+                OrderDate = x.Header.OrderDate,
+                CustomerName = x.Header.CustomerName,
+                AddressLine = x.Header.AddressLine,
+                SubDistrict = x.Header.SubDistrict,
+                District = x.Header.District,
+                Province = x.Header.Province,
+                ZipCode = x.Header.ZipCode,
+                CustomerPhone = x.Header.CustomerPhone,
+                CustomerEmail = x.Header.CustomerEmail,
+                Social = x.Header.Social,
+                Items = x.Items.Select(d => new OrderItemDto
+                {
+                    LocationId = d.LocationId,
+                    ProductId = d.ProductId,
+                    ProductName = d.ProductName,
+                    Quantity = d.Quantity,
+                    UnitPrice = d.UnitPrice,
+                    Discount = d.Discount,
+                    ImageUrl = prodMap.TryGetValue(d.ProductId, out var img) ? img : ""
+                }).ToList()
+            }).ToList();
+
+            return Ok(result);
+
+            static List<int> ParseCsvInt(string? csv)
+            {
+                var list = new List<int>();
+                if (string.IsNullOrWhiteSpace(csv)) return list;
+                foreach (var t in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    if (int.TryParse(t, out var v)) list.Add(v);
+                return list;
+            }
+        }
+
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
         {

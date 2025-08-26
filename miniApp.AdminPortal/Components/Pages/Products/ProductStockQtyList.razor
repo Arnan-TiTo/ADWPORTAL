@@ -534,6 +534,7 @@ else
         catch { _userId = 0; }
 
         await LoadLocationsForUser(_userId);
+        await LoadLocationFlags();
         await LoadStocks();
         loading = false;
     }
@@ -585,18 +586,6 @@ else
             var http = await CreateClient();
             var url = $"api/ProductStock/location/{selectedLocationId}?userId={_userId}";
             all = await http.GetFromJsonAsync<List<StockRow>>(url) ?? new();
-
-            // set flags by first row
-            if (all.Count > 0)
-            {
-                locationIsWarehouse = all[0].isWarehouse == 1;
-                locationIsStorehouse = all[0].isStorehouse == 1;
-                locationIsDamagehouse = all[0].isDamagehouse == 1;
-            }
-            else
-            {
-                locationIsWarehouse = locationIsStorehouse = locationIsDamagehouse = false;
-            }
         }
         catch (Exception ex)
         {
@@ -671,6 +660,7 @@ else
     {
         if (int.TryParse(e.Value?.ToString(), out var v))
             selectedLocationId = v;
+        await LoadLocationFlags();
         await LoadStocks();
     }
 
@@ -954,7 +944,6 @@ else
             saving = true;
             var http = await CreateClient();
 
-            // ส่งชื่อฟิลด์ให้ตรงกับ DTO: QtyReceive
             var payload = new
             {
                 Id = receiveDamageDoc.Id,
@@ -966,7 +955,7 @@ else
             var resp = await http.PostAsJsonAsync("api/ProductStock/damage-return/confirm", payload);
             if (resp.IsSuccessStatusCode)
             {
-                // ที่คลังใหญ่: OnHand สุทธิเท่าเดิม, Damaged + qty
+                // WH: OnHand สุทธิเท่าเดิม, Damaged + qty
                 selectedRow.QtyDamaged += qty;
                 selectedRow.QtyAvailable = selectedRow.QtyOnHand - selectedRow.QtyReserved - selectedRow.QtyDamaged;
 
@@ -1034,7 +1023,7 @@ else
             var resp = await http.PostAsJsonAsync("api/ProductStock/warehouse-to-damagehouse", payload);
             if (resp.IsSuccessStatusCode)
             {
-                // ที่คลังใหญ่: Damaged -qty, OnHand -qty
+                // DH: Damaged -qty, OnHand -qty
                 selectedRow.QtyDamaged -= transferDamageQty;
                 selectedRow.QtyOnHand -= transferDamageQty;
                 selectedRow.QtyAvailable = selectedRow.QtyOnHand - selectedRow.QtyReserved - selectedRow.QtyDamaged;
@@ -1092,9 +1081,41 @@ else
     private string FromLocationName(int id)
         => locations.FirstOrDefault(x => x.Id == id)?.Name ?? $"#{id}";
 
+    private async Task LoadLocationFlags()
+    {
+        locationIsWarehouse = locationIsStorehouse = locationIsDamagehouse = false;
+
+        if (selectedLocationId <= 0) return;
+
+        try
+        {
+            var http = await CreateClient();
+            var loc = await http.GetFromJsonAsync<LocationFlag>($"api/Locations/{selectedLocationId}");
+            locationIsWarehouse = ((loc?.isWarehouse ?? 0) == 1);
+            locationIsStorehouse = ((loc?.isStorehouse ?? 0) == 1);
+            locationIsDamagehouse = ((loc?.isDamagehouse ?? 0) == 1);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load location flags failed: {ex.Message}", "warning");
+        }
+    }
+
     // ===== DTOs =====
-    public class LocationOption { public int Id { get; set; } public string Name { get; set; } = ""; }
+    public class LocationOption { 
+        public int Id { get; set; } 
+        public string Name { get; set; } = "";
+    }
     public class UserLocationDto { public int UserId { get; set; } public int LocationId { get; set; } }
+
+    public class LocationFlag
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public int isWarehouse { get; set; }
+        public int? isStorehouse { get; set; }
+        public int? isDamagehouse { get; set; }
+    }
 
     public class StockRow
     {
@@ -1110,7 +1131,7 @@ else
         public int QtyReserved { get; set; }
         public int QtyDamaged { get; set; }
         public int QtyAvailable { get; set; }
-        public int QtyReceive { get; set; }      // ถ้า API เติมมาก็โชว์/ใช้ได้
+        public int QtyReceive { get; set; }
 
         public int isWarehouse { get; set; }
         public int isStorehouse { get; set; }
@@ -1126,7 +1147,6 @@ else
         public string? ByUser { get; set; }
     }
 
-    // สำหรับ Receive Damage dropdown/list + doc view
     public class DamageReturnListItem
     {
         public int Id { get; set; }

@@ -67,4 +67,26 @@
             console.error('downloadFile error', e);
         }
     };
+
+    window.downloadFileFromUrl = async function (url, filename) {
+        if (!url) return;
+        try {
+            const res = await fetch(url, { mode: 'cors' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename || 'download';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+            console.error('downloadFileFromUrl', err);
+            // fallback ให้ผู้ใช้เซฟเอง
+            window.open(url, '_blank');
+        }
+    };
+
 })();

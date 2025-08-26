@@ -157,6 +157,55 @@ namespace miniApp.API.Controllers
             return Ok(new { total, page, pageSize, items });
         }
 
+        [HttpGet("location/{locationId:int}")]
+        public async Task<ActionResult<IEnumerable<ProductStockRowDto>>> GetByLocation(int locationId, [FromQuery] int? userId)
+        {
+            var rows = await (from s in _context.ProductStocks
+                              join p in _context.Products on s.ProductId equals p.Id
+                              where s.LocationId == locationId
+                              orderby p.Name
+                              select new ProductStockRowDto
+                              {
+                                  ProductId = p.Id,
+                                  Name = p.Name,
+                                  Sku = p.Sku,
+                                  ImageUrl = p.ImageUrl,
+                                  Price = (decimal?)p.Price ?? 0,
+                                  QtyOnHand = s.QtyOnHand,
+                                  QtyReserved = s.QtyReserved,
+                                  QtyDamaged = s.QtyDamaged,
+                                  QtyAvailable = s.QtyAvailable
+                              }).ToListAsync();
+
+            return Ok(rows);
+        }
+
+        [HttpGet("dropdown-not-in-location")]
+        public async Task<ActionResult<IEnumerable<ProductResponseDto>>> DropdownNotInLocation(
+            [FromQuery] int locationId, [FromQuery] string? q = null, [FromQuery] int top = 50)
+        {
+            if (locationId <= 0) return Ok(Array.Empty<ProductResponseDto>());
+
+            var query = _context.Products
+                .Where(p => !_context.ProductStocks
+                    .Any(s => s.LocationId == locationId && s.ProductId == p.Id));
+
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var s = q.Trim();
+                query = query.Where(p => p.Name.Contains(s) || p.Sku.Contains(s));
+            }
+
+            var list = await query
+                .OrderBy(p => p.Name)
+                .Take(top)
+                .Select(p => new ProductResponseDto { Id = p.Id, Name = p.Name, Sku = p.Sku })
+                .ToListAsync();
+
+            return Ok(list);
+        }
+
+
         // ====== GET: api/productstock/product/{productId}?userId=... ======
         [HttpGet("product/{productId}")]
         public async Task<IActionResult> GetByProduct(int productId, [FromQuery] int userId)

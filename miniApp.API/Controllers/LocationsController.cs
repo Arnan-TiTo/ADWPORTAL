@@ -47,7 +47,6 @@ namespace miniApp.API.Controllers
             return Path.Combine(webRoot, "images");
         }
 
-
         [HttpPost]
         public async Task<IActionResult> CreateLocation(
             [FromForm] string Name,
@@ -64,7 +63,7 @@ namespace miniApp.API.Controllers
             [FromForm] string? ContractPhone,
             [FromForm] int? isWarehouse,
             [FromForm] int? isStorehouse,
-
+            [FromForm] int? isDamagehouse,
             [FromForm] List<IFormFile>? Image,
             [FromForm] string Usernames)
         {
@@ -89,9 +88,9 @@ namespace miniApp.API.Controllers
                 Postcode = Postcode,
                 ContractPerson = ContractPerson,
                 ContractPhone = ContractPhone,
-                isWarehouse = isWarehouse,
-                isStorehouse = isStorehouse,
-
+                isWarehouse = isWarehouse ?? 0,
+                isStorehouse = isStorehouse ?? 0,
+                isDamagehouse = isDamagehouse ?? 0,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -121,7 +120,7 @@ namespace miniApp.API.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            return Ok(new { message = "Location saved", location.Id });
+            return Ok(new { message = "Location saved", Id = location.Id });
         }
 
         [HttpPut("{id:int}")]
@@ -141,7 +140,7 @@ namespace miniApp.API.Controllers
             [FromForm] string? ContractPhone,
             [FromForm] int? isWarehouse,
             [FromForm] int? isStorehouse,
-
+            [FromForm] int? isDamagehouse,
             [FromForm] List<IFormFile>? Image,
             [FromForm] string Usernames)
         {
@@ -167,8 +166,9 @@ namespace miniApp.API.Controllers
             location.Postcode = Postcode;
             location.ContractPerson = ContractPerson;
             location.ContractPhone = ContractPhone;
-            location.isWarehouse = isWarehouse;
-            location.isStorehouse = isStorehouse;
+            location.isWarehouse = isWarehouse ?? 0;
+            location.isStorehouse = isStorehouse ?? 0;
+            location.isDamagehouse = isDamagehouse ?? 0;
 
             if (Image is { Count: > 0 })
             {
@@ -222,6 +222,9 @@ namespace miniApp.API.Controllers
                     Postcode = l.Postcode,
                     ContractPerson = l.ContractPerson,
                     ContractPhone = l.ContractPhone,
+                    isWarehouse = l.isWarehouse,
+                    isStorehouse = l.isStorehouse,
+                    isDamagehouse = l.isDamagehouse,
 
                     Images = l.Images.Select(img => new LocationImageDto
                     {
@@ -264,6 +267,9 @@ namespace miniApp.API.Controllers
                 Postcode = l.Postcode,
                 ContractPerson = l.ContractPerson,
                 ContractPhone = l.ContractPhone,
+                isWarehouse = l.isWarehouse,
+                isStorehouse = l.isStorehouse,
+                isDamagehouse = l.isDamagehouse,
 
                 Images = l.Images.Select(img => new LocationImageDto
                 {
@@ -273,7 +279,6 @@ namespace miniApp.API.Controllers
             };
             return Ok(dto);
         }
-
 
         [HttpGet("dropdown")]
         public async Task<IActionResult> GetLocationDropdown()
