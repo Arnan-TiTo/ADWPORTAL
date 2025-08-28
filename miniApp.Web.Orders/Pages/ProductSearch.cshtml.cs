@@ -1,9 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using miniApp.WebOrders.Models;
-using System.Net.Http.Json;
 using System.Text.Json;
-using System.Linq;
+using System.Globalization;
 
 namespace miniApp.WebOrders.Pages
 {
@@ -84,7 +83,13 @@ namespace miniApp.WebOrders.Pages
                 : $"{baseUrl}api/product";
 
             var all = await client.GetFromJsonAsync<List<ProductDto>>(url) ?? new();
-            Products = all.Where(p => visible.Contains(p.Id)).ToList();
+
+            var thComparer = StringComparer.Create(new CultureInfo("th-TH"), ignoreCase: true);
+
+            Products = all
+                .Where(p => visible.Contains(p.Id))
+                .OrderBy(p => p.Name ?? string.Empty, thComparer)   
+                .ToList();
         }
 
         [ValidateAntiForgeryToken]

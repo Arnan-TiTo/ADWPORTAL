@@ -188,35 +188,51 @@
           });
         }
 
-        async function loadAvail() {
+        async function loadAvail({ sortByName = true, desc = false } = {}) {
           if (!LOCATION_ID || !USERID) return;
+
           try {
             const url = `${APIBASEURL}api/ProductStock/location/${LOCATION_ID}?userId=${USERID}`;
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${AUTHTOKEN}` } });
-            if (!res.ok) return;
+            const res = await fetch(url, {
+              headers: { Authorization: `Bearer ${AUTHTOKEN}`, Accept: "application/json" }
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-            const rows = await res.json();
-            for (const r of (rows || [])) {
+            let rows = await res.json();
+            if (!Array.isArray(rows)) rows = [];
+
+            if (sortByName) {
+              const collator = new Intl.Collator("th-TH", { sensitivity: "base", numeric: true });
+              rows.sort((a, b) => {
+                const an = (a.productName ?? a.ProductName ?? a.name ?? a.Name ?? "").trim();
+                const bn = (b.productName ?? b.ProductName ?? b.name ?? b.Name ?? "").trim();
+                return desc ? collator.compare(bn, an) : collator.compare(an, bn);
+              });
+            }
+
+            for (const r of rows) {
               const pid = r.productId ?? r.ProductId;
-              const oh  = Number(r.qtyOnHand    ?? r.QtyOnHand    ?? 0);
-              const rs  = Number(r.qtyReserved  ?? r.QtyReserved  ?? 0);
-              const dm  = Number(r.qtyDamaged   ?? r.QtyDamaged   ?? 0);
+              const oh  = Number(r.qtyOnHand   ?? r.QtyOnHand   ?? 0);
+              const rs  = Number(r.qtyReserved ?? r.QtyReserved ?? 0);
+              const dm  = Number(r.qtyDamaged  ?? r.QtyDamaged  ?? 0);
+
               let avail = Number(r.qtyAvailable ?? r.QtyAvailable);
               if (!Number.isFinite(avail)) avail = oh - rs - dm;
               avail = Math.max(0, Math.trunc(avail));
 
               STOCK_MAP[pid] = avail;
 
-              const span = document.querySelector(`[data-avail-for="${pid}"]`);
+              const span = document.querySelector(`[data-avail-for="${CSS.escape(String(pid))}"]`);
               if (span) span.textContent = avail.toLocaleString();
             }
+
             updateButtonsByAvail();
           } catch (e) {
-            console.error('loadAvail failed', e);
+            console.error("loadAvail failed", e);
           }
         }
 
-        // ดัก submit ปุ่ม "เพิ่มลงตะกร้า" ทั้งของที่เรนเดอร์จาก Razor และที่เติมจาก JS
+        // ดัก submit ปุ่ม "เพิ่มลงตะกร้า" ทั้ง Razor และ JS
         document.getElementById('productScroll')?.addEventListener('submit', (ev)=>{
           const form = ev.target.closest('form');
           if (!form) return;
@@ -236,6 +252,8 @@
         document.addEventListener('DOMContentLoaded', loadAvail);
 
         // ===== ค้นหา =====
+        const SORT_BY  = 'name';
+        const SORT_DIR = 'asc';
         async function doSearch(e){
             e.preventDefault();
             const keyword = document.getElementById("searchInput").value.trim();
@@ -254,7 +272,28 @@
 
                 if(!products.length){ container.innerHTML = `<p class="text-sm text-gray-400">No products found.</p>`; return; }
 
-                products.forEach(p=>{
+                const collator = new Intl.Collator('th-TH', { sensitivity: 'base', numeric: true });
+                   const get = {
+                     name:  p => (p.productName ?? p.ProductName ?? p.name ?? p.Name ?? '').trim(),
+                     brand: p => (p.brandName    ?? p.BrandName    ?? '').trim(),
+                     price: p => Number(p.price  ?? p.Price ?? 0)
+                   };
+
+                   products.sort((a, b) => {
+                     const ka = get[SORT_BY](a);
+                     const kb = get[SORT_BY](b);
+
+                     if (!ka && kb) return  1;
+                     if (!kb && ka) return -1;
+
+                     let r = (SORT_BY === 'price') ? (ka - kb) : collator.compare(ka, kb);
+
+                     if (r === 0) r = collator.compare(get.brand(a), get.brand(b)) || ((a.id ?? 0) - (b.id ?? 0));
+
+                     return (SORT_DIR === 'desc') ? -r : r;
+                   });
+
+                    products.forEach(p=>{
                     const el = document.createElement("div");
                     el.className = "border rounded-xl p-2 text-center shadow-sm min-w-[40%]";
                     const imgSrc = resolveImg(p.imageUrl);
@@ -287,7 +326,6 @@
                     container.appendChild(el);
                 });
 
-                //อัปเดตสถานะปุ่มตามสต็อกล่าสุด
                 updateButtonsByAvail();
 
             }catch(err){

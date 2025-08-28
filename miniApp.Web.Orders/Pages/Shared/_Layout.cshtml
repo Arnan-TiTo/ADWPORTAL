@@ -120,16 +120,13 @@
 
                 <!-- Content and Footer -->
                 <div class="flex flex-col flex-1 relative">
-                    <!-- Page Content -->
-                    @* <main class="flex-1 px-0 py-8 pb-[88px] overflow-y-auto w-full min-h-0 overscroll-contain"> *@
                     <main class="flex-1 px-0 py-2 overflow-y-auto w-full min-h-0 overscroll-contain"
-                          + style="padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));">
+                          style="padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));">
                         @RenderBody()
                     </main>
 
-                    <!-- Footer -->
                     <footer class="fixed left-0 right-0 bg-white border-t shadow-md z-50 h-16"
-                            + style="bottom: env(safe-area-inset-bottom, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);">
+                            style="bottom: env(safe-area-inset-bottom, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);">
                         @await Html.PartialAsync("_FooterMenu")
                     </footer>
                 </div>
