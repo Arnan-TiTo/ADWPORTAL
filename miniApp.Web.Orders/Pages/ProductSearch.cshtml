@@ -86,7 +86,9 @@
             @foreach (var p in Model.Products)
             {
                 <div class="border rounded-xl p-2 text-center shadow-sm min-w-[40%]">
-                    <img src="@Img(p.ImageUrl)" class="w-75 h-75  rounded mb-2 object-cover" />
+                    <div class="h-36 flex items-center justify-center">
+                        <img src="@Img(p.ImageUrl)" class="max-h-full max-w-full object-contain" />
+                    </div>
                     <div class="text-xs text-gray-500">@p.BrandName</div>
                     <div class="font-semibold text-sm">@p.Name</div>
                     <div class="text-sm text-black font-bold">@p.Price.ToString("N0") Baht</div>
