@@ -1,0 +1,111 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.0.6 Chrome/138.0.7204.100 Electron/37.2.3 Safari/537.36" version="28.0.6">
+  <diagram name="Page-1" id="iMLS5y820DA8gsJnh1gI">
+    <mxGraphModel dx="786" dy="573" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-2" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" vertex="1" parent="1">
+          <mxGeometry x="70" y="130" width="90" height="390" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-3" value="&lt;div&gt;Admin Portal&lt;/div&gt;(warehouse)" style="html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="70" y="80" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-4" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" vertex="1" parent="1">
+          <mxGeometry x="270" y="130" width="90" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-5" value="Front Line&lt;br&gt;(Distibution)&amp;nbsp;" style="html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="270" y="80" width="88" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-6" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" vertex="1" parent="1">
+          <mxGeometry x="470" y="130" width="90" height="390" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-7" value="Sale Report&lt;br&gt;(Shop)" style="html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="470" y="80" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-14" value="" style="edgeStyle=none;orthogonalLoop=1;jettySize=auto;html=1;rounded=0;exitX=1;exitY=0.156;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="6XCHsVpmGGCH6MuK7xro-2" target="6XCHsVpmGGCH6MuK7xro-4">
+          <mxGeometry width="100" relative="1" as="geometry">
+            <mxPoint x="180" y="190" as="sourcePoint" />
+            <mxPoint x="280" y="184.5" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-15" value="โอนออก" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="176" y="160" width="70" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-16" value="" style="edgeStyle=none;orthogonalLoop=1;jettySize=auto;html=1;rounded=0;exitX=1;exitY=0.156;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1">
+          <mxGeometry width="100" relative="1" as="geometry">
+            <mxPoint x="360" y="190" as="sourcePoint" />
+            <mxPoint x="470" y="190" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-17" value="โอนออก" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="370" y="160" width="70" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-18" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" vertex="1" parent="1">
+          <mxGeometry x="268" y="385" width="90" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-19" value="Distibution&amp;nbsp;" style="html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="279" y="400" width="70" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-20" value="" style="edgeStyle=none;orthogonalLoop=1;jettySize=auto;html=1;rounded=0;" edge="1" parent="1" source="6XCHsVpmGGCH6MuK7xro-4" target="6XCHsVpmGGCH6MuK7xro-18">
+          <mxGeometry width="100" relative="1" as="geometry">
+            <mxPoint x="210" y="290" as="sourcePoint" />
+            <mxPoint x="310" y="290" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-21" value="บันทึกส่งคืนของเสีย" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="190" y="340" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-22" value="บันทีกรับไม่เกินยอดที่ warehouse ส่งมา" style="whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="140" width="70" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-23" value="" style="edgeStyle=none;orthogonalLoop=1;jettySize=auto;html=1;rounded=0;entryX=1;entryY=1;entryDx=0;entryDy=-5;entryPerimeter=0;" edge="1" parent="1">
+          <mxGeometry width="100" relative="1" as="geometry">
+            <mxPoint x="268" y="456" as="sourcePoint" />
+            <mxPoint x="160" y="456" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-24" value="บันทีกรับส่งคืน" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="170" y="424" width="90" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-25" value="ตรวจนับ&lt;br&gt;ยอด &amp;lt; คงเหลือ&lt;br&gt;ตัดยอดคืน DC" style="whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="160" width="70" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-26" value="บันทีกรับส่งคืน" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="371" y="269" width="90" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-27" value="" style="edgeStyle=none;orthogonalLoop=1;jettySize=auto;html=1;rounded=0;entryX=0.97;entryY=0.893;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="6XCHsVpmGGCH6MuK7xro-6">
+          <mxGeometry width="100" relative="1" as="geometry">
+            <mxPoint x="460" y="300" as="sourcePoint" />
+            <mxPoint x="359.99999999999994" y="300.00000000000006" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-28" value="ตรวจนับ&lt;br&gt;ยอด &amp;gt; คงเหลือ&lt;br&gt;แจ้ง Admin&lt;div&gt;ทำ Adjust In,Transfer&lt;/div&gt;" style="whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="260" width="70" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-29" value="&amp;nbsp;โอนออก&amp;nbsp;" style="whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="230" width="70" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-30" value="บันทึก&lt;div&gt;รายการขาย&lt;/div&gt;" style="whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="410" width="70" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-31" value="บันทีกรับ" style="whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="140" width="70" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-32" value="โอนออก" style="whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="235" width="70" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-33" value="บันทึกรับคืน&lt;div&gt;ของเสีย&lt;/div&gt;" style="whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="334" width="70" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="6XCHsVpmGGCH6MuK7xro-36" value="โอนออก&lt;div&gt;ของเสีย&lt;/div&gt;&lt;div&gt;เข้าคลัง&lt;/div&gt;&lt;div&gt;Damage&lt;/div&gt;" style="whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="430" width="70" height="80" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

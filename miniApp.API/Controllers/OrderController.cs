@@ -177,7 +177,9 @@ namespace miniApp.API.Controllers
             if (locFilter.Count == 0) return Ok(Array.Empty<OrderViewDto>());
 
             // 3) กำหนดช่วงวัน
-            var fromAt = (from?.Date) ?? DateTime.UtcNow.Date.AddDays(-90);
+            //var fromAt = (from?.Date) ?? DateTime.UtcNow.Date.AddDays(-90);
+            var today = DateTime.Today;
+            var fromAt = (from?.Date ?? new DateTime(today.Year, today.Month, 1)).Date;
             var toAt = (to?.Date.AddDays(1)) ?? DateTime.UtcNow.Date.AddDays(1); // exclusive
 
             // 4) ดึงออเดอร์ + กรอง items ด้วย locFilter
@@ -208,7 +210,7 @@ namespace miniApp.API.Controllers
             var allProdIds = rows.SelectMany(x => x.Items.Select(i => i.ProductId)).Distinct().ToList();
             var prodMap = await _context.Products
                 .Where(p => allProdIds.Contains(p.Id))
-                .ToDictionaryAsync(p => p.Id, p => p.ImageUrl ?? "");
+                .ToDictionaryAsync(p => p.Id, p => new { Img = p.ImageUrl ?? "", Sku = p.Sku ?? "" });
 
             // 8) map → DTO
             var result = rows.Select(x => new OrderViewDto
@@ -228,11 +230,12 @@ namespace miniApp.API.Controllers
                 {
                     LocationId = d.LocationId,
                     ProductId = d.ProductId,
+                    Sku = prodMap.TryGetValue(d.ProductId, out var v) ? v.Sku : "",
                     ProductName = d.ProductName,
                     Quantity = d.Quantity,
                     UnitPrice = d.UnitPrice,
                     Discount = d.Discount,
-                    ImageUrl = prodMap.TryGetValue(d.ProductId, out var img) ? img : ""
+                    ImageUrl = prodMap.TryGetValue(d.ProductId, out v) ? v.Img : ""
                 }).ToList()
             }).ToList();
 

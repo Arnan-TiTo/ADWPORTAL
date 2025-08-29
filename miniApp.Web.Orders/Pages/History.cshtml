@@ -50,7 +50,7 @@
             <input type="hidden" name="ToDate" value="@(Model.ToDate?.ToString("yyyy-MM-dd"))" />
             <!-- ส่งค่าถัดไป -->
             <input type="hidden" name="SortDir" value="@Model.NextSortDir" />
-            <button type="submit" class="px-3 py-1 rounded border text-sm bg-gray-50">
+            <button type="submit" class="px-3 py-1 rounded border text-sm bg-green-50">
                 Sort by date @((Model.SortDir?.Equals("asc", StringComparison.OrdinalIgnoreCase) ?? false) ? "▲" : "▼")
             </button>
         </form>
@@ -112,7 +112,7 @@
                                 <img src="@Img(item.ImageUrl)"
                                      class="w-14 h-14 rounded bg-gray-100 border object-cover" />
                                 <div class="flex-1">
-                                    <div class="font-semibold text-xs">@item.ProductId</div>
+                                    <div class="font-semibold text-xs">@item.Sku</div>
                                     <div class="font-semibold text-sm">@item.ProductName</div>
                                 </div>
                                 <div class="text-right font-semibold text-black">

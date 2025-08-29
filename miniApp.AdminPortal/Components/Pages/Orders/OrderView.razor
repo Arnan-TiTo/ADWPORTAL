@@ -26,7 +26,7 @@ else
                 <div class="card-header">Order</div>
                 <div class="card-body">
                     <div><strong>No:</strong> @order.OrderNo</div>
-                    <div><strong>Date:</strong> @order.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+                    <div><strong>Date:</strong> @order.OrderDate</div>
                     <div><strong>Payment:</strong> @order.PaymentMethod</div>
                     <div><strong>Ask to contact:</strong> @(order.MayIAsk ? "Yes" : "No")</div>
                 </div>

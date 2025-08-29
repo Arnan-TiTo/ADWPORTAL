@@ -34,18 +34,6 @@ namespace miniApp.API.Dtos
         public int Id { get; set; }
 
     }
-
-    public class OrderItemDto
-    {
-        public int LocationId { get; set; }
-        public int ProductId { get; set; }
-        public string ProductName { get; set; } = "";
-        public int Quantity { get; set; }
-        public decimal UnitPrice { get; set; }
-        public decimal Discount { get; set; }
-        public decimal Total => Quantity * UnitPrice;
-        public string ImageUrl { get; set; } = "";
-    }
     
     public class OrderViewDto
     {
@@ -74,5 +62,18 @@ namespace miniApp.API.Dtos
         public string? SlipImage { get; set; }
 
         public List<OrderItemDto> Items { get; set; } = new();
+    }
+
+    public class OrderItemDto
+    {
+        public int LocationId { get; set; }
+        public int ProductId { get; set; }
+        public string Sku { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public decimal Total => Quantity * UnitPrice;
+        public string ImageUrl { get; set; } = "";
     }
 }

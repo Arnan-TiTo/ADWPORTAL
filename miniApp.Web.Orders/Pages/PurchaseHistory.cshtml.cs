@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using miniApp.WebOrders.Models;
 
 namespace miniApp.WebOrders.Pages
@@ -32,7 +33,7 @@ namespace miniApp.WebOrders.Pages
         {
             var data = await LoadOrdersAsync();
 
-            // filter ฝั่ง UI เพิ่มเติม (คำสั่ง/สินค้า/ราคา/ช่วงวัน)
+            // filter ครั้งแรก call api
             if (!string.IsNullOrWhiteSpace(OrderNoFilter))
                 data = data.Where(o => (o.OrderNo ?? "")
                     .Contains(OrderNoFilter.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
@@ -49,7 +50,7 @@ namespace miniApp.WebOrders.Pages
             if (ToDate.HasValue)
                 data = data.Where(o => o.OrderDate < ToDate.Value.Date.AddDays(1)).ToList();
 
-            // sort
+            // initial sort (ครั้งแรก)
             data = (SortField, (SortDir ?? "desc").ToLower()) switch
             {
                 ("OrderNo", "asc") => data.OrderBy(o => o.OrderNo).ToList(),
@@ -57,7 +58,7 @@ namespace miniApp.WebOrders.Pages
                 ("CustomerName", "asc") => data.OrderBy(o => o.CustomerName).ToList(),
                 ("CustomerName", "desc") => data.OrderByDescending(o => o.CustomerName).ToList(),
                 ("OrderDate", "asc") => data.OrderBy(o => o.OrderDate).ToList(),
-                ("OrderDate", "desc") => data.OrderByDescending(o => o.OrderDate).ToList(),
+                _ => data.OrderByDescending(o => o.OrderDate).ToList(),
             };
 
             Orders = data;
@@ -75,7 +76,8 @@ namespace miniApp.WebOrders.Pages
             var userId = HttpContext.Session.GetInt32("USERID") ?? 0;
             if (userId <= 0) return new();
 
-            var from = (FromDate ?? DateTime.Today.AddDays(-90)).Date;
+            var today = DateTime.Today;
+            var from = (FromDate ?? new DateTime(today.Year, today.Month, 1)).Date;
             var to = (ToDate ?? DateTime.Today).Date;
 
             var url = $"{api}api/order/history/by-location?userId={userId}" +
