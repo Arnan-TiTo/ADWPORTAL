@@ -32,6 +32,7 @@ namespace miniApp.API.Models
         // Payment
         public string PaymentMethod { get; set; } = string.Empty; 
         public string? SlipImage { get; set; }
+        public int? CreatedByUserId { get; set; }
 
         // Order Items
         public List<OrderDt> OrderDts { get; set; } = new();

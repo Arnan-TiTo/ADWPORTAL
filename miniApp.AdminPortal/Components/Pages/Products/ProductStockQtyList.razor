@@ -296,7 +296,7 @@ else
                         var outstanding = Math.Max(0, receiveDamageDoc.Qty - receiveDamageDoc.QtyReceive);
                         <div class="border rounded p-2 mb-2">
                             <div><strong>DocNo:</strong> @receiveDamageDoc.DocNo</div>
-                            <div><strong>Create date:</strong> @receiveDamageDoc.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+                            <div><strong>Create date:</strong> @receiveDamageDoc.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
                             <div><strong>Create by:</strong> @(receiveDamageDoc.CreatedByUserId?.ToString() ?? "-")</div>
                             <div><strong>Return Damage From:</strong> @FromLocationName(receiveDamageDoc.FromLocationId)</div>
                             <div><strong>Product:</strong> @receiveDamageDoc.ProductName (@receiveDamageDoc.Sku)</div>
@@ -411,16 +411,16 @@ else
                                     <tr>
                                         <th style="width:160px;">When</th>
                                         <th style="width:140px;">Action</th>
-                                        <th class="text-end" style="width:90px;">Qty</th>
+                                        <th class="text-end" style="width:90px;">Quantity</th>
                                         <th>Note</th>
-                                        <th style="width:160px;">By</th>
+                                        <th style="width:160px;">By User</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach (var a in audit)
                                     {
                                         <tr>
-                                            <td>@a.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                            <td>@a.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                                             <td>@a.Action</td>
                                             <td class="text-end">@a.Qty</td>
                                             <td class="text-truncate" style="max-width:420px">@a.Note</td>

@@ -87,6 +87,8 @@ namespace miniApp.API.Controllers
                 PaymentMethod = h.PaymentMethod,
                 SlipImage = h.SlipImage,
                 Social = h.Social,
+                CreatedByUserId = h.CreatedByUserId,
+
                 Items = h.OrderDts.Select(d => new OrderItemDto
                 {
                     LocationId = d.LocationId,
@@ -128,6 +130,7 @@ namespace miniApp.API.Controllers
                 CustomerPhone = h.CustomerPhone,
                 CustomerEmail = h.CustomerEmail,
                 Social = h.Social,
+                CreatedByUserId = h.CreatedByUserId,
 
                 Items = h.OrderDts.Select(d =>
                 {
@@ -226,6 +229,8 @@ namespace miniApp.API.Controllers
                 CustomerPhone = x.Header.CustomerPhone,
                 CustomerEmail = x.Header.CustomerEmail,
                 Social = x.Header.Social,
+                CreatedByUserId = x.Header.CreatedByUserId,
+
                 Items = x.Items.Select(d => new OrderItemDto
                 {
                     LocationId = d.LocationId,
@@ -334,6 +339,8 @@ namespace miniApp.API.Controllers
                 CustomerPhone = x.Header.CustomerPhone,
                 CustomerEmail = x.Header.CustomerEmail,
                 Social = x.Header.Social,
+                CreatedByUserId = x.Header.CreatedByUserId,
+
                 Items = x.Items.Select(d => new OrderItemDto
                 {
                     LocationId = d.LocationId,

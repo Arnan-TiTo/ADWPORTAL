@@ -3,6 +3,7 @@
 @using System.Net.Http.Headers
 @using System.Net.Http.Json
 @using System.Text
+@using System.Linq
 @using Microsoft.Extensions.Options
 @using Microsoft.JSInterop
 @using miniApp.AdminPortal.Models
@@ -74,6 +75,14 @@ else
                         Date @SortIcon(nameof(OrderViewDto.OrderDate))
                     </th>
 
+                    <th style="cursor:pointer" @onclick="SortByLocation">
+                        Location @SortIcon(nameof(OrderViewDto.LocationName))
+                    </th>
+
+                    <th style="cursor:pointer" @onclick="SortByUser">
+                        User @SortIcon(nameof(OrderViewDto.UserFullname))
+                    </th>
+
                     <th style="cursor:pointer" @onclick="SortByCustomer">
                         Customer @SortIcon(nameof(OrderViewDto.CustomerName))
                     </th>
@@ -83,7 +92,7 @@ else
                     <th>Slip</th>
 
                     <th class="text-end" style="cursor:pointer" @onclick="SortByItems">
-                        Items @SortIcon("Items")
+                        Quantity @SortIcon("Items")
                     </th>
 
                     <th class="text-end" style="cursor:pointer" @onclick="SortByAmount">
@@ -105,7 +114,9 @@ else
                             </button>
                         </td>
                         <td>@o.OrderNo</td>
-                        <td>@o.OrderDate</td>
+                        <td>@o.OrderDate.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@(string.IsNullOrWhiteSpace(o.LocationName) ? "-" : o.LocationName)</td>
+                        <td>@(string.IsNullOrWhiteSpace(o.UserFullname) ? "-" : o.UserFullname)</td>
                         <td>@o.CustomerName</td>
                         <td>@o.CustomerPhone</td>
                         <td class="text-truncate" style="max-width:320px">
@@ -136,13 +147,14 @@ else
                     {
                         <tr class="bg-light">
                             <td></td>
-                            <td colspan="9">
+                            <td colspan="11">
                                 <div class="table-responsive">
                                     <table class="table table-sm mb-0">
                                         <thead>
                                             <tr>
                                                 <th style="width:64px;">Image</th>
                                                 <th>Product</th>
+                                                <th>Location</th>
                                                 <th class="text-end">Qty</th>
                                                 <th class="text-end">Unit</th>
                                                 <th class="text-end">Discount</th>
@@ -164,6 +176,7 @@ else
                                                         }
                                                     </td>
                                                     <td>@it.ProductName</td>
+                                                    <td>@(string.IsNullOrWhiteSpace(it.LocationName) ? "-" : it.LocationName)</td>
                                                     <td class="text-end">@it.Quantity</td>
                                                     <td class="text-end">@FormatCurrency(it.UnitPrice)</td>
                                                     <td class="text-end">@FormatCurrency(it.Discount)</td>
@@ -173,7 +186,7 @@ else
                                         </tbody>
                                         <tfoot>
                                             <tr>
-                                                <td colspan="5" class="text-end"><strong>Grand Total</strong></td>
+                                                <td colspan="6" class="text-end"><strong>Grand Total</strong></td>
                                                 <td class="text-end"><strong>@FormatCurrency(CalcOrderAmount(o))</strong></td>
                                             </tr>
                                         </tfoot>
@@ -192,12 +205,16 @@ else
 
 @code {
     // ---------- Paging ----------
-    private PaginationState _pager = new() { WindowSize = 5 }; 
+    private PaginationState _pager = new() { WindowSize = 5 };
 
     // ---------- Data ----------
     private List<OrderViewDto> all = new();
     private List<OrderViewDto> filtered = new();
     private List<OrderViewDto> paged = new();
+
+    // lookups
+    private Dictionary<int, string> _userNameMap = new();
+    private Dictionary<int, string> _locationNameMap = new();
 
     private HashSet<int> expanded = new();
 
@@ -222,7 +239,6 @@ else
         loading = false;
     }
 
-
     private async Task Load()
     {
         try
@@ -234,8 +250,43 @@ else
             if (!string.IsNullOrWhiteSpace(token))
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+            // 1) โหลด orders
             all = await client.GetFromJsonAsync<List<OrderViewDto>>("api/Order") ?? new();
             foreach (var o in all) o.Items ??= new();
+
+            // 2) โหลด users & locations
+            var usersTask = client.GetFromJsonAsync<List<UserLite>>("api/Users");
+            var locsTask = client.GetFromJsonAsync<List<LocationLite>>("api/Locations/all");
+            await Task.WhenAll(usersTask!, locsTask!);
+
+            var users = usersTask?.Result ?? new List<UserLite>();
+            var locs = locsTask?.Result ?? new List<LocationLite>();
+
+            // 3) สร้างแผนที่ lookup (กัน key ซ้ำด้วย GroupBy → First)
+            _userNameMap = users
+                .GroupBy(u => u.Id)
+                .ToDictionary(g => g.Key, g => g.First().Fullname ?? string.Empty);
+
+            _locationNameMap = locs
+                .GroupBy(l => l.Id)
+                .ToDictionary(g => g.Key, g => g.First().Name ?? string.Empty);
+
+            // 4) เติม UserFullname (จาก CreatedByUserId) และ LocationName (จาก Item.LocationId)
+            foreach (var o in all)
+            {
+                o.UserFullname = _userNameMap.TryGetValue(o.CreatedByUserId, out var uf) ? uf : string.Empty;
+
+                foreach (var it in o.Items!)
+                {
+                    it.LocationName = _locationNameMap.TryGetValue(it.LocationId, out var ln) ? ln : string.Empty;
+                }
+
+                // รวมชื่อ location ของออเดอร์ (กันซ้ำ)
+                o.LocationName = string.Join(", ",
+                    o.Items.Select(i => i.LocationName)
+                           .Where(n => !string.IsNullOrWhiteSpace(n))
+                           .Distinct());
+            }
 
             // default sort: วันที่ล่าสุดก่อน
             sortField = nameof(OrderViewDto.OrderDate);
@@ -250,6 +301,7 @@ else
             ApplyFilterSortAndPage(resetPage: true);
         }
     }
+
 
     // --- Filtering + Sorting + Paging ---
     private void ApplyFilterClick() => ApplyFilterSortAndPage(resetPage: true);
@@ -313,7 +365,9 @@ else
 
     private void SortByOrderNo() => ToggleSort(nameof(OrderViewDto.OrderNo));
     private void SortByOrderDate() => ToggleSort(nameof(OrderViewDto.OrderDate));
-    private void SortByCustomer() => ToggleSort(nameof(OrderViewDto.CustomerName));
+    private void SortByLocation() => ToggleSort(nameof(OrderViewDto.LocationName));
+    private void SortByUser() => ToggleSort(nameof(OrderViewDto.UserFullname));
+        private void SortByCustomer() => ToggleSort(nameof(OrderViewDto.CustomerName));
     private void SortByItems() => ToggleSort("Items");
     private void SortByAmount() => ToggleSort("Amount");
 
@@ -410,8 +464,8 @@ else
 
         var header = new[]
         {
-            "OrderNo","OrderDate","Customer","Phone","Address",
-            "Product","Qty","UnitPrice","Discount","LineTotal","OrderAmount"
+            "OrderNo","OrderDate","Location","User","Customer","Phone","Address",
+            "Product","Quantity","UnitPrice","Discount","LineTotal","OrderAmount"
         };
         var lines = new List<string> { string.Join(",", header) };
 
@@ -434,7 +488,9 @@ else
                 lines.Add(string.Join(",", new[]
                 {
                     Esc(o.OrderNo ?? ""),
-                    Esc(o.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")),
+                    Esc(o.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")),
+                    Esc(o.LocationName ?? ""),
+                    Esc(o.UserFullname ?? ""),
                     Esc(o.CustomerName ?? ""),
                     Esc(o.CustomerPhone ?? ""),
                     Esc(address),
@@ -452,7 +508,9 @@ else
                 lines.Add(string.Join(",", new[]
                 {
                     Esc(o.OrderNo ?? ""),
-                    Esc(o.OrderDate.ToLocalTime().ToString("yyyy-MM-dd HH:mm")),
+                    Esc(o.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")),
+                    Esc(o.LocationName ?? ""),
+                    Esc(o.UserFullname ?? ""),
                     Esc(o.CustomerName ?? ""),
                     Esc(o.CustomerPhone ?? ""),
                     Esc(address),
@@ -509,10 +567,15 @@ else
         public string Nationality { get; set; } = "";
         public bool MayIAsk { get; set; }
 
+        public int CreatedByUserId { get; set; }
         public string PaymentMethod { get; set; } = "";
         public string SlipImage { get; set; } = "";
 
         public List<OrderItemDto>? Items { get; set; }
+
+        // เติมจาก lookup/API
+        public string UserFullname { get; set; } = "";
+        public string LocationName { get; set; } = "";
     }
 
     public class OrderItemDto
@@ -523,5 +586,21 @@ else
         public decimal UnitPrice { get; set; }
         public decimal Discount { get; set; }
         public string? ImageUrl { get; set; }
+
+        public int LocationId { get; set; }
+        public string LocationName { get; set; } = "";
+    }
+
+    // --- Lite DTOs for lookup ---
+    public class UserLite
+    {
+        public int Id { get; set; }
+        public string? Fullname { get; set; }
+    }
+
+    public class LocationLite
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
     }
 }

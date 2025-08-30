@@ -61,6 +61,7 @@ namespace miniApp.API.Dtos
 
         public string PaymentMethod { get; set; } = string.Empty;
         public string? SlipImage { get; set; }
+        public int? CreatedByUserId { get; set; }
 
         public List<OrderItemDto> Items { get; set; } = new();
     }
