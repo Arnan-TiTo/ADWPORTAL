@@ -53,6 +53,8 @@ namespace miniApp.WebOrders.Models
         public bool MayIAsk { get; set; }
         public string PaymentMethod { get; set; } = "";
         public string? SlipImage { get; set; }
+        public int CreatedByUserId { get; set; }
+
         public List<OrderItemDto> Items { get; set; } = new();
     }
 

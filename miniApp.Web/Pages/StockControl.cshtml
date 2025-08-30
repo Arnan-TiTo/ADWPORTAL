@@ -183,7 +183,8 @@
 </div>
 
 <!-- Confirm Toast (no-scroll while open) -->
-<div id="confirmToast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 hidden">
+<div id="confirmToast" class="fixed bottom-5 left-1/2 -translate-x-1/2 hidden"
+     style="z-index: 70; pointer-events: auto;">
     <div class="bg-gray-900 text-white rounded-xl px-4 py-3 shadow-lg max-w-sm w-[90vw] sm:w-auto">
         <div id="confirmMsg" class="text-sm mb-3"></div>
         <div class="flex justify-end gap-2">
@@ -235,6 +236,7 @@
             const msgEl = document.getElementById('confirmMsg');
             const yes   = document.getElementById('confirmYes');
             const no    = document.getElementById('confirmNo');
+            const footer = document.querySelector('footer');
 
             msgEl.textContent = message;
 
@@ -242,17 +244,20 @@
               yes.onclick = null;
               no.onclick  = null;
               box.classList.add('hidden');
+              footer?.classList.remove('pointer-events-none');
               unfreezeScroll();
             };
 
             yes.onclick = () => { cleanup(); resolve(true);  };
             no.onclick  = () => { cleanup(); resolve(false); };
 
-            document.activeElement && typeof document.activeElement.blur === 'function' && document.activeElement.blur();
+            document.activeElement?.blur?.();
             freezeScroll();
+            footer?.classList.add('pointer-events-none');
             box.classList.remove('hidden');
           });
         }
+
 
         /* ===== DOM helpers ===== */
         function getCard(el){ return el.closest('.prod-card'); }

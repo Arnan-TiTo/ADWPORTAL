@@ -13,7 +13,7 @@ namespace miniApp.WebOrders.Pages.Orders
         private readonly IConfiguration _config;
 
         [BindProperty] public List<CartItemDto> Cart { get; set; } = new();
-        [BindProperty] public string PaymentMethod { get; set; } = string.Empty;
+        [BindProperty] public string PaymentMethod { get; set; } = "transfer";
         [BindProperty] public IFormFile? Slip { get; set; }
 
         public int LocationId => Cart.FirstOrDefault()?.LocationId ?? 0;
@@ -21,6 +21,7 @@ namespace miniApp.WebOrders.Pages.Orders
         public decimal Subtotal => Cart.Sum(p => p.Price * p.Quantity);
         public decimal DiscountTotal => Cart.Sum(p => p.Discount);
         public decimal Total => Subtotal - DiscountTotal;
+
 
         public PaymentModel(IHttpClientFactory httpClientFactory, IConfiguration config)
             => (_httpClientFactory, _config) = (httpClientFactory, config);
@@ -64,6 +65,13 @@ namespace miniApp.WebOrders.Pages.Orders
                 slipImageFileName = fileName;
             }
 
+            var userId = HttpContext.Session.GetInt32("USERID") ?? 0;
+            if (userId == 0)
+            {
+                ModelState.AddModelError(string.Empty, "กรุณาเข้าสู่ระบบก่อนทำรายการ");
+                return Page();
+            }
+
             // --- DTO ส่งเข้า API ---
             var orderDto = new OrderCreateDto
             {
@@ -83,6 +91,7 @@ namespace miniApp.WebOrders.Pages.Orders
                 MayIAsk = customer.MayIAsk,
                 PaymentMethod = PaymentMethod ?? "",
                 SlipImage = slipImageFileName,
+                CreatedByUserId = userId,
                 Items = Cart.Select(c => new OrderItemDto
                 {  
                     LocationId = c.LocationId,
@@ -117,8 +126,10 @@ namespace miniApp.WebOrders.Pages.Orders
             HttpContext.Session.Remove("Cart");
             HttpContext.Session.Remove("ORDER_CUSTOMER");
             TempData["ShowToast"] = "บันทึกข้อมูลเรียบร้อยแล้ว";
+            TempData["NextUrl"] = Url.Page("/ProductSearch");
+            TempData["DelayMs"] = 2000; 
 
-            return RedirectToPage("Payment");
+            return Page();
         }
 
         private List<CartItemDto> GetCart()

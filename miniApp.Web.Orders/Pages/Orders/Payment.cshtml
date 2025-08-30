@@ -3,6 +3,8 @@
 @{
     ViewData["Title"] = "Add Order - Payment";
     var toastMsg = TempData["ShowToast"] as string;
+    var nextUrl = TempData["NextUrl"] as string;
+    var delayMs = (TempData["DelayMs"] as int?) ?? 2000;
 }
 
 @if (!string.IsNullOrEmpty(toastMsg))
@@ -10,7 +12,6 @@
     <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded shadow-lg z-50">
         @toastMsg
     </div>
-    <script> setTimeout(()=>document.getElementById("toast")?.remove(),2500); </script>
 }
 
 <style>
@@ -24,7 +25,7 @@
     }
 </style>
 
-<div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-6">
+<div class="max-w-md mx-auto bg-white p-4 min-h-screen space-y-4">
     <!-- Header -->
     <div class="flex items-center justify-between">
         <a asp-page="/Orders/Customer" class="text-xl">←</a>
@@ -75,7 +76,7 @@
             </label>
 
             <label class="flex items-center cursor-pointer opacity-80">
-                <input id="payCash" asp-for="PaymentMethod" type="radio" value="cash" class="accent-yellow-400 mr-2" />
+                <input id="payCash" asp-for="PaymentMethod" type="radio" value="cash"  class="accent-yellow-400 mr-2" />
                 <span class="flex items-center"><span class="mr-1">🪙</span> Cash</span>
             </label>
         </div>
@@ -105,7 +106,10 @@
         </div>
 
         <!-- SAVE Button -->
-        <button type="submit" id="saveBtn" class="w-full py-3 bg-black text-white r05 text-base font-bold mt-2 shadow-md">SAVE</button>
+        <button type="submit" id="saveBtn"
+                class="w-full inline-flex items-center justify-center py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white text-base font-bold mt-2 shadow-md">
+            SAVE
+        </button>
     </form>
 </div>
 
@@ -154,5 +158,17 @@
           saveBtn.disabled = true;
           saveBtn.textContent = 'Saving...';
         });
+
+        // ===== Toast auto-hide + optional redirect =====
+        const TOAST_MSG = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(toastMsg ?? ""));
+        const NEXT_URL  = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(nextUrl ?? ""));
+        const DELAY_MS  = @delayMs;
+
+        if (TOAST_MSG) {
+          setTimeout(function () {
+            document.getElementById("toast")?.remove();
+            if (NEXT_URL) { window.location.href = NEXT_URL; }
+          }, DELAY_MS);
+        }
     </script>
 }

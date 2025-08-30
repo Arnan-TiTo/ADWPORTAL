@@ -418,7 +418,9 @@ namespace miniApp.API.Controllers
                     new SqlParameter("@PaymentMethod", (object?)dto.PaymentMethod ?? ""),
                     new SqlParameter("@SlipImage",     (object?)dto.SlipImage     ?? DBNull.Value),
                     new SqlParameter("@Social",        (object?)dto.Social        ?? DBNull.Value),
+                    new SqlParameter("@CreatedByUserId",  (object?)dto.CreatedByUserId ?? DBNull.Value),
 
+                    
                     new SqlParameter("@Items", tvp)
                     {
                         SqlDbType = System.Data.SqlDbType.Structured,
@@ -435,7 +437,7 @@ namespace miniApp.API.Controllers
                 await _context.Database.ExecuteSqlRawAsync(
                     "EXEC dbo.sp_Order_Create " +
                     "@CustomerName,@CustomerPhone,@CustomerEmail,@AddressLine,@SubDistrict,@District,@Province,@ZipCode," +
-                    "@Gender,@BirthDate,@Occupation,@Nationality,@MayIAsk,@PaymentMethod,@SlipImage,@Social," +
+                    "@Gender,@BirthDate,@Occupation,@Nationality,@MayIAsk,@PaymentMethod,@SlipImage,@Social,@CreatedByUserId," +
                     "@Items,@OrderId OUT,@OrderNo OUT", p);
 
                 await tx.CommitAsync();

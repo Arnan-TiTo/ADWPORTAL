@@ -95,22 +95,29 @@ else
                 </InputSelect>
             </div>
 
-            <!-- Type flags -->
+            <!-- Type flags (Radio) -->
             <div class="col-12">
                 <label class="form-label d-block mb-1">Location type</label>
-                <div class="form-check form-check-inline">
-                    <InputCheckbox class="form-check-input" id="chkWarehouse" @bind-Value="model.IsWarehouse" />
-                    <label class="form-check-label" for="chkWarehouse">Warehouse</label>
-                </div>
-                <div class="form-check form-check-inline">
-                    <InputCheckbox class="form-check-input" id="chkStorehouse" @bind-Value="model.IsStorehouse" />
-                    <label class="form-check-label" for="chkStorehouse">Storehouse</label>
-                </div>
-                <div class="form-check form-check-inline">
-                    <InputCheckbox class="form-check-input" id="chkDamagehouse" @bind-Value="model.IsDamagehouse" />
-                    <label class="form-check-label" for="chkDamagehouse">Damagehouse</label>
-                </div>
-                <div class="form-text">ไม่เลือก = 0</div>
+                <InputRadioGroup @bind-Value="model.SelectedType">
+                    <div class="d-flex align-items-center gap-4 flex-nowrap text-nowrap">
+                        <div class="form-check form-check-inline mb-0">
+                            <InputRadio class="form-check-input" id="radWarehouse" Value="LocationType.Warehouse" />
+                            <label class="form-check-label" for="radWarehouse">Warehouse</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <InputRadio class="form-check-input" id="radStorehouse" Value="LocationType.Storehouse" />
+                            <label class="form-check-label" for="radStorehouse">Distribution Center</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <InputRadio class="form-check-input" id="radDamagehouse" Value="LocationType.Damagehouse" />
+                            <label class="form-check-label" for="radDamagehouse">Damage Warehouse</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <InputRadio class="form-check-input" id="radNone" Value="LocationType.None" />
+                            <label class="form-check-label" for="radNone">Shop</label>
+                        </div>
+                    </div>
+                </InputRadioGroup>
             </div>
 
             <!-- Images -->
@@ -217,6 +224,16 @@ else
                 IsDamagehouse = (loc.isDamagehouse ?? 0) == 1
             };
 
+            // map flags -> SelectedType (ถ้าทั้งหมดเป็น 0 ให้ None เป็นค่าเริ่มต้น)
+            if (model.IsWarehouse)
+                model.SelectedType = LocationType.Warehouse;
+            else if (model.IsStorehouse)
+                model.SelectedType = LocationType.Storehouse;
+            else if (model.IsDamagehouse)
+                model.SelectedType = LocationType.Damagehouse;
+            else
+                model.SelectedType = LocationType.None;
+
             existingThumbs = loc.Images?.Select(i => BuildImageUrl(i.ImageUrl)).ToList();
         }
         catch (Exception ex)
@@ -303,7 +320,12 @@ else
             form.Add(new StringContent(model.ContractPerson ?? ""), "ContractPerson");
             form.Add(new StringContent(model.ContractPhone ?? ""), "ContractPhone");
 
-            // flags: ส่งเป็น 1/0 เสมอ (ไม่ติ๊ก = 0)
+            // map SelectedType -> 3 flags (ให้เหลือ 1 เดียวเสมอ)
+            model.IsWarehouse = model.SelectedType == LocationType.Warehouse;
+            model.IsStorehouse = model.SelectedType == LocationType.Storehouse;
+            model.IsDamagehouse = model.SelectedType == LocationType.Damagehouse;
+
+            // flags: ส่งเป็น 1/0 เสมอ
             form.Add(new StringContent(model.IsWarehouse ? "1" : "0"), "isWarehouse");
             form.Add(new StringContent(model.IsStorehouse ? "1" : "0"), "isStorehouse");
             form.Add(new StringContent(model.IsDamagehouse ? "1" : "0"), "isDamagehouse");
@@ -356,7 +378,7 @@ else
         return $"{full}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
     }
 
-    // ===== DTOs =====
+    // ===== DTOs & VM =====
     public class UserItem
     {
         public int Id { get; set; }
@@ -398,6 +420,8 @@ else
         public int? isDamagehouse { get; set; }
     }
 
+    public enum LocationType { None = 0, Warehouse = 1, Storehouse = 2, Damagehouse = 3 }
+
     public class LocationEditVm
     {
         public int Id { get; set; }
@@ -417,9 +441,12 @@ else
         public string? ContractPerson { get; set; }
         public string? ContractPhone { get; set; }
 
-        // flags
+        // เก็บค่าจริงที่ส่ง/รับกับ API (bool -> 1/0)
         public bool IsWarehouse { get; set; } = false;
         public bool IsStorehouse { get; set; } = false;
         public bool IsDamagehouse { get; set; } = false;
+
+        // ใช้กับ UI (radio)
+        public LocationType SelectedType { get; set; } = LocationType.None;
     }
 }

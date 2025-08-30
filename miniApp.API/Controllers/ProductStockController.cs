@@ -593,32 +593,39 @@ namespace miniApp.API.Controllers
                 await conn.OpenAsync();
 
                 const string sql = @"
-                    SELECT TOP(@Top)
-                        st.CreatedAt,
-                        st.ReasonCode AS Action,
-                        CASE
-                            WHEN st.ReasonCode IN('RESERVE','RESERVE_CANCEL','RESERVE_SHIP') THEN 0
-                            WHEN st.FromLocationId = @LocationId AND st.ToLocationId IS NULL THEN -ABS(st.QtyChange)
-                            WHEN st.FromLocationId IS NULL AND st.ToLocationId = @LocationId THEN + ABS(st.QtyChange)
-                            WHEN st.FromLocationId = @LocationId AND st.ToLocationId IS NOT NULL THEN - ABS(st.QtyChange)
-                            WHEN st.ToLocationId = @LocationId AND st.FromLocationId IS NOT NULL THEN + ABS(st.QtyChange)
-                            ELSE 0
-                        END AS MovementQty,
-                        CASE
-                            WHEN st.ReasonCode = 'RESERVE'        THEN + ABS(st.QtyChange)
-                            WHEN st.ReasonCode = 'RESERVE_CANCEL' THEN - ABS(st.QtyChange)
-                            ELSE 0
-                        END AS ReserveDelta,
-                        st.Note,
-                        COALESCE(NULLIF(u.Fullname, ''), NULLIF(u.Username, ''), '(system)') AS ByUser
-                    FROM dbo.StockTransactions st
-                    LEFT JOIN dbo.Users u ON st.PerformedByUserId = u.Id
-                    WHERE st.ProductId = @ProductId
-                      AND(st.FromLocationId = @LocationId
-                           OR st.ToLocationId = @LocationId
-                           OR(st.FromLocationId IS NULL AND st.ToLocationId IS NULL))
-                    ORDER BY st.CreatedAt DESC;
-                ";
+                SELECT TOP(@Top)
+                    st.CreatedAt,
+                    st.ReasonCode AS Action,
+                    CASE
+                        WHEN st.ReasonCode IN('RESERVE','RESERVE_CANCEL','RESERVE_SHIP') THEN 0
+                        WHEN st.FromLocationId = @LocationId AND st.ToLocationId IS NULL THEN -ABS(st.QtyChange)
+                        WHEN st.FromLocationId IS NULL AND st.ToLocationId = @LocationId THEN  ABS(st.QtyChange)
+                        WHEN st.FromLocationId = @LocationId AND st.ToLocationId IS NOT NULL THEN -ABS(st.QtyChange)
+                        WHEN st.ToLocationId = @LocationId AND st.FromLocationId IS NOT NULL THEN  ABS(st.QtyChange)
+                        ELSE 0
+                    END AS MovementQty,
+                    CASE
+                        WHEN st.ReasonCode = 'RESERVE'        THEN  ABS(st.QtyChange)
+                        WHEN st.ReasonCode = 'RESERVE_CANCEL' THEN -ABS(st.QtyChange)
+                        ELSE 0
+                    END AS ReserveDelta,
+                    CASE 
+                        WHEN st.ReasonCode = 'SALE' THEN oh.OrderNo
+                        ELSE st.Note
+                    END AS Note,
+                    COALESCE(NULLIF(u.Fullname, ''), NULLIF(u.Username, ''), '(system)') AS ByUser
+                FROM dbo.StockTransactions st
+                LEFT JOIN dbo.Users u
+                       ON st.PerformedByUserId = u.Id
+                LEFT JOIN dbo.OrderHd oh
+                       ON oh.Id = TRY_CAST(LEFT(st.ReferenceId, CHARINDEX('-', st.ReferenceId + '-') - 1) AS INT)
+                WHERE st.ProductId = @ProductId
+                  AND (
+                        st.FromLocationId = @LocationId
+                     OR st.ToLocationId   = @LocationId
+                     OR (st.FromLocationId IS NULL AND st.ToLocationId IS NULL)
+                  )
+                ORDER BY st.CreatedAt DESC;";
 
                 await using var cmd = new SqlCommand(sql, conn);
                 cmd.Parameters.Add(new SqlParameter("@Top", top));
