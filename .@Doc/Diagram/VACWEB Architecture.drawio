@@ -1,52 +1,52 @@
 <mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.1.2 Chrome/138.0.7204.243 Electron/37.4.0 Safari/537.36" version="28.1.2">
   <diagram name="Page-1" id="NKe3vBwpbget28f8CcVr">
-    <mxGraphModel dx="860" dy="623" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="774" dy="561" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="INxDHBcrtFGWlmnRRqzf-1" target="INxDHBcrtFGWlmnRRqzf-2">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="INxDHBcrtFGWlmnRRqzf-1" target="INxDHBcrtFGWlmnRRqzf-2" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-1" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;VACWEB&amp;nbsp;&lt;span style=&quot;font-family: &amp;quot;TH SarabunPSK&amp;quot;, sans-serif;&quot;&gt;Architecture&lt;/span&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-1" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;VACWEB&amp;nbsp;&lt;span style=&quot;font-family: &amp;quot;TH SarabunPSK&amp;quot;, sans-serif;&quot;&gt;Architecture&lt;/span&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="330" y="70" width="170" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="INxDHBcrtFGWlmnRRqzf-2" target="INxDHBcrtFGWlmnRRqzf-11">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="INxDHBcrtFGWlmnRRqzf-2" target="INxDHBcrtFGWlmnRRqzf-11" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="INxDHBcrtFGWlmnRRqzf-2" target="INxDHBcrtFGWlmnRRqzf-18">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="INxDHBcrtFGWlmnRRqzf-2" target="INxDHBcrtFGWlmnRRqzf-18" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-2" value="App API&lt;div&gt;(.Net 8)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-2" value="App API&lt;div&gt;(.Net 8)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="330" y="210" width="170" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="INxDHBcrtFGWlmnRRqzf-6" target="INxDHBcrtFGWlmnRRqzf-2">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="INxDHBcrtFGWlmnRRqzf-6" target="INxDHBcrtFGWlmnRRqzf-2" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-6" value="Frontline&lt;div&gt;(Razor page)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-6" value="Frontline&lt;div&gt;(Razor page)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="70" y="320" width="170" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="INxDHBcrtFGWlmnRRqzf-7" target="INxDHBcrtFGWlmnRRqzf-2">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="INxDHBcrtFGWlmnRRqzf-7" target="INxDHBcrtFGWlmnRRqzf-2" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-7" value="Future External&amp;nbsp;&lt;div&gt;(shopee/llazada/tiktok)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-7" value="External&lt;div&gt;Future Integrate&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="570" y="210" width="170" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="INxDHBcrtFGWlmnRRqzf-8" target="INxDHBcrtFGWlmnRRqzf-2">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="INxDHBcrtFGWlmnRRqzf-8" target="INxDHBcrtFGWlmnRRqzf-2" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-8" value="Admin Portal&lt;div&gt;(Blazor page)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-8" value="Admin Portal&lt;div&gt;(Blazor page)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="70" y="210" width="170" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="INxDHBcrtFGWlmnRRqzf-9" target="INxDHBcrtFGWlmnRRqzf-2">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="INxDHBcrtFGWlmnRRqzf-9" target="INxDHBcrtFGWlmnRRqzf-2" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-9" value="Sale Report&lt;div&gt;(Razor page)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-9" value="Sale Report&lt;div&gt;(Razor page)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="70" y="420" width="170" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-11" value="SQL SERVER" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" vertex="1" parent="1">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-11" value="SQL SERVER" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" parent="1" vertex="1">
           <mxGeometry x="345" y="380" width="140" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="INxDHBcrtFGWlmnRRqzf-18" value="Storage&lt;div&gt;(phisical appapi/images)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+        <mxCell id="INxDHBcrtFGWlmnRRqzf-18" value="Storage&lt;div&gt;(phisical appapi/images)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="570" y="310" width="170" height="60" as="geometry" />
         </mxCell>
       </root>
