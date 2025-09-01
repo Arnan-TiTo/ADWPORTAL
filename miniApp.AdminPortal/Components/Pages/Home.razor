@@ -150,7 +150,6 @@ else
         try
         {
             var http = await CreateClient();
-            // ใช้ dropdown (Id, Name) พอและ payload เล็กกว่า
             var drops = await http.GetFromJsonAsync<List<LocationDrop>>("api/locations/dropdown") ?? new();
             _locationName = drops.ToDictionary(x => x.Id, x => x.Name);
         }
