@@ -235,7 +235,7 @@ else
                         <label class="form-label">To Location</label>
                         <select class="form-select" @bind="transferToLocationId">
                             <option value="">-- Select --</option>
-                            @foreach (var l in locations.Where(x => x.Id != selectedLocationId))
+                            @foreach (var l in locations!.Where(x => x.Id != selectedLocationId))
                             {
                                 <option value="@l.Id">@l.Name</option>
                             }
@@ -353,7 +353,7 @@ else
                         <label class="form-label">To Damagehouse</label>
                         <select class="form-select" @bind="transferDamageToId">
                             <option value="">-- Select --</option>
-                            @foreach (var l in locations.Where(x => x.Id != selectedLocationId))
+                            @foreach (var l in locations!.Where(x => x.Id != selectedLocationId))
                             {
                                 <option value="@l.Id">@l.Name</option>
                             }
@@ -539,14 +539,15 @@ else
         loading = false;
     }
 
-    private async Task<HttpClient> CreateClient()
+    private Task<HttpClient> CreateClient()
     {
         var c = ClientFactory.CreateClient();
         c.BaseAddress = new Uri(ApiBase);
         var token = TokenProvider.Token;
         if (!string.IsNullOrWhiteSpace(token))
             c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return c;
+
+        return Task.FromResult(c);
     }
 
     private async Task LoadLocationsForUser(int userId)

@@ -5,6 +5,8 @@ using Microsoft.Extensions.Options;
 using miniApp.AdminPortal.Components;
 using miniApp.AdminPortal.Models;
 using miniApp.AdminPortal.Security;
+using miniApp.AdminPortal.Services;
+using miniApp.AdminPortal.States;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,6 +56,17 @@ builder.Services.AddHttpClient("ApiClient", (sp, http) =>
 })
 .AddHttpMessageHandler<AuthMessageHandler>();
 
+builder.Services.AddHttpClient("IdwApiBaseUrl", (sp, http) =>
+{
+    var cfg = sp.GetRequiredService<IOptions<ApiSettings>>().Value;
+    http.BaseAddress = new Uri(cfg.IdwApiBaseUrl);
+})
+.AddHttpMessageHandler<AuthMessageHandler>();
+
+//AddScoped
+builder.Services.AddScoped<IdwImportService>();
+builder.Services.AddScoped<IdwListState>();
+
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddServerSideBlazor()
@@ -74,7 +87,7 @@ app.UseRouting();
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseAntiforgery(); 
+app.UseAntiforgery();
 
 
 
