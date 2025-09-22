@@ -1,0 +1,43 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="app.css?v-2" />
+    <HeadOutlet />
+</head>
+<body class="scale-wrap">
+    <div class="scale-inner">
+        <CascadingAuthenticationState>
+            <Routes />
+        </CascadingAuthenticationState>
+    </div>
+
+    <!-- ขยายรูป -->
+    <div class="modal fade" id="image-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content bg-transparent border-0">
+                <button type="button" class="btn-close btn-close-white ms-auto me-2 mt-2"
+                        data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="d-flex justify-content-center align-items-center p-2">
+                    <img id="image-modal-img" class="img-fluid rounded shadow"
+                         style="max-height:90vh; user-select:none; cursor:grab;" />
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="js/site.js?v=20250825a" defer></script>
+    <script src="js/toast.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/qrlogin.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

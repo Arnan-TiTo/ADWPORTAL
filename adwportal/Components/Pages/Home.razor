@@ -1,0 +1,246 @@
+﻿@page "/"
+@using System.Net.Http.Json
+@using System.Net.Http.Headers
+@using Microsoft.Extensions.Options
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@using adwportal.Models
+@inject IHttpClientFactory ClientFactory
+@inject IOptions<ApiSettings> Options
+@inject AuthTokenProvider TokenProvider
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider Auth
+
+<h3 class="d-flex align-items-center justify-content-between">
+    <span>Dashboard</span>
+    <div class="d-flex gap-2">
+        <input type="date" class="form-control" style="width: 180px" @bind="fromDate" />
+        <input type="date" class="form-control" style="width: 180px" @bind="toDate" />
+        <button class="btn btn-primary" @onclick="Reload">Reload</button>
+    </div>
+</h3>
+
+@if (loading)
+{
+    <div class="alert alert-secondary">Loading…</div>
+}
+else if (!hasData)
+{
+    <div class="alert alert-warning">ยังไม่มีข้อมูลในช่วงวันที่ที่เลือก</div>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">Top 10 Locations by Sales</div>
+                <div class="card-body">
+                    <div style="height: 320px;">
+                        <canvas id="salesByLocationChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">Top 10 Products (Pie)</div>
+                <div class="card-body d-flex justify-content-center">
+                    <div class="mx-auto" style="width:420px;height:420px">
+                        <canvas id="topProductsPie" class="d-block"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+        // ---------- State ----------
+    private bool loading = true;
+    private bool hasData = false;
+    private DateTime fromDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime toDate = DateTime.Today;
+    private int _userId;
+
+    private Dictionary<int, string> _locationName = new();
+
+    // ข้อมูลกราฟ (เก็บเป็น state)
+    private List<string> locLabels = new();
+    private List<double> locValues = new();
+    private List<string> prodLabels = new();
+    private List<double> prodValues = new();
+
+    // คุม timing JS interop (support prerender)
+    private bool _canInvokeJs = false;
+    private bool _needsRenderCharts = false;
+    private readonly List<(string msg, string level)> _pendingToasts = new();
+
+    private string ApiBase => Options.Value.ApiBaseUrl;
+
+    // ---------- DTO เฉพาะที่ใช้ ----------
+    private class OrderItemDto
+    {
+        public int LocationId { get; set; }
+        public int ProductId { get; set; }
+        public string? ProductName { get; set; }
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+    }
+    private class OrderViewDto
+    {
+        public DateTime OrderDate { get; set; }
+        public List<OrderItemDto> Items { get; set; } = new();
+    }
+    private class LocationDrop { public int Id { get; set; } public string Name { get; set; } = ""; }
+
+    // ---------- Lifecycle ----------
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var auth = await Auth.GetAuthenticationStateAsync();
+            var claim = auth.User?.FindFirst("USERID")?.Value;
+            int.TryParse(claim, out _userId);
+        }
+        catch { _userId = 0; }
+
+        await LoadLocationNames();
+        await LoadAndPrepare();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _canInvokeJs = true;
+            if (_pendingToasts.Count > 0)
+            {
+                foreach (var t in _pendingToasts)
+                    await JS.InvokeVoidAsync("showToast", t.msg, t.level);
+                _pendingToasts.Clear();
+            }
+        }
+
+        if (_canInvokeJs && _needsRenderCharts)
+            await RenderCharts();
+    }
+
+    // ---------- Helpers ----------
+    private Task<HttpClient> CreateClient()
+    {
+        var c = ClientFactory.CreateClient();
+        c.BaseAddress = new Uri(ApiBase);
+        var token = TokenProvider.Token;
+        if (!string.IsNullOrWhiteSpace(token))
+            c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+     
+        return Task.FromResult(c);
+    }
+
+    private async Task Toast(string message, string level = "info")
+    {
+        if (_canInvokeJs)
+            await JS.InvokeVoidAsync("showToast", message, level);
+        else
+            _pendingToasts.Add((message, level));
+    }
+
+    private async Task LoadLocationNames()
+    {
+        try
+        {
+            var http = await CreateClient();
+            var drops = await http.GetFromJsonAsync<List<LocationDrop>>("api/locations/dropdown") ?? new();
+            _locationName = drops.ToDictionary(x => x.Id, x => x.Name);
+        }
+        catch
+        {
+            _locationName.Clear();
+        }
+    }
+
+    private async Task Reload() => await LoadAndPrepare();
+
+    private async Task LoadAndPrepare()
+    {
+        loading = true;
+        hasData = false;
+        _needsRenderCharts = false;
+        StateHasChanged();
+
+        if (toDate < fromDate) toDate = fromDate;
+
+        List<OrderViewDto> orders = new();
+        try
+        {
+            var http = await CreateClient();
+            var url =
+                $"/api/Order/history/bydateft?userId={_userId}" +
+                $"&from={fromDate:yyyy-MM-dd}&to={toDate:yyyy-MM-dd}&includeAll=true";
+            orders = await http.GetFromJsonAsync<List<OrderViewDto>>(url) ?? new();
+        }
+        catch (Exception ex)
+        {
+            await Toast($"โหลดออเดอร์ล้มเหลว: {ex.Message}", "error");
+            loading = false;
+            return;
+        }
+
+        var allItems = orders.SelectMany(o => o.Items);
+        hasData = allItems.Any();
+
+        var byLoc = allItems
+            .GroupBy(i => i.LocationId)
+            .Select(g => new
+            {
+                LocationId = g.Key,
+                Total = g.Sum(i => Math.Max(0m, (i.UnitPrice * i.Quantity) - i.Discount))
+            })
+            .OrderByDescending(x => x.Total)
+            .Take(10)
+            .ToList();
+
+        locLabels = byLoc
+            .Select(x => _locationName.TryGetValue(x.LocationId, out var n) ? n : $"#{x.LocationId}")
+            .ToList();
+        locValues = byLoc.Select(x => (double)x.Total).ToList();
+
+        var byProduct = allItems
+            .GroupBy(i => i.ProductId)
+            .Select(g => new
+            {
+                ProductId = g.Key,
+                Name = g.Select(x => x.ProductName ?? $"#{g.Key}")
+                        .FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? $"#{g.Key}",
+                Total = g.Sum(i => Math.Max(0m, (i.UnitPrice * i.Quantity) - i.Discount))
+            })
+            .OrderByDescending(x => x.Total)
+            .Take(10)
+            .ToList();
+
+        prodLabels = byProduct.Select(x => x.Name).ToList();
+        prodValues = byProduct.Select(x => (double)x.Total).ToList();
+
+        loading = false;
+        _needsRenderCharts = hasData;
+        StateHasChanged();
+
+        if (_canInvokeJs && _needsRenderCharts)
+            await RenderCharts();
+    }
+
+
+    private async Task RenderCharts()
+    {
+        _needsRenderCharts = false;
+        if (!hasData) return;
+
+        await JS.InvokeVoidAsync("dashboard.renderBar",
+            "salesByLocationChart", locLabels, locValues, "Top 10 Locations by Sales", 900); 
+
+        await JS.InvokeVoidAsync("dashboard.renderPie",
+            "topProductsPie", prodLabels, prodValues, "Top 10 Products", 900);
+    }
+}

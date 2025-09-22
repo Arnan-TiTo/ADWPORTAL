@@ -1,6 +1,0 @@
-Dev
-dotnet user-secrets init
-dotnet user-secrets set "AuthToken" "9f4d7c83-21a4-4aaf-9401-6a21717e5460"
-
-Production
-setx AuthToken "9f4d7c83-21a4-4aaf-9401-6a21717e5460" /M

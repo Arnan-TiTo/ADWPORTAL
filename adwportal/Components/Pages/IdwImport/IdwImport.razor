@@ -1,0 +1,295 @@
+﻿@page "/IdwImport"
+@using System.Net.Http.Headers
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text
+@using adwportal.Models
+@using adwportal.Services
+@inject IHttpClientFactory ClientFactory
+@inject IJSRuntime JS
+@inject IOptions<ApiSettings> Options
+@inject IdwImportService IdwImportService
+@inject NavigationManager Navigation
+
+<h3>Import Data</h3>
+@* 
+<div class="border p-2 bg-light" style="max-height:200px; overflow:auto">
+    <pre>@token</pre>
+</div> *@
+
+<div class="card mb-3">
+    <div class="card-body">
+        <InputFile OnChange="OnFileSelected" />
+
+        @if (!string.IsNullOrWhiteSpace(selectedFileName))
+        {
+            <p class="mt-2"><strong>Selected:</strong> @selectedFileName</p>
+            <div class="border p-2 bg-light" style="max-height:200px; overflow:auto">
+                <pre>@previewText</pre>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-success me-2" @onclick="Save" disabled="@isSaving">Save</button>
+                <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+            </div>
+        }
+    </div>
+</div>
+
+@if (lastUpload != null)
+{
+    <div class="card mt-3">
+        <div class="card-body">
+            <h5>Import Summary</h5>
+            <div class="row">
+                <div class="col-md-3"><strong>ImportId:</strong> @lastUpload.importId</div>
+                <div class="col-md-3"><strong>Inserted:</strong> @lastUpload.rows</div>
+                <div class="col-md-3"><strong>Skipped (DB):</strong> @lastUpload.skippedDb</div>
+                <div class="col-md-3"><strong>Skipped (File dup):</strong> @lastUpload.skippedFile</div>
+            </div>
+
+            @if (lastUpload.skippedOrders != null && lastUpload.skippedOrders.Any())
+            {
+                <div class="mt-3">
+                    <h6>Skipped Orders</h6>
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>OrderNo</th>
+                                <th>Reason</th>
+                                <th>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in lastUpload.skippedOrders)
+                            {
+                                <tr>
+                                    <td>@s.OrderNo</td>
+                                    <td>@s.Reason</td>
+                                    <td>@s.Detail</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (lastImported != null)
+{
+    <div class="card mt-3">
+        <div class="card-body">
+            <h5>Batch Detail</h5>
+            <p><strong>BatchNo:</strong> @lastImported.BatchNo</p>
+            <p><strong>File:</strong> @lastImported.FileName</p>
+            <p><strong>ImportedBy:</strong> @lastImported.ImportedBy</p>
+            <p><strong>ImportedAt:</strong> @lastImported.ImportedAt</p>
+            <p><strong>Status:</strong> @lastImported.Status</p>
+            <p><strong>RowCount:</strong> @lastImported.RowCount</p>
+            <div class="mt-3">
+                <button class="btn btn-danger" @onclick="Delete" disabled="@isDelete">Delete</button>
+            </div>
+
+            <table class="table table-sm table-bordered">
+                <thead>
+                    <tr>
+                        <th>Page</th>
+                        <th>OrderNo</th>
+                        <th>PickupDate</th>
+                        <th>ShipByDate</th>
+                        <th>SenderName</th>
+                        <th>SenderAddress</th>
+                        <th>ReceiverName</th>
+                        <th>ReceiverAddress</th>
+                        <th>ItemName</th>
+                        <th>IsCOD</th>
+                        <th>ItemVariant</th>
+                        <th>Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (lastImported.Rows != null && lastImported.Rows.Any())
+                    {
+                        @foreach (var r in lastImported.Rows)
+                        {
+                            <tr>
+                                <td>@r.PageNo</td>
+                                <td>@r.OrderNo</td>
+                                <td>@r.PickupDate?.ToString("dd-MM-yyyy")</td>
+                                <td>@r.ShipByDate?.ToString("dd-MM-yyyy")</td>
+                                <td>@r.SenderName</td>
+                                <td>@r.SenderAddress</td>
+                                <td>@r.ReceiverName</td>
+                                <td>@r.ReceiverAddress</td>
+                                <td>@r.ItemName</td>
+                                <td>@r.IsCod</td>
+                                <td>@r.ItemVariant</td>
+                                <td>@r.Qty</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="12" class="text-muted text-center">No rows found</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <button class="btn btn-outline-secondary" @onclick="ClearImported">Clear</button>
+        </div>
+    </div>
+}
+
+@code {
+    private string? tokenRaw;
+    private string? token;
+
+    private IBrowserFile? selectedFile;
+    private string? selectedFileName;
+    private string? previewText;
+    private bool? isSaving;
+    private bool? isDelete;
+
+    private UploadResponseDto? lastUpload;   // <-- สรุปผลจาก API ใหม่
+    private IdwImportDto? lastImported;      // รายละเอียด (ตารางด้านล่าง)
+
+    private MemoryStream? cachedFileStream;
+    private string? importId;
+
+    private string ApiBase => Options.Value.ApiBaseUrl ?? "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoginAsync("admin", "123456yjm");
+    }
+
+    // ---- helpers ----
+    private static string? NormalizeToken(string? t)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return null;
+        t = t.Trim().Trim('"');
+        if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            t = t.Substring(7).Trim();
+        return t;
+    }
+
+    private static bool Is401(Exception ex) =>
+        ex.Message.Contains("401") || ex.Message.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase);
+
+    private async Task LoginAsync(string user, string pass)
+    {
+        var resp = await IdwImportService.LoginAsync(user, pass);
+        tokenRaw = resp?.Token;
+        token = NormalizeToken(tokenRaw);
+
+        if (string.IsNullOrWhiteSpace(token))
+            await JS.InvokeVoidAsync("showToast", "Login failed (no token)", "error");
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        selectedFileName = selectedFile.Name;
+
+        await using var stream = selectedFile.OpenReadStream(maxAllowedSize: 10_000_000);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+
+        previewText = Encoding.UTF8.GetString(ms.ToArray());
+        if (previewText.Length > 1000) previewText = previewText[..1000] + "... (truncated)";
+
+        cachedFileStream = new MemoryStream(ms.ToArray());
+    }
+
+    private async Task<UploadResponseDto> DoUploadAsync()
+    {
+        var bytes = cachedFileStream!.ToArray();
+        await using var ms = new MemoryStream(bytes, writable: false);
+        return await IdwImportService.UploadImportAsync(token!, ms, selectedFile!.Name);
+    }
+
+    private async Task Save()
+    {
+        if (selectedFile == null || string.IsNullOrWhiteSpace(token) || cachedFileStream == null) return;
+        isSaving = true;
+        try
+        {
+            try
+            {
+                lastUpload = await DoUploadAsync();
+            }
+            catch (Exception ex) when (Is401(ex))
+            {
+                await LoginAsync("admin", "123456yjm");
+                lastUpload = await DoUploadAsync();
+            }
+
+            if (lastUpload != null && lastUpload.importId > 0)
+            {
+                importId = lastUpload.importId.ToString();
+                await JS.InvokeVoidAsync("showToast",
+                    $"Import {importId}: +{lastUpload.rows}, skippedDb={lastUpload.skippedDb}, skippedFile={lastUpload.skippedFile}",
+                    "success");
+
+                // ดึงรายละเอียด (ถ้า API ฝั่งรายละเอียดพร้อม)
+                lastImported = await IdwImportService.GetImportAsync(token!, lastUpload.importId);
+
+                // clear file buffer
+                selectedFile = null;
+                selectedFileName = null;
+                previewText = null;
+                cachedFileStream?.Dispose();
+                cachedFileStream = null;
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("showToast", "Import failed", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", ex.Message, "error");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Delete()
+    {
+        if (string.IsNullOrWhiteSpace(token) || lastImported?.BatchNo is null) return;
+
+        var ok = await JS.InvokeAsync<bool>("confirm", $"Delete batch '{lastImported.BatchNo}' and all its rows?");
+        if (!ok) return;
+
+        isDelete = true;
+        try
+        {
+            await IdwImportService.DeleteImportByBatchAsync(token!, lastImported.BatchNo);
+            await JS.InvokeVoidAsync("showToast", $"Deleted batch {lastImported.BatchNo}", "success");
+            lastImported = null;
+            importId = null;
+            selectedFile = null;
+            selectedFileName = null;
+            previewText = null;
+            lastUpload = null;
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Delete failed: {ex.Message}", "error");
+        }
+        finally
+        {
+            isDelete = false;
+            StateHasChanged();
+        }
+    }
+
+    private void IdwImportEditForm(long id) => Navigation.NavigateTo($"/IdwImportEdit/{id}");
+    private void Cancel() { selectedFile = null; selectedFileName = null; previewText = null; }
+    private void ClearImported() { lastImported = null; lastUpload = null; }
+}
