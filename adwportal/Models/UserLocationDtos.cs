@@ -6,7 +6,7 @@
         public string Name { get; set; } = "";
     }
 
-    public class UserLocationDto
+    public class UserLocationDtos
     {
         public int UserId { get; set; }
         public int LocationId { get; set; }

@@ -12,8 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 
 // === Fixed API token ===
-var fixedToken = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
-builder.Services.AddSingleton(new AuthTokenProvider(fixedToken ?? ""));
+var fixeDtosken = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
+builder.Services.AddSingleton(new AuthTokenProvider(fixeDtosken ?? ""));
 
 // === Config API base ===
 builder.Services.Configure<ApiSettings>(builder.Configuration.GetSection("ApiSettings"));
@@ -70,6 +70,11 @@ builder.Services.AddHttpClient("IdwApiBaseUrl", (sp, http) =>
 //AddScoped
 builder.Services.AddScoped<IdwImportService>();
 builder.Services.AddScoped<IdwListState>();
+builder.Services.AddScoped<MiscService>();
+builder.Services.AddScoped<CompanyService>();
+builder.Services.AddScoped<PartnerService>();
+builder.Services.AddScoped<ShopService>();
+
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
@@ -96,21 +101,21 @@ app.UseAntiforgery();
 
 
 //session logout
-app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDto dto) =>
+app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos Dtos) =>
 {
-    if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
+    if (Dtos is null || string.IsNullOrWhiteSpace(Dtos.Token))
         return Results.BadRequest("Invalid token");
 
-    ctx.Session.SetString("JWT", dto.Token);
-    ctx.Session.SetInt32("USERID", dto.UserId);
-    ctx.Session.SetString("FULLNAME", dto.Fullname ?? "");
+    ctx.Session.SetString("JWT", Dtos.Token);
+    ctx.Session.SetInt32("USERID", Dtos.UserId);
+    ctx.Session.SetString("FULLNAME", Dtos.Fullname ?? "");
 
     var claims = new List<System.Security.Claims.Claim>
     {
-        new(System.Security.Claims.ClaimTypes.Name, dto.Username ?? ""),
-        new("USERID", dto.UserId.ToString()),
-        new("JWT", dto.Token),
-        new("FULLNAME", dto.Fullname ?? "")
+        new(System.Security.Claims.ClaimTypes.Name, Dtos.Username ?? ""),
+        new("USERID", Dtos.UserId.ToString()),
+        new("JWT", Dtos.Token),
+        new("FULLNAME", Dtos.Fullname ?? "")
     };
     var id = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
     var cp = new System.Security.Claims.ClaimsPrincipal(id);
@@ -151,7 +156,7 @@ app.MapRazorComponents<App>()
 
 app.Run();
 
-// DTO set-session
-public record SetSessionDto(string Token, int UserId, string? Fullname, string? Username);
+// Dtos set-session
+public record SetSessionDtos(string Token, int UserId, string? Fullname, string? Username);
 
 public class AuthTokenProvider { public string Token { get; } public AuthTokenProvider(string t) => Token = t; }

@@ -25,9 +25,9 @@ namespace adwportal.Services
             var http = _clientFactory.CreateClient();
             http.BaseAddress = new Uri(apiBase + "/");
 
-            var fixedToken = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
-            if (!string.IsNullOrWhiteSpace(fixedToken))
-                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", fixedToken);
+            var fixeDtosken = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
+            if (!string.IsNullOrWhiteSpace(fixeDtosken))
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", fixeDtosken);
 
             return Task.FromResult(http);
         }
@@ -39,17 +39,17 @@ namespace adwportal.Services
             return data ?? new List<LocationOption>();
         }
 
-        public async Task<List<UserLocationDto>> GetUserLocationsAsync(int userId)
+        public async Task<List<UserLocationDtos>> GetUserLocationsAsync(int userId)
         {
             var http = await CreateClientAsync();
-            var data = await http.GetFromJsonAsync<List<UserLocationDto>>($"api/userlocations/user/{userId}");
-            return data ?? new List<UserLocationDto>();
+            var data = await http.GetFromJsonAsync<List<UserLocationDtos>>($"api/userlocations/user/{userId}");
+            return data ?? new List<UserLocationDtos>();
         }
 
         public async Task<bool> AddAsync(int userId, int locationId)
         {
             var http = await CreateClientAsync();
-            var res = await http.PostAsJsonAsync("api/userlocations", new UserLocationDto { UserId = userId, LocationId = locationId });
+            var res = await http.PostAsJsonAsync("api/userlocations", new UserLocationDtos { UserId = userId, LocationId = locationId });
             return res.IsSuccessStatusCode;
         }
 

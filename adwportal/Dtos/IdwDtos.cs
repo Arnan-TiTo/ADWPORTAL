@@ -1,4 +1,4 @@
-﻿namespace adwportal.Models;
+﻿namespace adwportal.Dtos;
 
 public class PagedResult<T>
 {
@@ -9,7 +9,7 @@ public class PagedResult<T>
     public List<T> Items { get; set; } = new();
 }
 
-public class IdwOrderDto
+public class IdwOrderDtos
 {
     public long Id { get; set; }
     public string? BatchNo { get; set; }
@@ -27,35 +27,35 @@ public class IdwOrderDto
     public int? Qty { get; set; }
 }
 
-public class LoginResponseDto
+public class LoginResponseDtos
 {
     public string Token { get; set; } = "";
     public int expires_in_hours { get; set; }
 }
 
 /* ====== UPDATED: รองรับผลสรุปการ import ใหม่จาก API ====== */
-public class UploadResponseDto
+public class UploadResponseDtos
 {
-    public long importId { get; set; }              // เดิม int -> long ให้ตรง DB/API
-    public int rows { get; set; }                  // จำนวนแถวที่ insert สำเร็จ
-    public string? batchNo { get; set; }            // คงไว้เพื่อเข้ากันได้ (อาจว่างถ้า API ไม่ส่ง)
-    public int skippedDb { get; set; }             // แถวที่ถูกข้ามเพราะมีอยู่แล้วใน DB
-    public int skippedFile { get; set; }           // แถวที่ซ้ำในไฟล์เดียวกัน
-    public List<SkipItem> skippedOrders { get; set; } = new(); // รายการ OrderNo ที่ข้าม
+    public long importId { get; set; }
+    public int rows { get; set; }
+    public string? batchNo { get; set; }
+    public int skippedDb { get; set; }
+    public int skippedFile { get; set; }
+    public List<SkipItem> skippedOrders { get; set; } = new();
 }
 
 public class SkipItem
 {
     public string? OrderNo { get; set; }
-    public string Reason { get; set; } = "";      // 'exists_in_db' | 'duplicate_in_file' | อื่น ๆ
-    public string? Detail { get; set; }            // เช่น page=3 หรือข้อความอธิบาย
+    public string Reason { get; set; } = "";
+    public string? Detail { get; set; }
 }
 
 /* ====== ข้อมูล import และแถว ====== */
-public class IdwImportDto
+public class IdwImportDtos
 {
     public long Id { get; set; }
-    public string SourceType { get; set; } = "Text"; // Text|CSV|Excel|PDF
+    public string SourceType { get; set; } = "Text";
     public string? FileName { get; set; } = string.Empty;
     public string? BatchNo { get; set; }
     public string ImportedBy { get; set; } = "system";
@@ -64,12 +64,19 @@ public class IdwImportDto
     public string? ErrorMessage { get; set; }
     public string? RawMetaJson { get; set; }
     public int RowCount { get; set; }
+    public int? CompanyId { get; set; }
+    public int? MiscIdPlatform { get; set; }
+    public int? MiscIdLogistic { get; set; }
+    public string? CompanyName { get; set; }
+    public string? PlatformName { get; set; }
+    public string? LogisticName { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.Now;
-    public ICollection<IdwImportRowDto> Rows { get; set; } = new List<IdwImportRowDto>();
+    public ICollection<IdwImportRowDtos> Rows { get; set; } = new List<IdwImportRowDtos>();
 }
 
 // === แถวในไฟล์ (ตัวจริงที่ใช้ทั้งโหลด/แก้ไข) ===
-public class IdwImportRowDto
+public class IdwImportRowDtos
 {
     public long Id { get; set; }
     public long ImportId { get; set; }

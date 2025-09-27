@@ -1,0 +1,173 @@
+﻿@page "/PartnerList"
+@using adwportal.Dtos
+@using adwportal.Services
+@inject PartnerService Svc
+@inject IdwImportService Idw
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<h3>Partners</h3>
+
+@if (loading)
+{
+    <div class="alert alert-info">Loading...</div>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">Name contains</label>
+                    <input class="form-control" @bind="NameFilter" @bind:event="oninput" />
+                </div>
+                <div class="col-md-6 text-end">
+                    <button class="btn btn-primary" @onclick="Add">+ Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:80px">Id</th>
+                    <th>Name</th>
+                    <th style="width:140px">PartnerId</th>
+                    <th>Environment</th>
+                    <th style="width:200px">Created</th>
+                    <th style="width:160px">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (paged.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center text-muted">No data</td></tr>
+                }
+                else
+                {
+                    @foreach (var p in paged)
+                    {
+                        <tr>
+                            <td>@p.Id</td>
+                            <td>@p.Name</td>
+                            <td>@p.PartnerId</td>
+                            <td>@(p.Environment ?? "-")</td>
+                            <td>@p.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => Edit(p.Id)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(p.Id)">Delete</button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <nav>
+        <ul class="pagination">
+            <li class="page-item @(pageIndex == 1 ? "disabled" : "")">
+                <button class="page-link" @onclick="Prev">Prev</button>
+            </li>
+            @for (int i = 1; i <= totalPages; i++)
+            {
+                <li class="page-item @(pageIndex == i ? "active" : "")">
+                    <button class="page-link" @onclick="(() => Go(i))">@i</button>
+                </li>
+            }
+            <li class="page-item @(pageIndex == totalPages ? "disabled" : "")">
+                <button class="page-link" @onclick="Next">Next</button>
+            </li>
+        </ul>
+    </nav>
+}
+
+@code {
+    string? token;
+    bool loading;
+    string? error;
+
+    List<PartnerDtos> all = new();
+    List<PartnerDtos> filtered = new();
+    List<PartnerDtos> paged = new();
+
+    string? nameFilter;
+    string? NameFilter
+    {
+        get => nameFilter;
+        set { nameFilter = value; pageIndex = 1; Apply(); }
+    }
+
+    const int pageSize = 10;
+    int pageIndex = 1;
+    int totalPages = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            loading = true;
+
+            var login = await Idw.LoginAsync("admin", "123456yjm");
+            token = login?.Token;
+            if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
+
+            // โหลดครั้งเดียว จากนั้นกรองในหน้า
+            all = await Svc.GetPartnersAsync(token!);
+            Apply();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { loading = false; }
+    }
+
+    void Apply()
+    {
+        IEnumerable<PartnerDtos> q = all;
+
+        if (!string.IsNullOrWhiteSpace(nameFilter))
+        {
+            var kw = nameFilter.Trim();
+            q = q.Where(x => (x.Name ?? "").Contains(kw, StringComparison.OrdinalIgnoreCase));
+        }
+
+        filtered = q.OrderBy(x => x.Name).ToList();
+
+        totalPages = Math.Max(1, (int)Math.Ceiling(filtered.Count / (double)pageSize));
+        pageIndex = Math.Clamp(pageIndex, 1, totalPages);
+        paged = filtered.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToList();
+        StateHasChanged();
+    }
+
+    void Prev() { if (pageIndex > 1) { pageIndex--; Apply(); } }
+    void Next() { if (pageIndex < totalPages) { pageIndex++; Apply(); } }
+    void Go(int i) { pageIndex = i; Apply(); }
+
+    void Add() => Nav.NavigateTo("/PartnerEdit");
+    void Edit(int id) => Nav.NavigateTo($"/PartnerEdit/{id}");
+
+    async Task Delete(int id)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", $"Delete partner id={id} ?");
+        if (!ok) return;
+
+        try
+        {
+            await Svc.DeletePartnerAsync(token!, id);
+            var idx = all.FindIndex(x => x.Id == id);
+            if (idx >= 0) all.RemoveAt(idx);
+
+            await JS.InvokeVoidAsync("showToast", "Deleted", "success");
+            Apply();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", ex.Message, "error");
+        }
+    }
+}

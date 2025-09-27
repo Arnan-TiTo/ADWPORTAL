@@ -78,8 +78,8 @@ else
 
     private string ApiBase => Options.Value.ApiBaseUrl;
 
-    // ---------- DTO เฉพาะที่ใช้ ----------
-    private class OrderItemDto
+    // ---------- Dtos เฉพาะที่ใช้ ----------
+    private class OrderItemDtos
     {
         public int LocationId { get; set; }
         public int ProductId { get; set; }
@@ -88,10 +88,10 @@ else
         public decimal UnitPrice { get; set; }
         public decimal Discount { get; set; }
     }
-    private class OrderViewDto
+    private class OrderViewDtos
     {
         public DateTime OrderDate { get; set; }
-        public List<OrderItemDto> Items { get; set; } = new();
+        public List<OrderItemDtos> Items { get; set; } = new();
     }
     private class LocationDrop { public int Id { get; set; } public string Name { get; set; } = ""; }
 
@@ -172,14 +172,14 @@ else
 
         if (toDate < fromDate) toDate = fromDate;
 
-        List<OrderViewDto> orders = new();
+        List<OrderViewDtos> orders = new();
         try
         {
             var http = await CreateClient();
             var url =
                 $"/api/Order/history/bydateft?userId={_userId}" +
                 $"&from={fromDate:yyyy-MM-dd}&to={toDate:yyyy-MM-dd}&includeAll=true";
-            orders = await http.GetFromJsonAsync<List<OrderViewDto>>(url) ?? new();
+            orders = await http.GetFromJsonAsync<List<OrderViewDtos>>(url) ?? new();
         }
         catch (Exception ex)
         {

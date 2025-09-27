@@ -7,8 +7,8 @@ namespace adwportal.Security
     {
         private readonly IHttpContextAccessor _http;
         private readonly AuthTokenProvider _fixed;
-        public AuthMessageHandler(IHttpContextAccessor http, AuthTokenProvider fixedToken)
-        { _http = http; _fixed = fixedToken; }
+        public AuthMessageHandler(IHttpContextAccessor http, AuthTokenProvider fixeDtosken)
+        { _http = http; _fixed = fixeDtosken; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
         {

@@ -2,6 +2,7 @@
 @using System
 @using System.Linq
 @using System.Threading.Tasks
+@using adwportal.Dtos
 @using adwportal.Models
 @using adwportal.Services
 @using adwportal.States
@@ -227,7 +228,7 @@ else
         try
         {
             loading = true;
-            var all = new List<IdwOrderDto>();
+            var all = new List<IdwOrderDtos>();
             var fetchSize = 300;
             var p = 1;
             var first = await Idw.SearchAsync(token, batchNo, null, null, p, fetchSize);
@@ -250,7 +251,7 @@ else
 
     void ApplyClientFilter()
     {
-        IEnumerable<IdwOrderDto> q = State.Source;
+        IEnumerable<IdwOrderDtos> q = State.Source;
         if (!string.IsNullOrWhiteSpace(State.OrderNo))
             q = q.Where(x => !string.IsNullOrEmpty(x.OrderNo) && x.OrderNo.Contains(State.OrderNo!, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrWhiteSpace(State.Sku))
@@ -259,7 +260,7 @@ else
         var list = q.ToList();
         Pag.SetTotal(list.Count);
         var skip = (Pag.Page - 1) * Pag.PageSize;
-        State.Data = new PagedResult<IdwOrderDto>
+        State.Data = new PagedResult<IdwOrderDtos>
         {
             Page = Pag.Page,
             Size = Pag.PageSize,
@@ -310,7 +311,7 @@ else
         var idxAll = State.Source.FindIndex(x => x.Id == id);
         if (idxAll >= 0)
         {
-            State.Source[idxAll] = new IdwOrderDto
+            State.Source[idxAll] = new IdwOrderDtos
             {
                 Id = row.Id,
                 BatchNo = State.BatchNo,

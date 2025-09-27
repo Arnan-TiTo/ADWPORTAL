@@ -11,11 +11,64 @@
             <!-- Sidebar -->
             <div class="sidebar @(isSidebarOpen ? "open" : "closed")">
                 <nav>
-                    <ul>
-                        <li><NavLink href="/" Match="NavLinkMatch.All" ActiveClass="is-active">Home</NavLink></li>
-                        <li><NavLink href="/UserList" Match="NavLinkMatch.Prefix" ActiveClass="is-active">User</NavLink></li>
-                        <li><NavLink href="/IdwImport" Match="NavLinkMatch.Prefix" ActiveClass="is-active">IDW Import</NavLink></li>
-                        <li><NavLink href="/IdwManageList" Match="NavLinkMatch.Prefix" ActiveClass="is-active">IDW Manage</NavLink></li>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <NavLink href="/" Match="NavLinkMatch.All" class="nav-link" ActiveClass="is-active">
+                                Home
+                            </NavLink>
+                        </li>
+
+                        <!-- Config (parent) -->
+                        <li class="nav-item">
+                            <button type="button"
+                                    class="nav-link btn btn-toggle w-100 d-flex align-items-center justify-content-between"
+                                    @onclick="ToggleConfig">
+                                <span>Config</span>
+                                <span class="caret @(configOpen ? "rotate-90" : "")">▶</span>
+                            </button>
+
+                            @if (configOpen)
+                            {
+                                <ul class="nav flex-column ms-3 submenu">
+                                    <li class="nav-item">
+                                        <NavLink href="/UserList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                            User
+                                        </NavLink>
+                                    </li>
+                                    <li class="nav-item">
+                                        <NavLink href="/PartnerList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                            Partner
+                                        </NavLink>
+                                    </li>
+                                    <li class="nav-item">
+                                        <NavLink href="/CompanyList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                            Company
+                                        </NavLink>
+                                    </li>
+                                    <li class="nav-item">
+                                        <NavLink href="/ShopList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                            Shop
+                                        </NavLink>
+                                    </li>
+                                    <li class="nav-item">
+                                        <NavLink href="/MiscList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                            Misc
+                                        </NavLink>
+                                    </li>
+                                </ul>
+                            }
+                        </li>
+
+                        <li class="nav-item">
+                            <NavLink href="/IdwImport" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                IDW Import
+                            </NavLink>
+                        </li>
+                        <li class="nav-item">
+                            <NavLink href="/IdwManageList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                IDW Manage
+                            </NavLink>
+                        </li>
                     </ul>
                 </nav>
             </div>
@@ -24,20 +77,18 @@
             <div class="main-content @(isSidebarOpen ? "shrink" : "")">
                 <div class="top-row d-flex align-items-center">
                     <div class="logo-area d-flex align-items-center gap-2">
-                        <img src="/images/logo.png" class="logo" />
+                        <img src="/images/logo.png" class="logo" alt="logo" />
                         <strong>VAC Admin Portal</strong>
-                        <button class="menu-toggle" @onclick="ToggleSidebar">☰</button>
+                        <button class="menu-toggle btn btn-outline-secondary btn-sm ms-2" type="button" @onclick="ToggleSidebar">☰</button>
                     </div>
 
-                    <!-- ดันขวา -->
                     <span class="ms-auto"></span>
 
-                    <!-- ชื่อผู้ใช้จาก Claims -->
                     <span class="topbar-name me-2">
                         Welcome @GetDisplayName(auth.User)
                     </span>
 
-                    <button class="btn btn-sm btn-outline-secondary" @onclick="Logout">Logout</button>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="Logout">Logout</button>
                 </div>
 
                 <main>@Body</main>
@@ -52,7 +103,10 @@
 
 @code {
     private bool isSidebarOpen = true;
-    void ToggleSidebar() => isSidebarOpen = !isSidebarOpen;
+    private bool configOpen = true; // ให้เปิด sub-menu ตอนเริ่มใช้งาน; ตั้ง false ถ้าต้องการให้พับ
+
+    private void ToggleSidebar() => isSidebarOpen = !isSidebarOpen;
+    private void ToggleConfig() => configOpen = !configOpen;
 
     // อ่านชื่อจาก Claims
     private static string GetDisplayName(ClaimsPrincipal? user)

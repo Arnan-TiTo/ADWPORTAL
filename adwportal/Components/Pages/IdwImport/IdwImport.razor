@@ -1,23 +1,89 @@
 ﻿@page "/IdwImport"
 @using System.Net.Http.Headers
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components
 @using System.Text
 @using adwportal.Models
+@using adwportal.Dtos
 @using adwportal.Services
 @inject IHttpClientFactory ClientFactory
 @inject IJSRuntime JS
 @inject IOptions<ApiSettings> Options
 @inject IdwImportService IdwImportService
+@inject ShopService ShopSvc
 @inject NavigationManager Navigation
 
 <h3>Import Data</h3>
-@* 
-<div class="border p-2 bg-light" style="max-height:200px; overflow:auto">
-    <pre>@token</pre>
-</div> *@
 
 <div class="card mb-3">
     <div class="card-body">
+
+        <!-- ===== Dropdowns: Company / Platform / Logistic / Shop ===== -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <label class="form-label">Company</label>
+                <InputSelect class="form-select" @bind-Value="SelectedCompanyId" TValue="int?" disabled="@isLookupLoading">
+                    <option value="">-- Select company --</option>
+                    @if (companies != null)
+                    {
+                        @foreach (var c in companies)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    }
+                </InputSelect>
+                @if (SelectedCompanyId.HasValue)
+                {
+                    <div class="form-text">
+                        PartnerId: @CurrentPartnerIdText
+                    </div>
+                }
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Shop</label>
+                <InputSelect class="form-select"
+                             @bind-Value="selectedShopDbId"
+                             TValue="int?"
+                             disabled="@(isLookupLoading || !shops.Any())">
+                    <option value="">-- @(shops.Any() ? "Select shop" : "No shop available") --</option>
+                    @foreach (var s in shops)
+                    {
+                        <option value="@s.Id">@((s.Name ?? "(no name)")) [@s.ShopId]</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Platform</label>
+                <InputSelect class="form-select" @bind-Value="selectedPlatformId" TValue="int?" disabled="@isLookupLoading">
+                    <option value="">-- Select platform --</option>
+                    @if (platforms != null)
+                    {
+                        @foreach (var p in platforms)
+                        {
+                            <option value="@p.Id">@p.Value1</option>
+                        }
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Logistic</label>
+                <InputSelect class="form-select" @bind-Value="selectedLogisticId" TValue="int?" disabled="@isLookupLoading">
+                    <option value="">-- Select logistic --</option>
+                    @if (logistics != null)
+                    {
+                        @foreach (var l in logistics)
+                        {
+                            <option value="@l.Id">@l.Value1</option>
+                        }
+                    }
+                </InputSelect>
+            </div>
+        </div>
+        <!-- ===== /Dropdowns ===== -->
+
         <InputFile OnChange="OnFileSelected" />
 
         @if (!string.IsNullOrWhiteSpace(selectedFileName))
@@ -27,7 +93,7 @@
                 <pre>@previewText</pre>
             </div>
             <div class="mt-3">
-                <button class="btn btn-success me-2" @onclick="Save" disabled="@isSaving">Save</button>
+                <button class="btn btn-success me-2" @onclick="Save" disabled="@DisableSave">Save</button>
                 <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
             </div>
         }
@@ -41,9 +107,9 @@
             <h5>Import Summary</h5>
             <div class="row">
                 <div class="col-md-3"><strong>ImportId:</strong> @lastUpload.importId</div>
-                <div class="col-md-3"><strong>Inserted:</strong> @lastUpload.rows</div>
-                <div class="col-md-3"><strong>Skipped (DB):</strong> @lastUpload.skippedDb</div>
-                <div class="col-md-3"><strong>Skipped (File dup):</strong> @lastUpload.skippedFile</div>
+                <div class="col-md-3"><strong>Inserted Order:</strong> @lastUpload.rows</div>
+                <div class="col-md-3"><strong>Skipped Order:</strong> @lastUpload.skippedDb</div>
+                <div class="col-md-3"><strong>Skipped File:</strong> @lastUpload.skippedFile</div>
             </div>
 
             @if (lastUpload.skippedOrders != null && lastUpload.skippedOrders.Any())
@@ -152,18 +218,119 @@
     private bool? isSaving;
     private bool? isDelete;
 
-    private UploadResponseDto? lastUpload;   // <-- สรุปผลจาก API ใหม่
-    private IdwImportDto? lastImported;      // รายละเอียด (ตารางด้านล่าง)
+    private UploadResponseDtos? lastUpload;
+    private IdwImportDtos? lastImported;
 
     private MemoryStream? cachedFileStream;
     private string? importId;
 
     private string ApiBase => Options.Value.ApiBaseUrl ?? "";
 
+    // ===== Lookup state =====
+    private bool isLookupLoading = false;
+    private List<CompanyItemDtos>? companies;
+    private List<MiscItemDtos>? platforms;
+    private List<MiscItemDtos>? logistics;
+
+    // shop dropdown (ขึ้นกับ partner ของ company)
+    private List<ShopDtos> shops = new();
+    private int? selectedShopDbId;
+
+    // ค่าที่เลือก
+    private int? selectedCompanyIdBacking;
+    private int? SelectedCompanyId
+    {
+        get => selectedCompanyIdBacking;
+        set
+        {
+            if (selectedCompanyIdBacking != value)
+            {
+                selectedCompanyIdBacking = value;
+                _ = OnCompanyChanged();
+            }
+        }
+    }
+    private int? selectedPlatformId;
+    private int? selectedLogisticId;
+
+    private bool DisableSave => isSaving == true
+                                || selectedFile == null
+                                || isLookupLoading
+                                || !SelectedCompanyId.HasValue
+                                || !selectedPlatformId.HasValue
+                                || !selectedLogisticId.HasValue;
+
     protected override async Task OnInitializedAsync()
     {
         await LoginAsync("admin", "123456yjm");
+        await LoadLookupsAsync();
     }
+
+    private async Task LoadLookupsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(token)) return;
+        isLookupLoading = true;
+        try
+        {
+            var ct = CancellationToken.None;
+            companies = await IdwImportService.GetCompaniesAsync(token!, ct);
+            platforms = await IdwImportService.GetPlatformsAsync(token!, ct);
+            logistics = await IdwImportService.GetLogisticsAsync(token!, ct);
+
+            // default select first
+            SelectedCompanyId ??= companies?.FirstOrDefault()?.Id;
+            selectedPlatformId ??= platforms?.FirstOrDefault()?.Id;
+            selectedLogisticId ??= logistics?.FirstOrDefault()?.Id;
+
+            // โหลด shops ตาม company ที่เลือก (ถ้ามี)
+            await LoadShopsForSelectedCompanyAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load lookups failed: {ex.Message}", "error");
+        }
+        finally
+        {
+            isLookupLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ดึง PartnerId ของบริษัท แล้วโหลด shops ด้วย partnerId
+    private async Task OnCompanyChanged()
+    {
+        // reset shop selection
+        selectedShopDbId = null;
+        await LoadShopsForSelectedCompanyAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadShopsForSelectedCompanyAsync()
+    {
+        shops.Clear();
+
+        if (!SelectedCompanyId.HasValue || companies is null || string.IsNullOrWhiteSpace(token))
+            return;
+
+        var comp = companies.FirstOrDefault(c => c.Id == SelectedCompanyId.Value);
+        if (comp == null) return;
+
+        var partnerId = comp.PartnerId;
+        if (partnerId <= 0) return;
+
+        try
+        {
+            var list = await ShopSvc.GetShopsAsync(token!, partnerId);
+            shops = list?.OrderBy(s => s.Name).ToList() ?? new List<ShopDtos>();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load shops failed: {ex.Message}", "error");
+        }
+    }
+
+    private string CurrentPartnerIdText
+        => (companies?.FirstOrDefault(c => c.Id == SelectedCompanyId)?.PartnerId)?.ToString() ?? "-";
 
     // ---- helpers ----
     private static string? NormalizeToken(string? t)
@@ -203,11 +370,20 @@
         cachedFileStream = new MemoryStream(ms.ToArray());
     }
 
-    private async Task<UploadResponseDto> DoUploadAsync()
+    private async Task<UploadResponseDtos> DoUploadAsync()
     {
         var bytes = cachedFileStream!.ToArray();
         await using var ms = new MemoryStream(bytes, writable: false);
-        return await IdwImportService.UploadImportAsync(token!, ms, selectedFile!.Name);
+        return await IdwImportService.UploadImportAsync(
+            token!,
+            ms,
+            selectedFile!.Name,
+            companyId: SelectedCompanyId,
+            shopId: selectedShopDbId,
+            miscIdPlatform: selectedPlatformId,
+            miscIdLogistic: selectedLogisticId,
+            CancellationToken.None
+        );
     }
 
     private async Task Save()
@@ -233,10 +409,8 @@
                     $"Import {importId}: +{lastUpload.rows}, skippedDb={lastUpload.skippedDb}, skippedFile={lastUpload.skippedFile}",
                     "success");
 
-                // ดึงรายละเอียด (ถ้า API ฝั่งรายละเอียดพร้อม)
                 lastImported = await IdwImportService.GetImportAsync(token!, lastUpload.importId);
 
-                // clear file buffer
                 selectedFile = null;
                 selectedFileName = null;
                 previewText = null;

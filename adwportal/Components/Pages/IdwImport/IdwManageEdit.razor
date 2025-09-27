@@ -1,4 +1,5 @@
 ﻿@page "/IdwMangeEdit/edit/{Id:long}"
+@using adwportal.Dtos
 @using adwportal.Models
 @using adwportal.Services
 @using adwportal.States
@@ -21,6 +22,25 @@ else
 {
     <div class="card">
         <div class="card-body">
+
+            <!-- READONLY: Company / Platform / Logistic -->
+            <div class="row g-3 mb-2">
+                <div class="col-md-4">
+                    <label class="form-label">Company</label>
+                    <input class="form-control" value="@companyName" disabled />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Platform</label>
+                    <input class="form-control" value="@platformName" disabled />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Logistic</label>
+                    <input class="form-control" value="@logisticName" disabled />
+                </div>
+            </div>
+
+            <hr />
+
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">Order No.</label>
@@ -83,11 +103,23 @@ else
 
 @code {
     [Parameter] public long Id { get; set; }
+
     bool loading, saving;
     string? error;
     string? token;
-    IdwImportRowDto model = new();
+
+    IdwImportRowDtos model = new();
     string? pickupDateStr, shipByDateStr;
+
+    // readonly names
+    string companyName = "-";
+    string platformName = "-";
+    string logisticName = "-";
+
+    // lookups (ใช้ map id -> name/value1)
+    List<CompanyItemDtos>? companies;
+    List<MiscItemDtos>? platforms;
+    List<MiscItemDtos>? logistics;
 
     protected override async Task OnInitializedAsync()
     {
@@ -100,26 +132,43 @@ else
                 error = "Login failed";
                 return;
             }
-            await Load();
+
+            loading = true;
+            await LoadLookups();   // โหลดชื่อไว้ก่อน
+            await Load();          // โหลดแถวที่แก้ + map company/platform/logistic
         }
         catch (Exception ex)
         {
             error = ex.Message;
         }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    async Task LoadLookups()
+    {
+        // ดึงลิสต์ทั้งหมดครั้งเดียวพอ
+        companies = await Idw.GetCompaniesAsync(token!);
+        platforms = await Idw.GetPlatformsAsync(token!);
+        logistics = await Idw.GetLogisticsAsync(token!);
     }
 
     async Task Load()
     {
         try
         {
-            loading = true;
             error = null;
+
+            // 1) โหลดแถว
             var row = await Idw.GetImportRowAsync(token!, Id);
             if (row == null)
             {
                 error = "ไม่พบข้อมูล";
                 return;
             }
+
             model.Id = row.Id;
             model.ImportId = row.ImportId;
             model.PageNo = row.PageNo;
@@ -135,16 +184,32 @@ else
             model.ItemVariant = row.ItemVariant;
             model.IsCod = row.IsCod;
             model.Qty = row.Qty;
+
             pickupDateStr = row.PickupDate?.ToString("yyyy-MM-dd");
             shipByDateStr = row.ShipByDate?.ToString("yyyy-MM-dd");
+
+            // 2) โหลด Import (เพื่อได้ CompanyId / MiscIdPlatform / MiscIdLogistic)
+            var imp = await Idw.GetImportAsync(token!, row.ImportId);
+            if (imp != null)
+            {
+                // map เป็นชื่อจาก lookup list
+                var comp = companies?.FirstOrDefault(x => x.Id == imp.CompanyId);
+                companyName = comp?.Name ?? "-";
+
+                var plat = platforms?.FirstOrDefault(x => x.Id == imp.MiscIdPlatform);
+                platformName = plat?.Value1 ?? "-";
+
+                var logi = logistics?.FirstOrDefault(x => x.Id == imp.MiscIdLogistic);
+                logisticName = logi?.Value1 ?? "-";
+            }
+            else
+            {
+                companyName = platformName = logisticName = "-";
+            }
         }
         catch (Exception ex)
         {
             error = ex.Message;
-        }
-        finally
-        {
-            loading = false;
         }
     }
 
@@ -159,9 +224,12 @@ else
             }
             saving = true;
             error = null;
+
             model.PickupDate = string.IsNullOrWhiteSpace(pickupDateStr) ? null : DateTime.Parse(pickupDateStr);
             model.ShipByDate = string.IsNullOrWhiteSpace(shipByDateStr) ? null : DateTime.Parse(shipByDateStr);
+
             await Idw.UpdateImportRowAsync(token!, model);
+
             State.RefreshRowId = model.Id;
             State.Dirty = false;
             await JS.InvokeVoidAsync("showToast", $"บันทึกเรียบร้อย: {Id}", "info");
