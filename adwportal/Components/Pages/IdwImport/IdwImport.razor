@@ -18,24 +18,28 @@
 <div class="card mb-3">
     <div class="card-body">
 
-        <!-- ===== Dropdowns: Company / Platform / Logistic / Shop ===== -->
+        <!-- ===== Dropdowns: Company(จาก partners) / Shop / Platform / Logistic ===== -->
         <div class="row g-3 mb-3">
             <div class="col-md-3">
                 <label class="form-label">Company</label>
-                <InputSelect class="form-select" @bind-Value="SelectedCompanyId" TValue="int?" disabled="@isLookupLoading">
+                <!-- ค่า value คือ Partner.Id แต่โชว์ชื่อบริษัท -->
+                <InputSelect class="form-select"
+                             @bind-Value="SelectedPartnerDbId"
+                             TValue="int?"
+                             disabled="@isLookupLoading">
                     <option value="">-- Select company --</option>
-                    @if (companies != null)
+                    @if (partners is not null)
                     {
-                        @foreach (var c in companies)
+                        @foreach (var p in partners)
                         {
-                            <option value="@c.Id">@c.Name</option>
+                            <option value="@p.Id">@((p.CompanyName ?? "(no company)"))</option>
                         }
                     }
                 </InputSelect>
-                @if (SelectedCompanyId.HasValue)
+                @if (SelectedPartnerDbId is not null)
                 {
                     <div class="form-text">
-                        PartnerId: @CurrentPartnerIdText
+                        Partner (ext): @CurrentPartnerExternalIdText
                     </div>
                 }
             </div>
@@ -45,8 +49,8 @@
                 <InputSelect class="form-select"
                              @bind-Value="selectedShopDbId"
                              TValue="int?"
-                             disabled="@(isLookupLoading || !shops.Any())">
-                    <option value="">-- @(shops.Any() ? "Select shop" : "No shop available") --</option>
+                             disabled="@(isLookupLoading || shops.Count == 0)">
+                    <option value="">-- @(shops.Count > 0 ? "Select shop" : "No shop available") --</option>
                     @foreach (var s in shops)
                     {
                         <option value="@s.Id">@((s.Name ?? "(no name)")) [@s.ShopId]</option>
@@ -58,7 +62,7 @@
                 <label class="form-label">Platform</label>
                 <InputSelect class="form-select" @bind-Value="selectedPlatformId" TValue="int?" disabled="@isLookupLoading">
                     <option value="">-- Select platform --</option>
-                    @if (platforms != null)
+                    @if (platforms is not null)
                     {
                         @foreach (var p in platforms)
                         {
@@ -72,7 +76,7 @@
                 <label class="form-label">Logistic</label>
                 <InputSelect class="form-select" @bind-Value="selectedLogisticId" TValue="int?" disabled="@isLookupLoading">
                     <option value="">-- Select logistic --</option>
-                    @if (logistics != null)
+                    @if (logistics is not null)
                     {
                         @foreach (var l in logistics)
                         {
@@ -151,12 +155,13 @@
             <p><strong>ImportedBy:</strong> @lastImported.ImportedBy</p>
             <p><strong>ImportedAt:</strong> @lastImported.ImportedAt</p>
             <p><strong>Status:</strong> @lastImported.Status</p>
-            <p><strong>RowCount:</strong> @lastImported.RowCount</p>
+            <p><strong>RowCount:</strong> @(importedRows?.Count ?? lastImported.RowCount)</p>
+
             <div class="mt-3">
                 <button class="btn btn-danger" @onclick="Delete" disabled="@isDelete">Delete</button>
             </div>
 
-            <table class="table table-sm table-bordered">
+            <table class="table table-sm table-bordered mt-3">
                 <thead>
                     <tr>
                         <th>Page</th>
@@ -174,8 +179,29 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (lastImported.Rows != null && lastImported.Rows.Any())
+                    @if (importedRows != null && importedRows.Any())
                     {
+                        @foreach (var r in importedRows)
+                        {
+                            <tr>
+                                <td><!-- ไม่มี page ใน IdwOrderDto --></td>
+                                <td>@r.OrderNo</td>
+                                <td>@r.PickupDate?.ToString("dd-MM-yyyy")</td>
+                                <td>@r.ShipByDate?.ToString("dd-MM-yyyy")</td>
+                                <td>@r.SenderName</td>
+                                <td>@r.SenderAddress</td>
+                                <td>@r.ReceiverName</td>
+                                <td>@r.ReceiveAddress</td>
+                                <td>@r.ProductName</td>
+                                <td>@r.Cod</td>
+                                <td>@r.Variant</td>
+                                <td>@r.Qty</td>
+                            </tr>
+                        }
+                    }
+                    else if (lastImported?.Rows != null && lastImported.Rows.Any())
+                    {
+                        @* เผื่อ API คืน Rows ใน IdwImportDtos *@
                         @foreach (var r in lastImported.Rows)
                         {
                             <tr>
@@ -188,7 +214,7 @@
                                 <td>@r.ReceiverName</td>
                                 <td>@r.ReceiverAddress</td>
                                 <td>@r.ItemName</td>
-                                <td>@r.IsCod</td>
+                                <td>@(r.IsCod == true ? "Y" : r.IsCod == false ? "N" : null)</td>
                                 <td>@r.ItemVariant</td>
                                 <td>@r.Qty</td>
                             </tr>
@@ -221,42 +247,42 @@
     private UploadResponseDtos? lastUpload;
     private IdwImportDtos? lastImported;
 
+    // แถวที่จะแสดง (fallback มาจาก SearchAsync)
+    private List<IdwOrderDtos> importedRows = new();
+
     private MemoryStream? cachedFileStream;
     private string? importId;
 
-    private string ApiBase => Options.Value.ApiBaseUrl ?? "";
-
-    // ===== Lookup state =====
     private bool isLookupLoading = false;
-    private List<CompanyItemDtos>? companies;
+
+    // partners (รวม CompanyName)
+    private List<MdwPartnerDtos>? partners;
     private List<MiscItemDtos>? platforms;
     private List<MiscItemDtos>? logistics;
 
-    // shop dropdown (ขึ้นกับ partner ของ company)
-    private List<ShopDtos> shops = new();
+    private readonly List<ShopDtos> shops = new();
     private int? selectedShopDbId;
 
-    // ค่าที่เลือก
-    private int? selectedCompanyIdBacking;
-    private int? SelectedCompanyId
+    private int? _selectedPartnerDbId;
+    private int? SelectedPartnerDbId
     {
-        get => selectedCompanyIdBacking;
+        get => _selectedPartnerDbId;
         set
         {
-            if (selectedCompanyIdBacking != value)
+            if (_selectedPartnerDbId != value)
             {
-                selectedCompanyIdBacking = value;
-                _ = OnCompanyChanged();
+                _selectedPartnerDbId = value;
+                _ = OnPartnerChanged();
             }
         }
     }
+
     private int? selectedPlatformId;
     private int? selectedLogisticId;
 
     private bool DisableSave => isSaving == true
                                 || selectedFile == null
                                 || isLookupLoading
-                                || !SelectedCompanyId.HasValue
                                 || !selectedPlatformId.HasValue
                                 || !selectedLogisticId.HasValue;
 
@@ -273,17 +299,16 @@
         try
         {
             var ct = CancellationToken.None;
-            companies = await IdwImportService.GetCompaniesAsync(token!, ct);
+
+            partners = await IdwImportService.GetPartnersAsync(token!, partnerExternalId: null, ct);
             platforms = await IdwImportService.GetPlatformsAsync(token!, ct);
             logistics = await IdwImportService.GetLogisticsAsync(token!, ct);
 
-            // default select first
-            SelectedCompanyId ??= companies?.FirstOrDefault()?.Id;
+            SelectedPartnerDbId ??= partners?.FirstOrDefault()?.Id;
             selectedPlatformId ??= platforms?.FirstOrDefault()?.Id;
             selectedLogisticId ??= logistics?.FirstOrDefault()?.Id;
 
-            // โหลด shops ตาม company ที่เลือก (ถ้ามี)
-            await LoadShopsForSelectedCompanyAsync();
+            await LoadShopsForSelectedPartnerAsync();
         }
         catch (Exception ex)
         {
@@ -296,32 +321,24 @@
         }
     }
 
-    // ดึง PartnerId ของบริษัท แล้วโหลด shops ด้วย partnerId
-    private async Task OnCompanyChanged()
+    private async Task OnPartnerChanged()
     {
-        // reset shop selection
         selectedShopDbId = null;
-        await LoadShopsForSelectedCompanyAsync();
+        await LoadShopsForSelectedPartnerAsync();
         StateHasChanged();
     }
 
-    private async Task LoadShopsForSelectedCompanyAsync()
+    private async Task LoadShopsForSelectedPartnerAsync()
     {
         shops.Clear();
 
-        if (!SelectedCompanyId.HasValue || companies is null || string.IsNullOrWhiteSpace(token))
+        if (SelectedPartnerDbId is null || string.IsNullOrWhiteSpace(token))
             return;
-
-        var comp = companies.FirstOrDefault(c => c.Id == SelectedCompanyId.Value);
-        if (comp == null) return;
-
-        var partnerId = comp.PartnerId;
-        if (partnerId <= 0) return;
 
         try
         {
-            var list = await ShopSvc.GetShopsAsync(token!, partnerId);
-            shops = list?.OrderBy(s => s.Name).ToList() ?? new List<ShopDtos>();
+            var list = await ShopSvc.GetShopsAsync(token!, SelectedPartnerDbId.Value);
+            shops.AddRange((list ?? new()).OrderBy(s => s.Name));
         }
         catch (Exception ex)
         {
@@ -329,10 +346,9 @@
         }
     }
 
-    private string CurrentPartnerIdText
-        => (companies?.FirstOrDefault(c => c.Id == SelectedCompanyId)?.PartnerId)?.ToString() ?? "-";
+    private string CurrentPartnerExternalIdText
+        => partners?.FirstOrDefault(p => p.Id == SelectedPartnerDbId)?.PartnerId.ToString() ?? "-";
 
-    // ---- helpers ----
     private static string? NormalizeToken(string? t)
     {
         if (string.IsNullOrWhiteSpace(t)) return null;
@@ -378,12 +394,31 @@
             token!,
             ms,
             selectedFile!.Name,
-            companyId: SelectedCompanyId,
             shopId: selectedShopDbId,
             miscIdPlatform: selectedPlatformId,
             miscIdLogistic: selectedLogisticId,
             CancellationToken.None
         );
+    }
+
+    private async Task LoadRowsByBatchAsync(string? batchNo)
+    {
+        importedRows.Clear();
+        if (string.IsNullOrWhiteSpace(batchNo) || string.IsNullOrWhiteSpace(token)) return;
+
+        try
+        {
+            // ดึงรายการออเดอร์ทั้งหมดใน batch (ปรับ size ถ้าไฟล์ใหญ่)
+            var page = await IdwImportService.SearchAsync(
+                token!, batchNo, orderNo: null, sku: null,
+                page: 1, size: 1000, CancellationToken.None);
+
+            importedRows = page.Items ?? new List<IdwOrderDtos>();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load rows failed: {ex.Message}", "error");
+        }
     }
 
     private async Task Save()
@@ -405,12 +440,29 @@
             if (lastUpload != null && lastUpload.importId > 0)
             {
                 importId = lastUpload.importId.ToString();
+
                 await JS.InvokeVoidAsync("showToast",
                     $"Import {importId}: +{lastUpload.rows}, skippedDb={lastUpload.skippedDb}, skippedFile={lastUpload.skippedFile}",
                     "success");
 
-                lastImported = await IdwImportService.GetImportAsync(token!, lastUpload.importId);
+                // 1) พยายามโหลดรายละเอียดตาม id (ถ้า API มี Rows)
+                lastImported = await IdwImportService.GetImportAsync(token!, lastUpload.importId) ?? new IdwImportDtos
+                {
+                    BatchNo = lastUpload.batchNo,
+                    RowCount = lastUpload.rows
+                };
 
+                // 2) Fallback: ถ้าไม่มี Rows ใน lastImported ให้ดึงด้วย batchNo
+                if (lastImported.Rows == null || lastImported.Rows.Count == 0)
+                {
+                    await LoadRowsByBatchAsync(lastUpload.batchNo);
+                }
+                else
+                {
+                    importedRows.Clear(); // ใช้ Rows ที่มากับ API
+                }
+
+                // clear file buffer
                 selectedFile = null;
                 selectedFileName = null;
                 previewText = null;
@@ -451,6 +503,7 @@
             selectedFileName = null;
             previewText = null;
             lastUpload = null;
+            importedRows.Clear();
         }
         catch (Exception ex)
         {
@@ -465,5 +518,5 @@
 
     private void IdwImportEditForm(long id) => Navigation.NavigateTo($"/IdwImportEdit/{id}");
     private void Cancel() { selectedFile = null; selectedFileName = null; previewText = null; }
-    private void ClearImported() { lastImported = null; lastUpload = null; }
+    private void ClearImported() { lastImported = null; lastUpload = null; importedRows.Clear(); }
 }

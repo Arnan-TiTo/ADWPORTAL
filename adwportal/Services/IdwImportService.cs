@@ -59,12 +59,11 @@ public class IdwImportService
         return res.IsSuccessStatusCode;
     }
 
-    // ===== Import (UPDATED: รองรับ companyId/miscIdPlatform/miscIdLogistic) =====
+    // ===== Import (UPDATED: รองรับ shopId/miscIdPlatform/miscIdLogistic) =====
     public async Task<UploadResponseDtos> UploadImportAsync(
         string token,
         Stream fileStream,
         string fileName,
-        int? companyId = null,
         int? shopId = null,
         int? miscIdPlatform = null,
         int? miscIdLogistic = null,
@@ -77,7 +76,6 @@ public class IdwImportService
         fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("application/octet-stream");
         form.Add(fileContent, "file", fileName);
 
-        if (companyId.HasValue) form.Add(new StringContent(companyId.Value.ToString()), "companyId");
         if (shopId.HasValue) form.Add(new StringContent(shopId.Value.ToString()), "shopId");
 
         if (miscIdPlatform.HasValue) form.Add(new StringContent(miscIdPlatform.Value.ToString()), "miscIdPlatform");
@@ -265,4 +263,14 @@ public class IdwImportService
         var res = await http.GetFromJsonAsync<List<MiscItemDtos>>("api/misc/logistics", ct);
         return res ?? new List<MiscItemDtos>();
     }
+
+    public async Task<List<MdwPartnerDtos>> GetPartnersAsync(string token, int? partnerExternalId = null, CancellationToken ct = default)
+    {
+        using var http = CreateClient(token);
+        var url = "api/companys/partners";
+        if (partnerExternalId is > 0) url += $"?partnerId={partnerExternalId.Value}";
+        var res = await http.GetFromJsonAsync<List<MdwPartnerDtos>>(url, ct);
+        return res ?? new();
+    }
+
 }

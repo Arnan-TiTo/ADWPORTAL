@@ -24,7 +24,14 @@
         public bool IsActive { get; set; } = true;
     }
 
-    public record MdwPartnerDtos(int Id, string Name, int PartnerId);
+    public record MdwPartnerDtos(
+        int Id, 
+        string Name, 
+        int PartnerId, 
+        int? CompanysId,
+        string? CompanyName
+    );
+
     public record MdwShopDtos(int Id, long ShopId, string? Name, int PartnerId);
 
 }
