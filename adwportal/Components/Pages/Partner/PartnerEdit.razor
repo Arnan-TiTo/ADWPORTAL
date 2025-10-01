@@ -3,6 +3,7 @@
 @using adwportal.Dtos
 @using adwportal.Services
 @inject PartnerService Svc
+@inject CompanyService Comp
 @inject IdwImportService Idw
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -26,17 +27,36 @@ else
                     <label class="form-label">Name</label>
                     <input class="form-control" @bind="model.Name" />
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">PartnerId (external)</label>
                     <input type="number" class="form-control" @bind="model.PartnerId" />
                 </div>
+
+                <!-- Company dropdown -->
+                <div class="col-md-6">
+                    <label class="form-label" >Company</label>
+                    <InputSelect class="form-select"
+                                 @bind-Value="model.CompanysId"
+                                 TValue="int?"
+                                 disabled="@loadingCompanies"
+                                 @key="companies">
+                        <option value="">-- Select company --</option>
+                        @foreach (var c in companies)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Environment</label>
+                    <input class="form-control" @bind="model.Environment" placeholder="e.g. production / test-stable" />
+                </div>
+
                 <div class="col-md-8">
                     <label class="form-label">PartnerKey (secret)</label>
                     <input class="form-control" @bind="model.PartnerKey" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Environment</label>
-                    <input class="form-control" @bind="model.Environment" placeholder="e.g. production / test-stable" />
                 </div>
 
                 @if (Id.HasValue && loadedPartner != null)
@@ -57,64 +77,138 @@ else
 }
 
 @code {
+
     [Parameter] public int? Id { get; set; }
 
     string? token;
-    bool loading, saving;
+    bool loading, saving, loadingCompanies;
     string? error;
     string title = "Add";
 
-    PartnerUpsertDtos model = new();
+    PartnerUpsertDtos model = new() { CompanysId = null };
     PartnerDtos? loadedPartner;
+
+    List<CompanyDtos> companies = new();
+
+    // ---------- helpers ----------
+    private static int? ResolveCompanyId(PartnerDtos? p)
+    {
+        if (p is null) return null;
+
+        int? id = p.CompanysId;
+
+        // เผื่อ DTO รุ่นเก่าใช้ CompanysId (มี s)
+        if (id is null)
+        {
+            try
+            {
+                id = (int?)((dynamic)p).CompanysId;
+            }
+            catch { /* ignore */ }
+        }
+
+        // บางระบบส่ง 0 แทน null
+        if (id is 0) id = null;
+
+        return id;
+    }
 
     protected override async Task OnInitializedAsync()
     {
+        loading = true;
         try
         {
-            loading = true;
-
+            // login
             var login = await Idw.LoginAsync("admin", "123456yjm");
-            token = login?.Token;
+            token = login?.Token?.Trim('"');
             if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
+
+            // โหลด companies + (ถ้ามี) partner พร้อมกัน
+            var loadCompaniesTask = LoadCompaniesAsync();
+            Task<PartnerDtos?> loadPartnerTask = Task.FromResult<PartnerDtos?>(null);
 
             if (Id.HasValue)
             {
                 title = "Edit";
-                loadedPartner = await Svc.GetPartnerAsync(token!, Id.Value);
-                if (loadedPartner == null) { error = "Not found"; return; }
+                loadPartnerTask = Svc.GetPartnerAsync(token!, Id.Value);
+            }
+            else
+            {
+                title = "Add";
+            }
 
+            await Task.WhenAll(loadCompaniesTask, loadPartnerTask);
+            loadedPartner = loadPartnerTask.Result;
+
+            // ตั้งค่า model
+            if (loadedPartner != null)
+            {
                 model = new PartnerUpsertDtos
                 {
                     Name = loadedPartner.Name ?? "",
                     PartnerId = loadedPartner.PartnerId,
                     PartnerKey = loadedPartner.PartnerKey,
-                    Environment = loadedPartner.Environment
+                    Environment = loadedPartner.Environment,
+                    CompanysId = ResolveCompanyId(loadedPartner)
                 };
+
+                // ถ้าค่าเดิมไม่มีในลิสต์ (เช่นบริษัทถูกลบ) ให้ปล่อยว่างเพื่อให้ผู้ใช้เลือกเอง
+                if (model.CompanysId is int cid && !companies.Any(c => c.Id == cid))
+                    model.CompanysId = null;
             }
+            else
+            {
+                // หน้า Add: ถ้าอยาก default ตัวแรก ให้เปิดบรรทัดนี้
+                if (model.CompanysId is null && companies.Count > 0)
+                    model.CompanysId = companies[0].Id;
+            }
+
+            // debug ช่วยตรวจสอบ
+            await JS.InvokeVoidAsync("console.log",
+                $"[PartnerEdit] after init -> companyId={model.CompanysId}, companies=[{string.Join(",", companies.Select(x => x.Id))}]");
         }
         catch (Exception ex) { error = ex.Message; }
-        finally { loading = false; }
+        finally { loading = false; StateHasChanged(); }
     }
 
+    private async Task LoadCompaniesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(token)) return;
+        loadingCompanies = true;
+        try
+        {
+            var list = await Comp.GetCompaniesDropdownAsync(token!) ?? new List<CompanyDtos>();
+
+            // distinct + sort
+            companies = list
+                .Where(c => c != null)
+                .GroupBy(c => c.Id)
+                .Select(g => g.First())
+                .OrderBy(c => c.Name)
+                .ToList();
+        }
+        finally
+        {
+            loadingCompanies = false;
+        }
+    }
+
+    // ---------- actions ----------
     async Task Save()
     {
         try
         {
             if (string.IsNullOrWhiteSpace(model.Name))
-            {
-                await JS.InvokeVoidAsync("showToast", "Name is required", "error");
-                return;
-            }
+            { await JS.InvokeVoidAsync("showToast", "Name is required", "error"); return; }
+
             if (model.PartnerId <= 0)
-            {
-                await JS.InvokeVoidAsync("showToast", "PartnerId must be > 0", "error");
-                return;
-            }
+            { await JS.InvokeVoidAsync("showToast", "PartnerId must be > 0", "error"); return; }
+
             if (string.IsNullOrWhiteSpace(model.PartnerKey))
-            {
-                await JS.InvokeVoidAsync("showToast", "PartnerKey is required", "error");
-                return;
-            }
+            { await JS.InvokeVoidAsync("showToast", "PartnerKey is required", "error"); return; }
+
+            if (model.CompanysId is null)
+            { await JS.InvokeVoidAsync("showToast", "Company is required", "error"); return; }
 
             saving = true;
 

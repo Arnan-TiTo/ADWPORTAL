@@ -5,6 +5,11 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
+<script>
+    window.forceNavigate = function (url) { window.location.href = url; };
+</script>
+
+
 <AuthorizeView>
     <Authorized Context="auth">
         <div class="page">

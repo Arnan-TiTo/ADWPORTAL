@@ -70,9 +70,12 @@ else
                             <td>@c.PartnerName</td>
                             <td>@c.ShopCount</td>
                             <td>@(c.IsActive ? "Y" : "N")</td>
-                            <td>@(c.UpdatedAt?.ToString("yyyy-MM-dd HH:mm") ?? c.CreatedAt.ToString("yyyy-MM-dd HH:mm"))</td>
+                            <td>@(c.UpdatedAt.ToString("dd-MM-yyyy HH:mm") ?? c.CreatedAt.ToString("dd-MM-yyyy HH:mm"))</td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => Edit(c.Id)">Edit</button>
+                                <button class="btn btn-sm btn-outline-primary me-1"
+                                        @onclick="() => EditForce(c.Id, c.PartnerId)">
+                                    Edit
+                                </button>
                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(c.Id)">Delete</button>
                             </td>
                         </tr>
@@ -174,7 +177,27 @@ else
     void Go(int i) { pageIndex = i; Apply(); }
 
     void Add() => Nav.NavigateTo("/CompanyEdit");
-    void Edit(int id) => Nav.NavigateTo($"/CompanyEdit/{id}");
+    // void Edit(int id) => Nav.NavigateTo($"/CompanyEdit/{id}");
+
+    void Edit(int? companyId, int? partnerId)
+    // {
+    //     var url = partnerId is > 0
+    //         ? $"/CompanyEdit/{companyId}?partnerId={partnerId}"
+    //         : $"/CompanyEdit/{companyId}";
+    {
+        var url = $"/CompanyEdit/12?partnerId=1";
+        Nav.NavigateTo(url, forceLoad: false);
+    }
+
+    string BuildCompanyEditUrl(int companyId, int partnerPk)
+        => $"/CompanyEdit/{companyId}?partnerId={partnerPk}";
+
+    async Task EditForce(int? companyId, int? partnerPk)
+    {
+        var url = $"/CompanyEdit/{companyId}?partnerId={partnerPk}";
+        await JS.InvokeVoidAsync("forceNavigate", url);
+
+    }
 
     async Task Delete(int id)
     {

@@ -1,5 +1,6 @@
 ﻿using adwportal.Dtos;
 using System.Net.Http.Headers;
+using static System.Net.WebRequestMethods;
 
 public class CompanyService
 {
@@ -18,6 +19,13 @@ public class CompanyService
     {
         using var http = Create(token);
         return await http.GetFromJsonAsync<List<MdwPartnerDtos>>("api/companys/partners", ct) ?? new();
+    }
+
+    public async Task<MdwPartnerDtos?> GetPartnerByIdAsync(
+        string token, int partnerId, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        return await http.GetFromJsonAsync<MdwPartnerDtos>($"api/partners/{partnerId}", ct);
     }
 
     public async Task<List<MdwShopDtos>> GetShopsAsync(string token, int partnerId, CancellationToken ct = default)
@@ -65,4 +73,36 @@ public class CompanyService
         var resp = await http.DeleteAsync($"api/companys/{id}", ct);
         resp.EnsureSuccessStatusCode();
     }
+    public async Task<List<CompanyDtos>?> GetCompaniesDropdownAsync(string token, CancellationToken ct = default)
+    {
+        using var http = Create(token); 
+        return await http.GetFromJsonAsync<List<CompanyDtos>>("api/companys", ct) ?? new();
+    }
+
+    public async Task<CompanyListItemDtos> CreateCompanyBasicAsync(string token, CompanyUpsertBasicDtos dto, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        var resp = await http.PostAsJsonAsync("api/companys/basic", dto, ct);
+        resp.EnsureSuccessStatusCode();
+        return (await resp.Content.ReadFromJsonAsync<CompanyListItemDtos>(cancellationToken: ct))!;
+    }
+
+    public async Task<CompanyListItemDtos> UpdateCompanyBasicAsync(string token, int id, CompanyUpsertBasicDtos dto, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        var resp = await http.PutAsJsonAsync($"api/companys/basic/{id}", dto, ct);
+        resp.EnsureSuccessStatusCode();
+        return (await resp.Content.ReadFromJsonAsync<CompanyListItemDtos>(cancellationToken: ct))!;
+    }
+
+    public async Task<List<MdwPartnerDtos>> GetPartnersByCompanyAsync(
+        string token, int companyId, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        return await http.GetFromJsonAsync<List<MdwPartnerDtos>>(
+            $"api/companys/partners?companyId={companyId}", ct
+        ) ?? new();
+    }
+
+
 }
