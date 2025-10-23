@@ -4,7 +4,7 @@
     {
         public int Id { get; set; }
         public string? Name { get; set; }
-        public int PartnerId { get; set; }
+        public long PartnerId { get; set; }
         public string? PartnerKey { get; set; }
         public string? Environment { get; set; }
         public DateTime CreatedAt { get; set; }
@@ -15,7 +15,7 @@
     public class PartnerUpsertDtos
     {
         public string Name { get; set; } = "";
-        public int PartnerId { get; set; }
+        public long PartnerId { get; set; }
         public string? PartnerKey { get; set; } = "";
         public string? Environment { get; set; }
         public int? CompanysId { get; set; }

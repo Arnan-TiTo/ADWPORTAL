@@ -32,7 +32,7 @@ else
                     </select>
                 </div>
                 <div class="col-md-5">
-                    <label class="form-label">Name contains</label>
+                    <label class="form-label">Name</label>
                     <input class="form-control" @bind="NameFilter" @bind:event="oninput" />
                 </div>
                 <div class="col-md-4 text-end align-self-end">
@@ -73,7 +73,7 @@ else
                             <td>@(c.UpdatedAt.ToString("dd-MM-yyyy HH:mm") ?? c.CreatedAt.ToString("dd-MM-yyyy HH:mm"))</td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary me-1"
-                                        @onclick="() => EditForce(c.Id, c.PartnerId)">
+                                        @onclick="() => EditForce(c.Id, Convert.ToInt32(c.PartnerId))">
                                     Edit
                                 </button>
                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(c.Id)">Delete</button>
@@ -143,7 +143,6 @@ else
             if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
 
             partners = await Svc.GetPartnersAsync(token!);
-            // โหลดรายการทั้งหมดครั้งเดียว แล้วกรองในหน้า
             all = await Svc.GetCompaniesAsync(token!);
             Apply();
         }
@@ -177,20 +176,6 @@ else
     void Go(int i) { pageIndex = i; Apply(); }
 
     void Add() => Nav.NavigateTo("/CompanyEdit");
-    // void Edit(int id) => Nav.NavigateTo($"/CompanyEdit/{id}");
-
-    void Edit(int? companyId, int? partnerId)
-    // {
-    //     var url = partnerId is > 0
-    //         ? $"/CompanyEdit/{companyId}?partnerId={partnerId}"
-    //         : $"/CompanyEdit/{companyId}";
-    {
-        var url = $"/CompanyEdit/12?partnerId=1";
-        Nav.NavigateTo(url, forceLoad: false);
-    }
-
-    string BuildCompanyEditUrl(int companyId, int partnerPk)
-        => $"/CompanyEdit/{companyId}?partnerId={partnerPk}";
 
     async Task EditForce(int? companyId, int? partnerPk)
     {

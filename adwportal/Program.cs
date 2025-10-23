@@ -1,11 +1,12 @@
-﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.Extensions.Options;
-using adwportal.Components;
+﻿using adwportal.Components;
 using adwportal.Models;
 using adwportal.Security;
 using adwportal.Services;
 using adwportal.States;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,6 +67,27 @@ builder.Services.AddHttpClient("IdwApiBaseUrl", (sp, http) =>
     AllowAutoRedirect = false,
     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
 });
+
+// MDW API client (marketplace)
+builder.Services.AddHttpClient("MdwApiBaseUrl", (sp, http) =>
+{
+    var cfg = sp.GetRequiredService<IOptions<ApiSettings>>().Value;
+    if (string.IsNullOrWhiteSpace(cfg.MdwApiBaseUrl))
+        throw new InvalidOperationException("ApiSettings:MdwApiBaseUrl is not configured.");
+    http.BaseAddress = new Uri(cfg.MdwApiBaseUrl);
+    http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+})
+.AddHttpMessageHandler<AuthMessageHandler>()  
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    UseCookies = false,
+    AllowAutoRedirect = false,
+    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+});
+
+// Service
+builder.Services.AddScoped<MdwMarketplaceService>();
+
 
 //AddScoped
 builder.Services.AddScoped<IdwImportService>();

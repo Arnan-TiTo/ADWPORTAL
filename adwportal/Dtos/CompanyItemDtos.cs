@@ -3,7 +3,7 @@
     public record CompanyItemDtos(
         int Id, 
         string Name,
-        int PartnerId
+        long PartnerId
     );
 
     public class CompanyDtos
@@ -15,7 +15,7 @@
     public record CompanyListItemDtos(
         int Id,
         string Name,
-        int? PartnerId,
+        long? PartnerId,
         string? PartnerName,
         bool IsActive,
         DateTime CreatedAt,
@@ -39,11 +39,17 @@
     public record MdwPartnerDtos(
         int Id, 
         string Name, 
-        int PartnerId, 
+        long PartnerId, 
         int? CompanysId,
         string? CompanyName
     );
 
-    public record MdwShopDtos(int Id, long ShopId, string? Name, int PartnerId);
+    public record MdwShopDtos(
+        int Id, 
+        long ShopId, 
+        string? Name, 
+        long PartnerId, 
+        string? Platform
+    );
 
 }

@@ -5,7 +5,7 @@
     public class MiscDtos
     {
         public int Id { get; set; }
-        public int? ParentId { get; set; }
+        public long? ParentId { get; set; }
         public string? Name { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public string? Value1 { get; set; } = string.Empty;
@@ -21,7 +21,7 @@
 
     public class MiscUpsertDtos
     {
-        public int? ParentId { get; set; }
+        public long? ParentId { get; set; }
         public string? Name { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public string? Value1 { get; set; } = string.Empty;

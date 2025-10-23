@@ -23,7 +23,7 @@ else
         <div class="card-body">
             <div class="row g-2 align-items-end">
                 <div class="col-md-6">
-                    <label class="form-label">Name contains</label>
+                    <label class="form-label">Name</label>
                     <input class="form-control" @bind="NameFilter" @bind:event="oninput" />
                 </div>
                 <div class="col-md-6 text-end">
@@ -59,7 +59,7 @@ else
                             <td>@p.Name</td>
                             <td>@p.PartnerId</td>
                             <td>@(p.Environment ?? "-")</td>
-                            <td>@p.CreatedAt.ToString("dd-MM-yyyy HH:mm")</td>
+                            <td>@p.CreatedAt.ToString(" HH:mm")</td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary me-1" 
                                         @onclick="() => Edit(p.Id)">Edit

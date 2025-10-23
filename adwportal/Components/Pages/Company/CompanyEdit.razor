@@ -1,10 +1,13 @@
-﻿@page "/CompanyEdit/{Id:int}"
+﻿@page "/CompanyEdit"
+@page "/CompanyEdit/{Id:int}"
 @using adwportal.Dtos
 @using adwportal.Services
 @inject CompanyService Svc
 @inject IdwImportService Idw
+@inject MdwMarketplaceService MdwSvc
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject Microsoft.Extensions.Configuration.IConfiguration Cfg
 
 <h3>Company @title</h3>
 
@@ -49,7 +52,7 @@ else
                                 <option value="@p.Id">@p.Name</option>
                             }
                         </InputSelect>
-                        <div class="form-text">* ใช้สำหรับดูร้านค้าเท่านั้น การบันทึกจะไม่แก้ mapping</div>
+                        <div class="form-text">* View and Get Token</div>
                     </div>
 
                     <div class="col-12">
@@ -73,9 +76,11 @@ else
                                 <table class="table table-sm table-bordered mb-0">
                                     <thead class="table-light">
                                         <tr>
-                                            <th style="width:100px">Id</th>
-                                            <th style="width:180px">ShopId</th>
+                                            <th style="width:90px">Id</th>
+                                            <th style="width:160px">ShopId</th>
                                             <th>Name</th>
+                                            <th style="width:120px">Platform</th>
+                                            <th style="width:160px">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -85,6 +90,14 @@ else
                                                 <td>@s.Id</td>
                                                 <td>@s.ShopId</td>
                                                 <td>@(s.Name ?? "-")</td>
+                                                <td>@(string.IsNullOrWhiteSpace(s.Platform) ? "-" : s.Platform)</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-primary"
+                                                            disabled="@busy"
+                                                            @onclick="() => ConnectShopAsync(s)">
+                                                        @(busy ? "..." : "Get Token")
+                                                    </button>
+                                                </td>
                                             </tr>
                                         }
                                     </tbody>
@@ -109,7 +122,8 @@ else
     public int? PartnerId { get; set; }
 
     string? token;
-    bool loading, saving;
+    string? mdwToken;
+    bool loading, saving, busy;
     string? error;
     string title = "Add";
 
@@ -117,10 +131,8 @@ else
     List<MdwPartnerDtos> partners = new();
     List<MdwShopDtos> shops = new();
 
-    // ส่งขึ้น API แค่ Name/IsActive
     CompanyUpsertBasicDtos model = new() { IsActive = true };
 
-    // ค่าที่ bind กับ dropdown และ trigger โหลด shops
     int? selectedPartnerId;
     int? SelectedPartnerId
     {
@@ -139,28 +151,27 @@ else
         {
             loading = true;
 
-            var login = await Idw.LoginAsync("admin", "123456yjm");
-            token = login?.Token?.Trim('"');
-            if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
+            // login IDW (โหลด company/partner/shops)
+            var loginIdw = await Idw.LoginAsync("admin", "123456yjm");
+            token = NormalizeToken(loginIdw?.Token);
+            if (string.IsNullOrWhiteSpace(token)) { error = "Login IDW failed"; return; }
+
+            //login MDW (เรียก auth link / exchange)
+            var loginMdw = await MdwSvc.LoginAsync("admin", "123456yjm");
+            mdwToken = NormalizeToken(loginMdw?.Token);
+            if (string.IsNullOrWhiteSpace(mdwToken)) { error = "Login MDW failed"; return; }
 
             if (Id.HasValue)
             {
                 title = "Edit";
 
-                // 1) ข้อมูลบริษัท
                 var c = await Svc.GetCompanyAsync(token!, Id.Value);
                 if (c == null) { error = "Not found"; return; }
 
-                model = new CompanyUpsertBasicDtos
-                {
-                    Name = c.Name,
-                    IsActive = c.IsActive
-                };
+                model = new CompanyUpsertBasicDtos { Name = c.Name, IsActive = c.IsActive };
 
-                // 2) โหลด partner ทั้งหมดที่ map กับบริษัทนี้
-                await LoadPartnerForEdit(PartnerId.Value);
+                await LoadPartnerForEdit(PartnerId ?? 0);
 
-                // 3) pre-select
                 if (PartnerId is > 0 && partners.Any(p => p.Id == PartnerId))
                     SelectedPartnerId = PartnerId;
                 else
@@ -175,26 +186,29 @@ else
         finally { loading = false; }
     }
 
-    // โหลด partner “ตัวเดียว” ตาม partnerId ที่ส่งมาจากหน้า list (หรือ route)
-    // แล้วเซ็ต dropdown ให้เลือกตัวนี้ พร้อมโหลด shops ให้ถูก
+    private static string? NormalizeToken(string? t)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return null;
+        t = t.Trim().Trim('"');
+        if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            t = t.Substring(7).Trim();
+        return t;
+    }
+
     private async Task LoadPartnerForEdit(int partnerId)
     {
         loadingPartners = true;
         try
         {
-            partners = new(); // เคลียร์ก่อน
-
-            var p = await Svc.GetPartnerByIdAsync(token!, partnerId);
-            if (p != null)
+            partners = new();
+            if (partnerId > 0)
             {
-                partners.Add(p);           // dropdown มีแค่ partner ที่แก้ไข
-                SelectedPartnerId = p.Id;  // trigger ไปโหลด shops ต่อ
-            }
-            else
-            {
-                await JS.InvokeVoidAsync("showToast", $"Partner id={partnerId} not found.", "warning");
-                SelectedPartnerId = null;
-                shops = new();
+                var p = await Svc.GetPartnerByIdAsync(token!, partnerId);
+                if (p != null)
+                {
+                    partners.Add(p);
+                    SelectedPartnerId = p.Id;
+                }
             }
         }
         catch (Exception ex)
@@ -238,6 +252,33 @@ else
         {
             loadingShops = false;
             StateHasChanged();
+        }
+    }
+
+    // === Get Token  ===
+    private async Task ConnectShopAsync(MdwShopDtos s)
+    {
+        try
+        {
+            var basePublic = "https://vibeandchic.com";
+            var callbackUrl = $"{basePublic}/marketplace/auth/callback?platform={s.Platform}";
+            var (ok, authUrl, err) = await MdwSvc.GetShopeeAuthLinkAsync(s.ShopId.ToString(), callbackUrl, token: mdwToken);
+            if (!ok || string.IsNullOrWhiteSpace(authUrl))
+                throw new Exception(err ?? "ไม่พบ authUrl");
+
+            // redirect ออกไปยัง Shopee
+            var next = Uri.EscapeDataString($"{Nav.BaseUri.TrimEnd('/')}/marketplace/auth/callback?platform={s.Platform}");
+            var openUrl = authUrl.Contains("state=") ? authUrl : $"{authUrl}&state=shop:{s.ShopId.ToString()}&next={next}";
+            Nav.NavigateTo(openUrl, forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            await JS.InvokeVoidAsync("showToast", error, "error");
+        }
+        finally
+        {
+            busy = false;
         }
     }
 

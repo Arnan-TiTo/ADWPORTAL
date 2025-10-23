@@ -1,6 +1,5 @@
 ﻿using adwportal.Dtos;
 using System.Net.Http.Headers;
-using static System.Net.WebRequestMethods;
 
 public class CompanyService
 {
@@ -31,7 +30,7 @@ public class CompanyService
     public async Task<List<MdwShopDtos>> GetShopsAsync(string token, int partnerId, CancellationToken ct = default)
     {
         using var http = Create(token);
-        return await http.GetFromJsonAsync<List<MdwShopDtos>>($"api/companys/shops?partnerId={partnerId}", ct) ?? new();
+        return await http.GetFromJsonAsync<List<MdwShopDtos>>($"api/shops?partnerId={partnerId}", ct) ?? new();
     }
 
     public async Task<List<CompanyListItemDtos>> GetCompaniesAsync(string token, string? name = null, int? partnerId = null, CancellationToken ct = default)

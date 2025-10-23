@@ -41,13 +41,13 @@
                                         </NavLink>
                                     </li>
                                     <li class="nav-item">
-                                        <NavLink href="/PartnerList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                            Partner
+                                        <NavLink href="/CompanyList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                            Company
                                         </NavLink>
                                     </li>
                                     <li class="nav-item">
-                                        <NavLink href="/CompanyList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                            Company
+                                        <NavLink href="/PartnerList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                            Partner
                                         </NavLink>
                                     </li>
                                     <li class="nav-item">
@@ -74,6 +74,22 @@
                                 IDW Manage
                             </NavLink>
                         </li>
+                        <li class="nav-item">
+                            <NavLink href="/shopsOAuth" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                MDW Shops OAuth
+                            </NavLink>
+                        </li>
+                        <li class="nav-item">
+                            <NavLink href="/normalize" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                MDW Normalize
+                            </NavLink>
+                        </li>
+                        <li class="nav-item">
+                            <NavLink href="/ViewOrderData" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                MDW View Order Data
+                            </NavLink>
+                        </li>
+                        
                     </ul>
                 </nav>
             </div>
@@ -108,12 +124,11 @@
 
 @code {
     private bool isSidebarOpen = true;
-    private bool configOpen = true; // ให้เปิด sub-menu ตอนเริ่มใช้งาน; ตั้ง false ถ้าต้องการให้พับ
+    private bool configOpen = true;
 
     private void ToggleSidebar() => isSidebarOpen = !isSidebarOpen;
     private void ToggleConfig() => configOpen = !configOpen;
 
-    // อ่านชื่อจาก Claims
     private static string GetDisplayName(ClaimsPrincipal? user)
     {
         if (user is null) return "";

@@ -1,5 +1,6 @@
 ﻿@page "/MiscEdit"
 @page "/MiscEdit/{Id:int}"
+
 @using adwportal.Dtos
 @using adwportal.Services
 @inject IdwImportService IdwSvc
@@ -22,14 +23,28 @@ else
     <div class="card">
         <div class="card-body">
             <div class="row g-3">
+                <!-- Type (distinct จากฐาน) -->
                 <div class="col-md-3">
                     <label class="form-label">Type</label>
-                    <input class="form-control" @bind="model.Type" />
+                    <InputSelect class="form-select"
+                                 @bind-Value="SelectedType"
+                                 TValue="string">
+                        <option value="">-- Select type --</option>
+                        @foreach (var t in types)
+                        {
+                            <option value="@t">@t</option>
+                        }
+                    </InputSelect>
+                    <div class="form-text">
+                        * ค่านี้จะบันทึกลงฟิลด์ <code>Type</code> ของรายการ
+                    </div>
                 </div>
+
                 <div class="col-md-3">
                     <label class="form-label">ParentId</label>
                     <input type="number" class="form-control" @bind="model.ParentId" />
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Name</label>
                     <input class="form-control" @bind="model.Name" />
@@ -80,25 +95,56 @@ else
 @code {
     [Parameter] public int? Id { get; set; }
 
+    // state
     bool loading, saving;
     string? error, token, title;
+
+    // model ที่จะบันทึก
     MiscUpsertDtos model = new();
+
+    // รายการ type (distinct)
+    List<string> types = new();
+
+    // ค่าที่เลือกในดรอปดาวน์
+    string? selectedType;
+    string? SelectedType
+    {
+        get => selectedType;
+        set
+        {
+            selectedType = value;
+            model.Type = selectedType;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             loading = true;
+
             var login = await IdwSvc.LoginAsync("admin", "123456yjm");
             token = login?.Token;
-            if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                error = "Login failed";
+                return;
+            }
 
             title = Id.HasValue ? "Edit" : "Add";
+
+            // โหลด type แบบ distinct
+            await LoadDistinctTypes();
 
             if (Id.HasValue)
             {
                 var m = await Svc.GetMiscByIdAsync(token!, Id.Value);
-                if (m == null) { error = "Not found."; return; }
+                if (m == null)
+                {
+                    error = "Not found.";
+                    return;
+                }
+
                 model = new MiscUpsertDtos
                 {
                     ParentId = m.ParentId,
@@ -112,29 +158,92 @@ else
                     Note = m.Note,
                     IsActive = m.IsActive
                 };
+
+                // เผื่อ type เดิมไม่มีในลิสต์ (กรณีพิมพ์เอง)
+                if (!string.IsNullOrWhiteSpace(model.Type) && !types.Contains(model.Type))
+                {
+                    types.Add(model.Type);
+                    types = types
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(t => t)
+                        .ToList();
+                }
+
+                SelectedType = model.Type; // ทำให้ dropdown ชี้ค่าปัจจุบัน
+            }
+            else
+            {
+                SelectedType = null; // หน้า Add ให้ผู้ใช้เลือก
             }
         }
-        catch (Exception ex) { error = ex.Message; }
-        finally { loading = false; }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadDistinctTypes()
+    {
+        try
+        {
+            var list = await Svc.GetMiscAsync(token!);
+            types = list
+                .Select(x => x.Type)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(t => t)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            types = new();
+            await JS.InvokeVoidAsync("showToast", $"Load types failed: {ex.Message}", "error");
+        }
     }
 
     async Task Save()
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(token)) { error = "Please login"; return; }
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                error = "Please login";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(model.Type))
+            {
+                await JS.InvokeVoidAsync("showToast", "Type is required", "error");
+                return;
+            }
+
             saving = true;
 
             if (Id.HasValue)
+            {
                 _ = await Svc.UpdateMiscAsync(token!, Id.Value, model);
+            }
             else
+            {
                 _ = await Svc.CreateMiscAsync(token!, model);
+            }
 
             await JS.InvokeVoidAsync("showToast", "Saved", "success");
             Nav.NavigateTo("/MiscList");
         }
-        catch (Exception ex) { error = ex.Message; }
-        finally { saving = false; }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", ex.Message, "error");
+        }
+        finally
+        {
+            saving = false;
+        }
     }
 
     void Cancel() => Nav.NavigateTo("/MiscList");
