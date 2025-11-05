@@ -168,7 +168,7 @@
 
             _mdwClient = ClientFactory.CreateClient("MdwApiBaseUrl");
             _mdwClient.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _idwToken);
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _mdwToken);
 
             // 4) register JS receiver + โหลดรายการ
             _selfRef = DotNetObjectReference.Create(this);

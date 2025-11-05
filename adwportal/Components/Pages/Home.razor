@@ -12,15 +12,15 @@
 @inject AuthenticationStateProvider Auth
 
 <h3 class="d-flex align-items-center justify-content-between">
-    <span>Dashboard</span>
-    <div class="d-flex gap-2">
+    <span>Dashboard Design</span>
+    @* <div class="d-flex gap-2">
         <input type="date" class="form-control" style="width: 180px" @bind="fromDate" />
         <input type="date" class="form-control" style="width: 180px" @bind="toDate" />
         <button class="btn btn-primary" @onclick="Reload">Reload</button>
-    </div>
+    </div> *@
 </h3>
 
-@if (loading)
+@* @if (loading)
 {
     <div class="alert alert-secondary">Loading…</div>
 }
@@ -243,4 +243,4 @@ else
         await JS.InvokeVoidAsync("dashboard.renderPie",
             "topProductsPie", prodLabels, prodValues, "Top 10 Products", 900);
     }
-}
+} *@

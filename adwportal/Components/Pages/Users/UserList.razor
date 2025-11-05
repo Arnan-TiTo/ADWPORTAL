@@ -1,13 +1,13 @@
 ﻿@page "/UserList"
 @using System.Net.Http.Headers
 @using System.Net.Http.Json
+@using System.Text.Json
 @using Microsoft.Extensions.Options
 @using Microsoft.AspNetCore.Components
 @using adwportal.Shared      @* PaginationState + PagingExtensions *@
 @using adwportal.Components  @* Pager.razor *@
 @inject IHttpClientFactory ClientFactory
 @inject IOptions<ApiSettings> Options
-@inject AuthTokenProvider TokenProvider
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -15,6 +15,11 @@
     <span>Users</span>
     <button class="btn btn-sm btn-primary" @onclick="AddUser">+ Add</button>
 </h3>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
 
 <div class="card mb-3">
     <div class="card-body">
@@ -160,57 +165,141 @@ else
 }
 
 @code {
-    // ---------- QR Modal state ----------
+    // ---------- Fixed token ----------
+    private const string FIXED_TOKEN = "9f4d7c83-21a4-4aaf-9401-6a21717e5460"; // TODO: ย้ายไป config/secret ถ้าต้องการ
+
+    // ---------- JS-safe (prerender) ----------
+    private bool _isClientReady;
+    private readonly Queue<(string msg, string type)> _toastQueue = new();
+    private async Task SafeToast(string message, string type = "info")
+    {
+        if (_isClientReady) await JS.InvokeVoidAsync("showToast", message, type);
+        else _toastQueue.Enqueue((message, type));
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _isClientReady = true;
+        while (_toastQueue.Count > 0) { var (m, t) = _toastQueue.Dequeue(); await JS.InvokeVoidAsync("showToast", m, t); }
+
+        try
+        {
+            loading = true;
+            token = FIXED_TOKEN;       // ใช้ fixed token ตรง ๆ
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            await SafeToast(ex.Message, "error");
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ---------- UI state ----------
     private bool showQrModal;
     private string? qrImageUrl;
     private string? qrContentForModal;
     private string? qrUsernameForModal;
-    // private bool sendingMail;
 
-    // ---------- Paging ----------
     private PaginationState _pager = new() { WindowSize = 5 };
 
-    // ---------- Data ----------
-    private bool loading = true;
+    private bool loading = false;
+    private string? error;
+    private string? token;
+
     private List<UserListItem> all = new();
     private List<UserListItem> filtered = new();
     private List<UserListItem> paged = new();
 
-    // ---------- Filter & Sort ----------
     private string? query;
     private string? roleFilter;
 
     private string sortCol = "Username";
     private bool sortAsc = true;
 
-    private string ApiBase => Options.Value.ApiBaseUrl ?? "";
-
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
         _pager.SetPageSize(10);
-        await Load();
-        loading = false;
+        return Task.CompletedTask;
     }
 
+    // ---------- Base URL (พอร์ต 5254) ----------
+    private string BaseSafe => RequireAbsoluteUrl(Options?.Value?.ApiBaseUrl);
+
+    private static string RequireAbsoluteUrl(string? url)
+    {
+        var s = (url ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(s))
+            throw new InvalidOperationException("ApiBaseUrl is empty. Set ApiSettings:ApiBaseUrl in appsettings.");
+        if (!Uri.TryCreate(s, UriKind.Absolute, out var u))
+            throw new InvalidOperationException($"ApiBaseUrl is not an absolute URL: '{s}'");
+        var abs = u.ToString();
+        if (!abs.EndsWith("/")) abs += "/";
+        return abs;
+    }
+
+    private static string StripBearer(string? tok)
+    {
+        if (string.IsNullOrWhiteSpace(tok)) return string.Empty;
+        var t = tok.Trim();
+        if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) t = t["Bearer ".Length..].Trim();
+        return t;
+    }
+
+    // ---------- Http client ----------
     private HttpClient MakeClient()
     {
         var c = ClientFactory.CreateClient();
-        c.BaseAddress = new Uri(ApiBase.TrimEnd('/') + "/");
-        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenProvider.Token);
+        c.BaseAddress = new Uri(BaseSafe, UriKind.Absolute);
+        c.DefaultRequestHeaders.Accept.Clear();
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+
+        var t = StripBearer(token);
+        c.DefaultRequestHeaders.Authorization =
+            string.IsNullOrWhiteSpace(t) ? null : new AuthenticationHeaderValue("Bearer", t);
+
         return c;
     }
 
+    private async Task<T?> SendJson<T>(Func<HttpClient, Task<HttpResponseMessage>> sender)
+    {
+        var client = MakeClient();
+        var resp = await sender(client);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            var msg = await resp.Content.ReadAsStringAsync();
+            error = $"{(int)resp.StatusCode} {resp.StatusCode}: {msg}";
+            await SafeToast($"Request failed: {(int)resp.StatusCode}", "error");
+            return default;
+        }
+
+        if (typeof(T) == typeof(string))
+        {
+            var text = await resp.Content.ReadAsStringAsync();
+            return (T?)(object?)text;
+        }
+        return await resp.Content.ReadFromJsonAsync<T>();
+    }
+
+    // ---------- Load data ----------
     private async Task Load()
     {
         try
         {
-            var client = MakeClient();
-            all = await client.GetFromJsonAsync<List<UserListItem>>("api/Users") ?? new();
+            // ชี้ไป https://localhost:5254/api/Users
+            all = await SendJson<List<UserListItem>>(c => c.GetAsync("api/Users")) ?? new();
             ApplyFilterSortAndPage(resetPage: true);
         }
         catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("showToast", $"Load users failed: {ex.Message}", "error");
+            error ??= ex.Message;
+            await SafeToast(error!, "error");
             all = new();
             ApplyFilterSortAndPage(resetPage: true);
         }
@@ -221,7 +310,6 @@ else
     {
         IEnumerable<UserListItem> q = all;
 
-        // filter
         if (!string.IsNullOrWhiteSpace(query))
         {
             var s = query.Trim().ToLowerInvariant();
@@ -234,7 +322,6 @@ else
             q = q.Where(x => string.Equals(x.Role ?? "", roleFilter, StringComparison.OrdinalIgnoreCase));
         }
 
-        // sort
         Func<UserListItem, object?> key = sortCol switch
         {
             "Fullname" => x => x.Fullname,
@@ -243,7 +330,6 @@ else
         };
         q = sortAsc ? q.OrderBy(key) : q.OrderByDescending(key);
 
-        // set collections & page
         filtered = q.ToList();
         _pager.SetTotal(filtered.Count);
 
@@ -265,7 +351,8 @@ else
     // ---------- UI handlers ----------
     private void SortBy(string col)
     {
-        if (sortCol == col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = true; }
+        if (sortCol == col) sortAsc = !sortAsc;
+        else { sortCol = col; sortAsc = true; }
         ApplyFilterSortAndPage(resetPage: false);
     }
 
@@ -323,16 +410,12 @@ else
     {
         var ok = await JS.InvokeAsync<bool>("confirmToast", $"Approve QR for {u.Username}?", "Approve", "Cancel", "info");
         if (!ok) return;
-        var resp = await MakeClient().PutAsync($"api/Users/{u.Id}/approve-qr", null);
-        if (resp.IsSuccessStatusCode)
+        var res = await SendJson<string>(c => c.PutAsync($"api/Users/{u.Id}/approve-qr", null));
+        if (res is not null)
         {
             u.IsApproveQr = 1;
-            await JS.InvokeVoidAsync("showToast", "Approved.", "success");
+            await SafeToast("Approved.", "success");
             ApplyFilterSortAndPage(resetPage: false);
-        }
-        else
-        {
-            await JS.InvokeVoidAsync("showToast", $"Approve failed: {await resp.Content.ReadAsStringAsync()}", "error");
         }
     }
 
@@ -340,16 +423,12 @@ else
     {
         var ok = await JS.InvokeAsync<bool>("confirmToast", $"Revoke QR for {u.Username}?", "Revoke", "Cancel", "warning");
         if (!ok) return;
-        var resp = await MakeClient().PutAsync($"api/Users/{u.Id}/revoke-qr", null);
-        if (resp.IsSuccessStatusCode)
+        var res = await SendJson<string>(c => c.PutAsync($"api/Users/{u.Id}/revoke-qr", null));
+        if (res is not null)
         {
             u.IsApproveQr = 0;
-            await JS.InvokeVoidAsync("showToast", "Revoked.", "success");
+            await SafeToast("Revoked.", "success");
             ApplyFilterSortAndPage(resetPage: false);
-        }
-        else
-        {
-            await JS.InvokeVoidAsync("showToast", $"Revoke failed: {await resp.Content.ReadAsStringAsync()}", "error");
         }
     }
 
@@ -360,65 +439,38 @@ else
             "Generate", "Cancel", "info");
         if (!ok) return;
 
-        try
+        var x = await SendJson<GenQrResponse>(c => c.PostAsync($"api/Users/{u.Id}/generate-qr?email=false", null))
+                ?? await SendJson<GenQrResponse>(c => c.PostAsync($"api/Users/{u.Id}/generate-qr", null));
+
+        if (!string.IsNullOrWhiteSpace(x?.Qr))
         {
-            var client = MakeClient();
-            var resp = await client.PostAsync($"api/Users/{u.Id}/generate-qr?email=false", null);
-            if (!resp.IsSuccessStatusCode)
-            {
-                // fallback ถ้า API ไม่รองรับพารามิเตอร์ email=false
-                resp = await client.PostAsync($"api/Users/{u.Id}/generate-qr", null);
-            }
+            u.QrLogin = x.Qr;
+            u.IsApproveQr = 0;
+            qrContentForModal = u.QrLogin;
+            qrUsernameForModal = u.Username;
+            qrImageUrl = BuildQrImageUrl(u.QrLogin, 512);
+            showQrModal = true;
 
-            if (resp.IsSuccessStatusCode)
-            {
-                var x = await resp.Content.ReadFromJsonAsync<GenQrResponse>();
-                if (!string.IsNullOrWhiteSpace(x?.Qr))
-                {
-                    // อัปเดตข้อมูลในตาราง
-                    u.QrLogin = x.Qr;
-                    u.IsApproveQr = 0;
-
-                    // เตรียม modal
-                    qrContentForModal = u.QrLogin;
-                    qrUsernameForModal = u.Username;
-                    qrImageUrl = BuildQrImageUrl(u.QrLogin, 512);
-                    showQrModal = true;
-
-                    await JS.InvokeVoidAsync("showToast", "QR generated. ดาวน์โหลดได้จากหน้าต่างที่แสดง", "success");
-                }
-                else
-                {
-                    await JS.InvokeVoidAsync("showToast", "Generate succeeded but QR is empty.", "warning");
-                }
-
-                ApplyFilterSortAndPage(resetPage: false);
-            }
-            else
-            {
-                await JS.InvokeVoidAsync("showToast", $"Generate failed: {await resp.Content.ReadAsStringAsync()}", "error");
-            }
+            await SafeToast("QR generated. ดาวน์โหลดได้จากหน้าต่างที่แสดง", "success");
         }
-        catch (Exception ex)
+        else
         {
-            await JS.InvokeVoidAsync("showToast", $"Generate failed: {ex.Message}", "error");
+            await SafeToast("Generate succeeded but QR is empty.", "warning");
         }
+
+        ApplyFilterSortAndPage(resetPage: false);
     }
 
     private async Task Activate(UserListItem u)
     {
         var ok = await JS.InvokeAsync<bool>("confirmToast", $"Activate user {u.Username}?", "Activate", "Cancel", "success");
         if (!ok) return;
-        var resp = await MakeClient().PutAsync($"api/Users/{u.Id}/activate", null);
-        if (resp.IsSuccessStatusCode)
+        var res = await SendJson<string>(c => c.PutAsync($"api/Users/{u.Id}/activate", null));
+        if (res is not null)
         {
             u.IsActive = 1;
-            await JS.InvokeVoidAsync("showToast", "User activated.", "success");
+            await SafeToast("User activated.", "success");
             ApplyFilterSortAndPage(resetPage: false);
-        }
-        else
-        {
-            await JS.InvokeVoidAsync("showToast", $"Activate failed: {await resp.Content.ReadAsStringAsync()}", "error");
         }
     }
 
@@ -426,16 +478,12 @@ else
     {
         var ok = await JS.InvokeAsync<bool>("confirmToast", $"Deactivate user {u.Username}?", "Deactivate", "Cancel", "warning");
         if (!ok) return;
-        var resp = await MakeClient().PutAsync($"api/Users/{u.Id}/deactivate", null);
-        if (resp.IsSuccessStatusCode)
+        var res = await SendJson<string>(c => c.PutAsync($"api/Users/{u.Id}/deactivate", null));
+        if (res is not null)
         {
             u.IsActive = 0;
-            await JS.InvokeVoidAsync("showToast", "User deactivated.", "success");
+            await SafeToast("User deactivated.", "success");
             ApplyFilterSortAndPage(resetPage: false);
-        }
-        else
-        {
-            await JS.InvokeVoidAsync("showToast", $"Deactivate failed: {await resp.Content.ReadAsStringAsync()}", "error");
         }
     }
 
@@ -443,20 +491,16 @@ else
     {
         var ok = await JS.InvokeAsync<bool>("confirmToast", $"Delete user {u.Username}?", "Delete", "Cancel", "error");
         if (!ok) return;
-        var resp = await MakeClient().DeleteAsync($"api/Users/{u.Id}");
-        if (resp.IsSuccessStatusCode)
+        var res = await SendJson<string>(c => c.DeleteAsync($"api/Users/{u.Id}"));
+        if (res is not null)
         {
             all.RemoveAll(x => x.Id == u.Id);
-            await JS.InvokeVoidAsync("showToast", "Deleted.", "success");
+            await SafeToast("Deleted.", "success");
             ApplyFilterSortAndPage(resetPage: false);
-        }
-        else
-        {
-            await JS.InvokeVoidAsync("showToast", $"Delete failed: {await resp.Content.ReadAsStringAsync()}", "error");
         }
     }
 
-    // ---------- Dtos ----------
+    // ---------- DTOs ----------
     public class UserListItem
     {
         public int Id { get; set; }
@@ -469,6 +513,5 @@ else
         public int IsApproveQr { get; set; }
         public int IsActive { get; set; }
     }
-
     public class GenQrResponse { public string Qr { get; set; } = string.Empty; }
 }
