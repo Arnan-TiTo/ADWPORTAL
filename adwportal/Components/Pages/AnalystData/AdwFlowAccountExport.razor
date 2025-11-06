@@ -68,7 +68,7 @@
 
 @if (isLoading)
 {
-    <div class="alert alert-info">กำลังดึงข้อมูล...</div>
+    <div class="alert alert-info">กำลังอัปเดตที่อยู่/ค้นข้อมูล...</div>
 }
 else
 {
@@ -111,7 +111,7 @@ else
 }
 
 @code {
-    // ===== ลำดับคอลัมน์ (CSV ,) =====
+    // ===== ลำดับคอลัมน์ “ตามสเปค CSV (, )” =====
     private static readonly string[] DesiredCsvOrder = new[] {
     "order_no","sale_channel","created_at_th","confirmed_at_th","paid_at_th",
     "buyer_userid","shipto_name","shipto_phone","shipto_email","shipto_address",
@@ -131,9 +131,6 @@ else
     private string? _mdwToken;
     private HttpClient? _mdwClient;
 
-    // แถวสำหรับ export (string พร้อมใช้งาน)
-    private List<Dictionary<string, string>> exportRows = new();
-
     private class FilterVm
     {
         public string Channel { get; set; } = "Shopee";
@@ -152,6 +149,7 @@ else
     private int totalItems;
     private List<Dictionary<string, object?>>? items;
     private List<string> columns = new();
+    private List<Dictionary<string, string>> exportRows = new();
 
     private bool IsPrevDisabled => filter.Page <= 1;
     private bool IsNextDisabled => (filter.Page * filter.PageSize) >= totalItems;
@@ -191,23 +189,36 @@ else
 
         try
         {
+            // === (1) ยิงอัปเดตจริงก่อนค้นหา ===
+            var updateQs = new Dictionary<string, string?>
+            {
+                ["channel"] = filter.Channel,
+                ["shopId"] = filter.ShopId,
+                ["dryRun"] = "false",
+                ["overwrite"] = "false"
+            };
+            var updateUrl = QueryHelpers.AddQueryString("api/adw/maintenance/update-addresses", updateQs);
+            using var updResp = await _mdwClient.PostAsync(updateUrl, content: null);
+            updResp.EnsureSuccessStatusCode();
+
+            // === (2) ค้นหา/ดึงข้อมูลตามปกติ ===
             var url = BuildApiUrl("/api/adw/export/flowaccount/orders", withPaging: true);
             var resp = await _mdwClient.GetFromJsonAsync<ApiResp>(url);
             totalItems = resp?.total ?? 0;
 
             items = (resp?.items ?? new()).Select(RowToDict).ToList();
 
-            // ===== บังคับคอลัมน์ = DesiredCsvOrder ทั้งหมด (ถ้าไม่มีค่า จะเว้นว่าง) =====
+            // คอลัมน์ล็อกตาม DesiredCsvOrder
             columns = DesiredCsvOrder.ToList();
 
-            // build exportRows
+            // สร้าง rows สำหรับ export (เป็น string พร้อมใช้)
             foreach (var r in items)
             {
                 var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var c in columns)
                 {
                     r.TryGetValue(c, out var val);
-                    d[c] = FmtCell(val); // แปลงเป็น string พร้อมใช้งาน
+                    d[c] = FmtCell(val);
                 }
                 exportRows.Add(d);
             }
@@ -331,6 +342,7 @@ else
         return v.ToString() ?? "";
     }
 }
+
 
 <script>
     function csvEscape(s) {
