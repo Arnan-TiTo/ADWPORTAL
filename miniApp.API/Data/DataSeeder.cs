@@ -18,7 +18,7 @@ namespace miniApp.API.Data
                 user = new User
                 {
                     Username = "admin",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456"),
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456yjm"),
                     Fullname = "Admin Tester",
                     Email = "admin@demo.com",
                     Phone = "0800000000",

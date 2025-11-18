@@ -67,8 +67,6 @@ else
                         <tr>
                             <td>@c.Id</td>
                             <td>@c.Name</td>
-                            <td>@c.PartnerName</td>
-                            <td>@c.ShopCount</td>
                             <td>@(c.IsActive ? "Y" : "N")</td>
                             <td>@(c.UpdatedAt.ToString("dd-MM-yyyy HH:mm") ?? c.CreatedAt.ToString("dd-MM-yyyy HH:mm"))</td>
                             <td>
