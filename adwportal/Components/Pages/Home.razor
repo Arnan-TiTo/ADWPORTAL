@@ -1,496 +1,246 @@
 ﻿@page "/"
-@using System.Net.Http.Headers
 @using System.Net.Http.Json
+@using System.Net.Http.Headers
 @using Microsoft.Extensions.Options
-@using System.Text.Json
-@using adwportal.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@using adwportal.Models
 @inject IHttpClientFactory ClientFactory
 @inject IOptions<ApiSettings> Options
+@inject AuthTokenProvider TokenProvider
 @inject IJSRuntime JS
-@implements IDisposable
-@inject MdwMarketplaceService MdwSvc
+@inject AuthenticationStateProvider Auth
 
-<style>
-    .token-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 12px;
-    }
-
-    .token-card {
-        background: linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%);
-        border-radius: 12px;
-        padding: 12px;
-        box-shadow: 0 6px 18px rgba(25, 30, 40, 0.06);
-        border: 1px solid rgba(0,0,0,0.04);
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        min-height: 120px;
-    }
-
-    @@media (max-width: 576px) {
-        .token-grid {
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-        }
-    }
-</style>
-
-<h3 class="mb-3 d-flex align-items-center justify-content-between">
-    <span>Dashboard</span>
-    @* <span class="text-muted">(@(currentToken ?? "mdwToken is null"))</span> *@
-    <div class="d-flex gap-2 align-items-center">
-        <button class="btn btn-sm btn-outline-primary" @onclick="ManualRefresh" disabled="@isLoading">
-            @if (isLoading)
-            {
-                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            }
-            Refresh
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleAutoRefresh">
-            @if (autoRefreshEnabled)
-            {
-                <span>Auto: On</span>
-            }
-            else
-            {
-                <span>Auto: Off</span>
-            }
-        </button>
-    </div>
+<h3 class="d-flex align-items-center justify-content-between">
+    <span>Dashboard Design</span>
+    @* <div class="d-flex gap-2">
+        <input type="date" class="form-control" style="width: 180px" @bind="fromDate" />
+        <input type="date" class="form-control" style="width: 180px" @bind="toDate" />
+        <button class="btn btn-primary" @onclick="Reload">Reload</button>
+    </div> *@
 </h3>
 
-<!-- Token cards -->
-<div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <div class="fw-semibold">Platform Token Status</div>
-        <div class="muted-small">Green = active • Red = expired • Grey = inactive</div>
-    </div>
-
-    <div class="card-body">
-        @if (isLoading)
-        {
-            <div class="text-center py-4">Loading tokens...</div>
-        }
-        else if (tokenList.Count == 0)
-        {
-            <div class="text-muted text-center py-4">No token records found.</div>
-        }
-        else
-        {
-            <div class="token-grid">
-                @foreach (var t in tokenList)
-                {
-                    <div class="token-card">
-                        <div class="head">
-                            <div class="token-icon" style="background:@GetIconBg(t.Channel); color:white;">
-                                @((MarkupString)GetPlatformSvg(t.Channel))
-                            </div>
-
-                            <div style="flex:1">
-                                <div class="token-title">@(t.ChannelDisplay)</div>
-                                <div class="token-sub">@(t.EnvironmentDisplay)</div>
-                            </div>
-
-                            <div style="text-align:right">
-                                @if (!t.IsActive)
-                                {
-                                    <span class="badge badge-small" style="background:#6c6f75; color:white">INACTIVE</span>
-                                }
-                                else if (t.IsExpired)
-                                {
-                                    <span class="badge badge-small" style="background:#e11d48; color:white">EXPIRED</span>
-                                }
-                                else
-                                {
-                                    <span class="badge badge-small" style="background:#10b981; color:white">ACTIVE</span>
-                                }
-                            </div>
-                        </div>
-
-                        <div class="token-sub">
-                            <div><strong>Account:</strong> @(t.AccountLabel)</div>
-                            <div><strong>Expires (TH):</strong> @(TimeZoneInfo.ConvertTimeFromUtc(t.AccessTokenExpAt, TimeZoneInfo.FindSystemTimeZoneById("Asia/Bangkok")).ToString("dd-MM-yyyy HH:mm:ss"))</div>
-                        </div>
-
+@* @if (loading)
+{
+    <div class="alert alert-secondary">Loading…</div>
+}
+else if (!hasData)
+{
+    <div class="alert alert-warning">ยังไม่มีข้อมูลในช่วงวันที่ที่เลือก</div>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">Top 10 Locations by Sales</div>
+                <div class="card-body">
+                    <div style="height: 320px;">
+                        <canvas id="salesByLocationChart"></canvas>
                     </div>
-                }
+                </div>
             </div>
-        }
-    </div>
-</div>
-
-<!-- Jobs section with filter -->
-<div class="card">
-    <div class="card-header d-flex align-items-center justify-content-between">
-        <div class="fw-semibold">Recent Job Logs</div>
-        <div class="d-flex align-items-center gap-2">
-            <label class="muted-small mb-0">Platform</label>
-            <select class="form-select form-select-sm" style="width:160px" @bind="jobPlatformFilter">
-                <option value="">(All)</option>
-                <option value="Shopee">Shopee</option>
-                <option value="Lazada">Lazada</option>
-                <option value="TikTok">TikTok</option>
-            </select>
-        </div>
-    </div>
-
-    <div class="card-body">
-        <div class="jobs-toolbar">
-            <div class="muted-small">Showing @filteredJobs.Count of @jobList.Count</div>
-            <div class="ms-auto muted-small">Last refresh: @lastRefreshedDisplay</div>
         </div>
 
-        @if (isLoading)
-        {
-            <div class="text-center py-4">Loading job logs...</div>
-        }
-        else if (jobList.Count == 0)
-        {
-            <div class="text-muted text-center py-4">No job logs available.</div>
-        }
-        else
-        {
-            <div class="table-responsive" style="max-height:50vh; overflow:auto;">
-                <table class="table table-sm table-striped">
-                    <thead class="table-light sticky-top">
-                        <tr>
-                            <th>#</th>
-                            <th>Platform</th>
-                            <th>ShopId</th>
-                            <th>Mode</th>
-                            <th>Requested (UTC)</th>
-                            <th>Completed (UTC)</th>
-                            <th>Total</th>
-                            <th>Created</th>
-                            <th>Updated</th>
-                            <th class="text-danger">Failed</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var j in filteredJobs)
-                        {
-                            <tr>
-                                <td>@j.TransId</td>
-                                <td>@(j.Platform ?? "-")</td>
-                                <td>@(j.ShopId?.ToString() ?? "-")</td>
-                                <td>@(j.Mode ?? "-")</td>
-                                <td>@j.RequestAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                                <td>@(j.CompletedAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</td>
-                                <td>@j.TotalRefs</td>
-                                <td>@j.CreatedCount</td>
-                                <td>@j.UpdatedCount</td>
-                                <td class="text-danger">@j.FailedCount</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header fw-semibold">Top 10 Products (Pie)</div>
+                <div class="card-body d-flex justify-content-center">
+                    <div class="mx-auto" style="width:420px;height:420px">
+                        <canvas id="topProductsPie" class="d-block"></canvas>
+                    </div>
+                </div>
             </div>
-        }
+        </div>
     </div>
-</div>
+}
 
 @code {
-    private string? error;
-    // ===== STATE (ALWAYS INITIALIZED TO EMPTY LISTS) =====
-    private List<TokenUi> tokenList = new();
-    private List<JobLogDto> jobList = new();
-    private List<JobLogDto> filteredJobs = new();
-    private string jobPlatformFilter = "";
+        // ---------- State ----------
+    private bool loading = true;
+    private bool hasData = false;
+    private DateTime fromDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime toDate = DateTime.Today;
+    private int _userId;
 
-    private bool isLoading = false;
-    private DateTime lastRefreshedUtc = DateTime.MinValue;
-    private string lastRefreshedDisplay => lastRefreshedUtc == DateTime.MinValue ? "-" : $"{lastRefreshedUtc:yyyy-MM-dd HH:mm:ss} UTC";
+    private Dictionary<int, string> _locationName = new();
 
-    // ===== MDW TOKEN STATE =====
-    private string currentToken = "";
-    private DateTime tokenExpireAt = DateTime.MinValue;
-    private bool isLoadingToken = false;
+    // ข้อมูลกราฟ (เก็บเป็น state)
+    private List<string> locLabels = new();
+    private List<double> locValues = new();
+    private List<string> prodLabels = new();
+    private List<double> prodValues = new();
 
-    private DateTime TokenExpireAt => tokenExpireAt;
-    private bool IsTokenExpired => tokenExpireAt != DateTime.MinValue && DateTime.UtcNow >= tokenExpireAt;
+    // คุม timing JS interop (support prerender)
+    private bool _canInvokeJs = false;
+    private bool _needsRenderCharts = false;
+    private readonly List<(string msg, string level)> _pendingToasts = new();
 
-    // ===== AUTO REFRESH =====
-    private System.Threading.Timer? _timer;
-    private bool autoRefreshEnabled = true;
-    private readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1800);
-    private readonly SemaphoreSlim _refreshSemaphore = new(1, 1);
+    private string ApiBase => Options.Value.ApiBaseUrl;
 
-    private string ApiBase => Options.Value.MdwApiBaseUrl;
-    private HttpClient? _mdw;
-
-    // ===== DTOs for UI =====
-    private class TokenUi
+    // ---------- Dtos เฉพาะที่ใช้ ----------
+    private class OrderItemDtos
     {
-        public int Id { get; set; }
-        public string Channel { get; set; } = "";
-        public string Environment { get; set; } = "";
-        public string AccountIdStr { get; set; } = "";
-        public long? AccountIdBig { get; set; }
-        public DateTime AccessTokenExpAt { get; set; }
-        public DateTime? RefreshTokenExpAt { get; set; }
-        public bool IsActive { get; set; }
-        public string TokenStatus { get; set; } = "";
-
-        public bool IsExpired => TokenStatus?.ToLowerInvariant() == "expired";
-        public string ChannelDisplay => string.IsNullOrWhiteSpace(Channel) ? "(unknown)" : char.ToUpper(Channel[0]) + Channel.Substring(1);
-        public string EnvironmentDisplay => string.IsNullOrWhiteSpace(Environment) ? "-" : Environment;
-        public string AccountLabel => !string.IsNullOrWhiteSpace(AccountIdStr) ? AccountIdStr : (AccountIdBig?.ToString() ?? "-");
+        public int LocationId { get; set; }
+        public int ProductId { get; set; }
+        public string? ProductName { get; set; }
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
     }
-
-    public class JobLogDto
+    private class OrderViewDtos
     {
-        public long TransId { get; set; }
-        public string? Platform { get; set; }
-        public long? ShopId { get; set; }
-        public string? Mode { get; set; }
-        public DateTime RequestAtUtc { get; set; }
-        public DateTime? CompletedAtUtc { get; set; }
-        public int TotalRefs { get; set; }
-        public int Attempted { get; set; }
-        public int CreatedCount { get; set; }
-        public int UpdatedCount { get; set; }
-        public int UnchangedCount { get; set; }
-        public int FailedCount { get; set; }
-        public string? Notes { get; set; }
+        public DateTime OrderDate { get; set; }
+        public List<OrderItemDtos> Items { get; set; } = new();
     }
+    private class LocationDrop { public int Id { get; set; } public string Name { get; set; } = ""; }
 
-    // ===== LIFECYCLE =====
+    // ---------- Lifecycle ----------
     protected override async Task OnInitializedAsync()
     {
-        // Load MDW Token first
-        await RefreshToken();
-
-        await LoadDashboard(); // Initial load
-
-        _timer = new System.Threading.Timer(async _ => await TimerTick(), null, RefreshInterval, RefreshInterval);
-    }
-
-    private async Task TimerTick()
-    {
-        if (!autoRefreshEnabled) return;
-
-        if (!await _refreshSemaphore.WaitAsync(0)) return;
-
         try
         {
-            await InvokeAsync(async () =>
+            var auth = await Auth.GetAuthenticationStateAsync();
+            var claim = auth.User?.FindFirst("USERID")?.Value;
+            int.TryParse(claim, out _userId);
+        }
+        catch { _userId = 0; }
+
+        await LoadLocationNames();
+        await LoadAndPrepare();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _canInvokeJs = true;
+            if (_pendingToasts.Count > 0)
             {
-                await LoadDashboard(inBackground: true);
-                StateHasChanged();
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"TimerTick error: {ex.Message}");
-        }
-        finally
-        {
-            _refreshSemaphore.Release();
-        }
-    }
-
-    public void Dispose()
-    {
-        _timer?.Dispose();
-        _refreshSemaphore?.Dispose();
-    }
-
-    // ===== ACTIONS =====
-    private async Task ManualRefresh()
-    {
-        await LoadDashboard();
-    }
-
-    private void ToggleAutoRefresh()
-    {
-        autoRefreshEnabled = !autoRefreshEnabled;
-    }
-
-
-    private static string? NormalizeToken(string? t)
-    {
-        if (string.IsNullOrWhiteSpace(t)) return null;
-        t = t.Trim().Trim('"');
-        if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) t = t[7..].Trim();
-        return t;
-    }
-
-    private async Task RefreshToken()
-    {
-
-        try
-        {
-            // MDW login
-            var loginMdw = await MdwSvc.LoginAsync("admin", "123456yjm");
-            currentToken = NormalizeToken(loginMdw?.Token) ?? throw new Exception("Login MDW failed");
-            _mdw = ClientFactory.CreateClient("MdwApiBaseUrl");
-            _mdw.DefaultRequestHeaders.Authorization =
-              new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", currentToken);
-
-
-            StateHasChanged();
-        }
-        catch (Exception ex) { error = ex.Message; StateHasChanged(); }
-    }
-
-    private async Task LoadDashboard(bool inBackground = false)
-    {
-        try
-        {
-            if (!inBackground)
-            {
-                isLoading = true;
-                StateHasChanged();
+                foreach (var t in _pendingToasts)
+                    await JS.InvokeVoidAsync("showToast", t.msg, t.level);
+                _pendingToasts.Clear();
             }
-
-            // ทุกครั้งที่โหลด dashboard ต้อง login ใหม่
-            await RefreshToken();
-
-            // ตรวจสอบว่าได้ token จริง ๆ ก่อน
-            if (string.IsNullOrEmpty(currentToken))
-            {
-                Console.Error.WriteLine("LoadDashboard: Failed to acquire a valid token.");
-                error = "Failed to acquire MDW API token. Cannot load dashboard.";
-                return;
-            }
-
-            // สร้าง client และตั้ง header ด้วย token ใหม่
-            var client = ClientFactory.CreateClient();
-            client.BaseAddress = new Uri(ApiBase);
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", currentToken);
-
-
-            
-            // เรียก API ด้วย HttpClient ธรรมดา แทน GetFromJsonAsync เพื่อตรวจสอบ status code
-            var requestMessage = new HttpRequestMessage(HttpMethod.Get, "/api/dashboard");
-            var response = await client.SendAsync(requestMessage);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                Console.Error.WriteLine($"LoadDashboard: API responded with {(int)response.StatusCode} {response.ReasonPhrase}");
-                error = $"API Error: {(int)response.StatusCode} {response.ReasonPhrase}";
-                return;
-            }
-
-            var jsonResponse = await response.Content.ReadAsStringAsync();
-            if (string.IsNullOrWhiteSpace(jsonResponse))
-            {
-                Console.Error.WriteLine("LoadDashboard: Received empty response body from API.");
-                error = "API returned empty response.";
-                return;
-            }
-
-            // ถอด JSON ด้วย JsonSerializer
-            using var jsonDoc = JsonDocument.Parse(jsonResponse);
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-
-            var dashResp = JsonSerializer.Deserialize<DashboardResponse>(jsonResponse, options);
-
-            // ตรวจสอบว่า deserialize ได้
-            if (dashResp == null)
-            {
-                Console.Error.WriteLine("LoadDashboard: Failed to deserialize API response.");
-                error = "Failed to parse API response.";
-                return;
-            }
-
-            // แม็ปข้อมูล
-            tokenList = dashResp.tokens?.Select(t => new TokenUi
-            {
-                Id = t.Id,
-                Channel = t.Channel ?? "",
-                Environment = t.Environment ?? "",
-                AccountIdStr = t.AccountIdStr ?? "",
-                AccountIdBig = t.AccountIdBig,
-                AccessTokenExpAt = t.AccessTokenExpAt,
-                RefreshTokenExpAt = t.RefreshTokenExpAt,
-                IsActive = t.IsActive,
-                TokenStatus = t.TokenStatus ?? ""
-            }).ToList() ?? new();
-
-            jobList = dashResp.jobs ?? new();
-
-            ApplyFilter();
-            lastRefreshedUtc = DateTime.UtcNow;
-            error = null; // ล้าง error ถ้าสำเร็จ
         }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"LoadDashboard error: {ex.Message}");
-            error = $"An error occurred while loading dashboard: {ex.Message}";
-        }
-        finally
-        {
-            isLoading = false;
-            await InvokeAsync(StateHasChanged);
-        }
+
+        if (_canInvokeJs && _needsRenderCharts)
+            await RenderCharts();
     }
 
-    private void ApplyFilter()
+    // ---------- Helpers ----------
+    private Task<HttpClient> CreateClient()
     {
-        if (string.IsNullOrWhiteSpace(jobPlatformFilter))
-            filteredJobs = jobList.ToList();
+        var c = ClientFactory.CreateClient();
+        c.BaseAddress = new Uri(ApiBase);
+        var token = TokenProvider.Token;
+        if (!string.IsNullOrWhiteSpace(token))
+            c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+     
+        return Task.FromResult(c);
+    }
+
+    private async Task Toast(string message, string level = "info")
+    {
+        if (_canInvokeJs)
+            await JS.InvokeVoidAsync("showToast", message, level);
         else
-            filteredJobs = jobList.Where(j => string.Equals(j.Platform, jobPlatformFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+            _pendingToasts.Add((message, level));
     }
 
-    private void ShowDetails(TokenUi t)
+    private async Task LoadLocationNames()
     {
-        var msg = $"Platform: {t.Channel}\nEnv: {t.Environment}\nAccount: {t.AccountLabel}\nExpires(UTC): {t.AccessTokenExpAt:yyyy-MM-dd HH:mm:ss}\nStatus: {t.TokenStatus}";
-        _ = InvokeAsync(() => JSRuntimeInvoke("alert", msg));
-    }
-
-    private async Task JSRuntimeInvoke(string name, object arg)
-    {
-        try { await JS.InvokeVoidAsync(name, arg); }
-        catch { /* ignore */ }
-    }
-
-    // ===== UTILS =====
-    private string GetPlatformSvg(string platform)
-    {
-        if (string.IsNullOrWhiteSpace(platform)) return "❓";
-        var p = platform.Trim().ToLowerInvariant();
-        return p switch
+        try
         {
-            "shopee" => @"<svg width='22' height='22' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><rect width='24' height='24' rx='6' fill='white' /><path d='M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7z' fill='white' /><text x='50%' y='54%' text-anchor='middle' dominant-baseline='middle' font-size='10' fill='white'>S</text></svg>",
-            "lazada" => @"<svg width='22' height='22' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><rect width='24' height='24' rx='6' fill='white' /><text x='50%' y='54%' text-anchor='middle' dominant-baseline='middle' font-size='10' fill='white'>L</text></svg>",
-            "tiktok" => @"<svg width='22' height='22' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><rect width='24' height='24' rx='6' fill='white' /><text x='50%' y='54%' text-anchor='middle' dominant-baseline='middle' font-size='10' fill='white'>T</text></svg>",
-            _ => $"<div style='font-size:14px'>{platform[0].ToString().ToUpperInvariant()}</div>"
-        };
-    }
-
-    private string GetIconBg(string platform)
-    {
-        if (string.IsNullOrWhiteSpace(platform)) return "#9CA3AF";
-        var p = platform.Trim().ToLowerInvariant();
-        return p switch
+            var http = await CreateClient();
+            var drops = await http.GetFromJsonAsync<List<LocationDrop>>("api/locations/dropdown") ?? new();
+            _locationName = drops.ToDictionary(x => x.Id, x => x.Name);
+        }
+        catch
         {
-            "shopee" => "#ff6f61",
-            "lazada" => "#0066ff",
-            "tiktok" => "#111827",
-            _ => "#6b7280"
-        };
+            _locationName.Clear();
+        }
     }
 
-    // ===== DTOs matching backend =====
-    private class DashboardResponse
+    private async Task Reload() => await LoadAndPrepare();
+
+    private async Task LoadAndPrepare()
     {
-        public List<TokenStatusDto>? tokens { get; set; }
-        public List<JobLogDto>? jobs { get; set; }
+        loading = true;
+        hasData = false;
+        _needsRenderCharts = false;
+        StateHasChanged();
+
+        if (toDate < fromDate) toDate = fromDate;
+
+        List<OrderViewDtos> orders = new();
+        try
+        {
+            var http = await CreateClient();
+            var url =
+                $"/api/Order/history/bydateft?userId={_userId}" +
+                $"&from={fromDate:yyyy-MM-dd}&to={toDate:yyyy-MM-dd}&includeAll=true";
+            orders = await http.GetFromJsonAsync<List<OrderViewDtos>>(url) ?? new();
+        }
+        catch (Exception ex)
+        {
+            await Toast($"โหลดออเดอร์ล้มเหลว: {ex.Message}", "error");
+            loading = false;
+            return;
+        }
+
+        var allItems = orders.SelectMany(o => o.Items);
+        hasData = allItems.Any();
+
+        var byLoc = allItems
+            .GroupBy(i => i.LocationId)
+            .Select(g => new
+            {
+                LocationId = g.Key,
+                Total = g.Sum(i => Math.Max(0m, (i.UnitPrice * i.Quantity) - i.Discount))
+            })
+            .OrderByDescending(x => x.Total)
+            .Take(10)
+            .ToList();
+
+        locLabels = byLoc
+            .Select(x => _locationName.TryGetValue(x.LocationId, out var n) ? n : $"#{x.LocationId}")
+            .ToList();
+        locValues = byLoc.Select(x => (double)x.Total).ToList();
+
+        var byProduct = allItems
+            .GroupBy(i => i.ProductId)
+            .Select(g => new
+            {
+                ProductId = g.Key,
+                Name = g.Select(x => x.ProductName ?? $"#{g.Key}")
+                        .FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? $"#{g.Key}",
+                Total = g.Sum(i => Math.Max(0m, (i.UnitPrice * i.Quantity) - i.Discount))
+            })
+            .OrderByDescending(x => x.Total)
+            .Take(10)
+            .ToList();
+
+        prodLabels = byProduct.Select(x => x.Name).ToList();
+        prodValues = byProduct.Select(x => (double)x.Total).ToList();
+
+        loading = false;
+        _needsRenderCharts = hasData;
+        StateHasChanged();
+
+        if (_canInvokeJs && _needsRenderCharts)
+            await RenderCharts();
     }
 
-    private class TokenStatusDto
+
+    private async Task RenderCharts()
     {
-        public int Id { get; set; }
-        public string? Channel { get; set; }
-        public string? Environment { get; set; }
-        public string? AccountIdStr { get; set; }
-        public long? AccountIdBig { get; set; }
-        public DateTime AccessTokenExpAt { get; set; }
-        public DateTime? RefreshTokenExpAt { get; set; }
-        public bool IsActive { get; set; }
-        public string? TokenStatus { get; set; }
+        _needsRenderCharts = false;
+        if (!hasData) return;
+
+        await JS.InvokeVoidAsync("dashboard.renderBar",
+            "salesByLocationChart", locLabels, locValues, "Top 10 Locations by Sales", 900); 
+
+        await JS.InvokeVoidAsync("dashboard.renderPie",
+            "topProductsPie", prodLabels, prodValues, "Top 10 Products", 900);
     }
-}
+} *@

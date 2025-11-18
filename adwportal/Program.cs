@@ -47,8 +47,8 @@ builder.Services.AddSession(o =>
 });
 
 builder.Services.AddHttpContextAccessor();
-
 builder.Services.AddTransient<AuthMessageHandler>();
+
 builder.Services.AddHttpClient("ApiClient", (sp, http) =>
 {
     var cfg = sp.GetRequiredService<IOptions<ApiSettings>>().Value;
@@ -77,7 +77,6 @@ builder.Services.AddHttpClient("MdwApiBaseUrl", (sp, http) =>
     http.BaseAddress = new Uri(cfg.MdwApiBaseUrl);
     http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 })
-.AddHttpMessageHandler<AuthMessageHandler>()  
 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
 {
     UseCookies = false,

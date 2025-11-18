@@ -5,12 +5,10 @@ using System.Text.Json.Serialization;
 namespace adwportal.Dtos
 {
     /// <summary>
-    /// DTO สำหรับแสดง Unified Order 1 รายการ บน FE
-    /// - รองรับทั้งกรณีที่ API ส่งฟิลด์ชื่อ Items / Payments / Shipments / ShipTo
-    ///   (เป็น JSON ตรง ๆ)
-    /// - หรือส่งชื่อ ItemsJson / PaymentsJson / ShipmentsJson / ShipToJson
-    ///   (จาก SQL VIEW ตรง ๆ แต่ serialize ออกมาเป็น JSON อีกที)
-    /// โดยสุดท้าย map มาลงที่ backing field เดียวกัน (_items, _payments, _shipments, _shipTo)
+    /// FE DTO สำหรับแสดง Unified Order 1 รายการ
+    /// ออกแบบให้รองรับได้ทั้งกรณีที่ API ส่งชื่อฟิลด์เป็น Items/Payments/Shipments/ShipTo
+    /// หรือส่งเป็น ItemsJson/PaymentsJson/ShipmentsJson/ShipToJson (จาก SQL VIEW ตรง ๆ)
+    /// โดย map มาลงที่ backing field เดียวกัน
     /// </summary>
     public sealed class FeUnifiedOrderDtos
     {
@@ -23,84 +21,41 @@ namespace adwportal.Dtos
         public string? OrderStatus { get; set; }
 
         public DateTime CreatedTimeUtc { get; set; }
-
-        // ใน DB / API ฝั่ง MDW ใช้ DateTime? ดังนั้นให้ตรงกันไว้ ป้องกัน null deserialize พัง
-        public DateTime? UpdatedTimeUtc { get; set; }
+        public DateTime UpdatedTimeUtc { get; set; }
 
         // ========== ข้อมูลย่อย (เก็บเป็น JSON เพื่อง่ายและยืดหยุ่น) ==========
 
         // --- Items (array) ---
         private JsonElement _items;
-
-        /// <summary>
-        /// ใช้กรณี API ส่ง property ชื่อ "items" (array/object)
-        /// </summary>
         [JsonPropertyName("items")]
-        public JsonElement Items
-        {
-            get => _items;
-            set => _items = value;
-        }
+        public JsonElement Items { get => _items; set => _items = value; }
 
-        /// <summary>
-        /// ใช้กรณี API ส่ง property ชื่อ "itemsJson"
-        /// </summary>
+        // เผื่อ API ส่งชื่อ ItemsJson มา
         [JsonPropertyName("itemsJson")]
-        public JsonElement ItemsJson
-        {
-            get => _items;
-            set => _items = value;
-        }
+        public JsonElement ItemsJson { get => _items; set => _items = value; }
 
         // --- Payments (array) ---
         private JsonElement _payments;
-
         [JsonPropertyName("payments")]
-        public JsonElement Payments
-        {
-            get => _payments;
-            set => _payments = value;
-        }
+        public JsonElement Payments { get => _payments; set => _payments = value; }
 
         [JsonPropertyName("paymentsJson")]
-        public JsonElement PaymentsJson
-        {
-            get => _payments;
-            set => _payments = value;
-        }
+        public JsonElement PaymentsJson { get => _payments; set => _payments = value; }
 
         // --- Shipments (array) ---
         private JsonElement _shipments;
-
         [JsonPropertyName("shipments")]
-        public JsonElement Shipments
-        {
-            get => _shipments;
-            set => _shipments = value;
-        }
+        public JsonElement Shipments { get => _shipments; set => _shipments = value; }
 
         [JsonPropertyName("shipmentsJson")]
-        public JsonElement ShipmentsJson
-        {
-            get => _shipments;
-            set => _shipments = value;
-        }
+        public JsonElement ShipmentsJson { get => _shipments; set => _shipments = value; }
 
         // --- ShipTo (object) ---
         private JsonElement _shipTo;
-
         [JsonPropertyName("shipTo")]
-        public JsonElement ShipTo
-        {
-            get => _shipTo;
-            set => _shipTo = value;
-        }
+        public JsonElement ShipTo { get => _shipTo; set => _shipTo = value; }
 
         [JsonPropertyName("shipToJson")]
-        public JsonElement ShipToJson
-        {
-            get => _shipTo;
-            set => _shipTo = value;
-        }
+        public JsonElement ShipToJson { get => _shipTo; set => _shipTo = value; }
     }
 }

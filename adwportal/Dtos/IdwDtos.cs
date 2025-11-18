@@ -1,6 +1,5 @@
 ﻿namespace adwportal.Dtos;
 
-
 public class PagedResult<T>
 {
     public int Page { get; set; }

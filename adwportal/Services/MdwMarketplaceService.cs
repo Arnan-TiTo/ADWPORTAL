@@ -255,7 +255,6 @@ namespace adwportal.Services
         }
 
         // ===== FE Orders (MarketplaceFeOrdersController) =====
-        // ===== FE Orders (MarketplaceFeOrdersController) =====
         public async Task<PagedResult<FeUnifiedOrderDtos>> FeOrdersListAsync(
             string? token,
             string? channel = null,
@@ -266,8 +265,7 @@ namespace adwportal.Services
             DateTime? toUtc = null,
             int page = 1,
             int pageSize = 50,
-            string? sort = "updatedDesc",
-            string? dateField = "updated",
+            string? sort = "createdDesc",
             CancellationToken ct = default)
         {
             using var http = CreateClient(token);
@@ -279,8 +277,6 @@ namespace adwportal.Services
             if (!string.IsNullOrWhiteSpace(status)) qb.Add("status", status);
             if (fromUtc.HasValue) qb.Add("fromUtc", fromUtc.Value.ToUniversalTime().ToString("o"));
             if (toUtc.HasValue) qb.Add("toUtc", toUtc.Value.ToUniversalTime().ToString("o"));
-            if (!string.IsNullOrWhiteSpace(dateField)) qb.Add("dateField", dateField);
-
             if (page <= 0) page = 1;
             if (pageSize <= 0 || pageSize > 200) pageSize = 50;
             qb.Add("page", page.ToString());
@@ -290,14 +286,9 @@ namespace adwportal.Services
             var url = "api/fe/orders" + qb.ToQueryString();
 
             using var res = await http.GetAsync(url, ct);
-            // ถ้า status code != 2xx ให้ throw เลย จะไปโผล่ใน error บนหน้า FE
             res.EnsureSuccessStatusCode();
 
-            // ตอนนี้ API ส่ง JSON แบบ:
-            // { "totalItems": 8, "page": 1, "size": 50, "items": [ ... ] }
             var obj = await res.Content.ReadFromJsonAsync<PagedResult<FeUnifiedOrderDtos>>(JsonOpts, ct);
-
-            // กัน null เผื่อ deserialize ไม่สำเร็จ
             return obj ?? new PagedResult<FeUnifiedOrderDtos>
             {
                 Page = page,
@@ -306,7 +297,6 @@ namespace adwportal.Services
                 Items = new List<FeUnifiedOrderDtos>()
             };
         }
-
 
         public async Task<FeUnifiedOrderDtos?> FeOrderGetByIdAsync(
             string? token,
@@ -318,7 +308,6 @@ namespace adwportal.Services
             if (!res.IsSuccessStatusCode) return null;
             return await res.Content.ReadFromJsonAsync<FeUnifiedOrderDtos>(JsonOpts, ct);
         }
-
 
         public async Task<FeUnifiedOrderDtos?> FeOrderGetByExternalAsync(
             string? token,
