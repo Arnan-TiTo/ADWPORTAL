@@ -4,6 +4,11 @@
 @using Microsoft.JSInterop
 @using adwportal.Dtos
 @using adwportal.Services
+
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider Auth
+@inject AuthTokenProvider TokenProvider
+
 @implements IAsyncDisposable
 @inject IHttpClientFactory ClientFactory
 @inject IJSRuntime JS
@@ -153,13 +158,43 @@
 
         try
         {
-            // 1) login IDW
-            var loginIdw = await Idw.LoginAsync("admin", "123456yjm");
-            _idwToken = NormalizeToken(loginIdw?.Token) ?? throw new Exception("Login IDW failed");
+            if (string.IsNullOrWhiteSpace(_idwToken) || string.IsNullOrWhiteSpace(_mdwToken))
+            {
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var user = authState.User;
 
-            // 2) login MDW
-            var loginMdw = await MdwSvc.LoginAsync("admin", "123456yjm");
-            _mdwToken = NormalizeToken(loginMdw?.Token) ?? throw new Exception("Login MDW failed");
+                var username =
+                    user.Identity?.Name
+                    ?? user.FindFirst("USERNAME")?.Value;
+
+                var password =
+                    user.FindFirst("PWD")?.Value
+                    ?? user.FindFirst("PASSWORD")?.Value;
+
+                if (!string.IsNullOrWhiteSpace(username) &&
+                    !string.IsNullOrWhiteSpace(password))
+                {
+                    // 1) login IDW
+                    var loginIdw = await Idw.LoginAsync(username, password);
+                    _idwToken = NormalizeToken(loginIdw?.Token) ?? throw new Exception("Login IDW failed");
+
+                    // 2) login MDW
+                    var loginMdw = await MdwSvc.LoginAsync(username, password);
+                    _mdwToken = NormalizeToken(loginMdw?.Token) ?? throw new Exception("Login MDW failed");
+
+                    if (!string.IsNullOrWhiteSpace(_idwToken))
+                    {
+                        // cache ใส่ provider ให้หน้าอื่นใช้ต่อ
+                        TokenProvider.IdwToken = _idwToken;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(_mdwToken))
+                    {
+                        // cache ใส่ provider ให้หน้าอื่นใช้ต่อ
+                        TokenProvider.MdwToken = _mdwToken;
+                    }
+                }
+            }
 
             // 3) bind token ให้ client ทั้งสอง
             _idwClient = ClientFactory.CreateClient("IdwApiBaseUrl");

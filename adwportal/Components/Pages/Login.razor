@@ -122,7 +122,8 @@
                 token = data.token,
                 userId = data.userId,
                 fullname = data.fullname,
-                username = _model.Username
+                username = _model.Username,
+                password = _model.Password
             });
             if (!ok) { _error = "Failed to set session."; return; }
 
@@ -178,7 +179,8 @@
                 token = result.token,
                 userId = result.userId,
                 fullname = result.fullname,
-                username = _model.Username
+                username = _model.Username,
+                password = _model.Password
             });
 
             if (ok) Nav.NavigateTo("/", forceLoad: true, replace: true);

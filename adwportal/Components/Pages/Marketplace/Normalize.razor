@@ -5,10 +5,16 @@
 @using adwportal.Dtos
 @using adwportal.Services
 @using Microsoft.AspNetCore.Components.Forms
+
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider Auth
+@inject AuthTokenProvider TokenProvider
+
 @inject IHttpClientFactory ClientFactory
 @inject MdwMarketplaceService MdwSvc
 @inject IdwImportService Idw
 @inject IJSRuntime JS
+
 
 <h3 class="mb-3">MDW — Normalize Orders</h3>
 <p class="text-muted">เลือกโหมดและกรอกพารามิเตอร์ให้ตรงกับเส้น จากนั้นกด Call</p>
@@ -248,19 +254,69 @@
 
         try
         {
-            // MDW login
-            var loginMdw = await MdwSvc.LoginAsync("admin", "123456yjm");
-            _mdwToken = NormalizeToken(loginMdw?.Token) ?? throw new Exception("Login MDW failed");
-            _mdw = ClientFactory.CreateClient("MdwApiBaseUrl");
-            _mdw.DefaultRequestHeaders.Authorization =
-              new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _mdwToken);
+            _idwToken = TokenProvider.IdwToken;
+            _mdwToken = TokenProvider.MdwToken;
 
-            // IDW login (โหลด shops)
-            var loginIdw = await Idw.LoginAsync("admin", "123456yjm");
-            _idwToken = NormalizeToken(loginIdw?.Token) ?? throw new Exception("Login IDW failed");
             _idw = ClientFactory.CreateClient("IdwApiBaseUrl");
             _idw.DefaultRequestHeaders.Authorization =
-              new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _idwToken);
+                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _idwToken);
+            _mdw = ClientFactory.CreateClient("MdwApiBaseUrl");
+            _mdw.DefaultRequestHeaders.Authorization =
+                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _mdwToken);
+
+
+            if (string.IsNullOrWhiteSpace(_idwToken) || string.IsNullOrWhiteSpace(_mdwToken))
+            {
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var user = authState.User;
+
+                var username =
+                    user.Identity?.Name
+                    ?? user.FindFirst("USERNAME")?.Value;
+
+                var password =
+                    user.FindFirst("PWD")?.Value
+                    ?? user.FindFirst("PASSWORD")?.Value;
+
+                if (!string.IsNullOrWhiteSpace(username) &&
+                    !string.IsNullOrWhiteSpace(password))
+                {
+
+                    // MDW login
+                    var loginMdw = await MdwSvc.LoginAsync(username, password);
+                    _mdwToken = NormalizeToken(loginMdw?.Token) ?? throw new Exception("Login MDW failed");
+
+
+                    // IDW login (โหลด shops)
+                    var loginIdw = await Idw.LoginAsync(username, password);
+                    _idwToken = NormalizeToken(loginIdw?.Token) ?? throw new Exception("Login IDW failed");
+
+
+                    if (!string.IsNullOrWhiteSpace(_idwToken))
+                    {
+                        // cache ใส่ provider ให้หน้าอื่นใช้ต่อ
+                        TokenProvider.IdwToken = _idwToken;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(_mdwToken))
+                    {
+                        // cache ใส่ provider ให้หน้าอื่นใช้ต่อ
+                        TokenProvider.MdwToken = _mdwToken;
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(_idwToken))
+            {
+                error = "Missing IDW token. Please go to Home page (/) to initialize external tokens.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_mdwToken))
+            {
+                error = "Missing MDW token. Please go to Home page (/) to initialize external tokens.";
+                return;
+            }
 
             await LoadShopsAsync();
 

@@ -10,11 +10,8 @@ using System.Net.Http.Headers;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add services to the container.
 builder.Services.AddRazorPages();
-
-// === Fixed API token ===
-var fixeDtosken = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
-builder.Services.AddSingleton(new AuthTokenProvider(fixeDtosken ?? ""));
 
 // === Config API base ===
 builder.Services.Configure<ApiSettings>(builder.Configuration.GetSection("ApiSettings"));
@@ -49,6 +46,7 @@ builder.Services.AddSession(o =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<AuthMessageHandler>();
 
+// === Main API client (Portal API) ===
 builder.Services.AddHttpClient("ApiClient", (sp, http) =>
 {
     var cfg = sp.GetRequiredService<IOptions<ApiSettings>>().Value;
@@ -56,6 +54,7 @@ builder.Services.AddHttpClient("ApiClient", (sp, http) =>
 })
 .AddHttpMessageHandler<AuthMessageHandler>();
 
+// === IDW API client ===
 builder.Services.AddHttpClient("IdwApiBaseUrl", (sp, http) =>
 {
     var cfg = sp.GetRequiredService<IOptions<ApiSettings>>().Value;
@@ -68,12 +67,13 @@ builder.Services.AddHttpClient("IdwApiBaseUrl", (sp, http) =>
     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
 });
 
-// MDW API client (marketplace)
+// === MDW API client (marketplace) ===
 builder.Services.AddHttpClient("MdwApiBaseUrl", (sp, http) =>
 {
     var cfg = sp.GetRequiredService<IOptions<ApiSettings>>().Value;
     if (string.IsNullOrWhiteSpace(cfg.MdwApiBaseUrl))
         throw new InvalidOperationException("ApiSettings:MdwApiBaseUrl is not configured.");
+
     http.BaseAddress = new Uri(cfg.MdwApiBaseUrl);
     http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 })
@@ -84,17 +84,15 @@ builder.Services.AddHttpClient("MdwApiBaseUrl", (sp, http) =>
     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
 });
 
-// Service
+// === Services ===
 builder.Services.AddScoped<MdwMarketplaceService>();
-
-
-//AddScoped
 builder.Services.AddScoped<IdwImportService>();
 builder.Services.AddScoped<IdwListState>();
 builder.Services.AddScoped<MiscService>();
 builder.Services.AddScoped<CompanyService>();
 builder.Services.AddScoped<PartnerService>();
 builder.Services.AddScoped<ShopService>();
+builder.Services.AddScoped<AuthTokenProvider>();
 
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
@@ -119,26 +117,35 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+// ===== Session login (ถูกเรียกจาก miniapp.setSession) =====
 
-
-//session logout
-app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos Dtos) =>
+app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos dto) =>
 {
-    if (Dtos is null || string.IsNullOrWhiteSpace(Dtos.Token))
+    if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
         return Results.BadRequest("Invalid token");
 
-    ctx.Session.SetString("JWT", Dtos.Token);
-    ctx.Session.SetInt32("USERID", Dtos.UserId);
-    ctx.Session.SetString("FULLNAME", Dtos.Fullname ?? "");
+    // เก็บลง Session ตามเดิม
+    ctx.Session.SetString("JWT", dto.Token);
+    ctx.Session.SetInt32("USERID", dto.UserId);
+    ctx.Session.SetString("FULLNAME", dto.Fullname ?? "");
+    if (!string.IsNullOrEmpty(dto.Password))
+        ctx.Session.SetString("PWD", dto.Password);
 
     var claims = new List<System.Security.Claims.Claim>
     {
-        new(System.Security.Claims.ClaimTypes.Name, Dtos.Username ?? ""),
-        new("USERID", Dtos.UserId.ToString()),
-        new("JWT", Dtos.Token),
-        new("FULLNAME", Dtos.Fullname ?? "")
+        new(System.Security.Claims.ClaimTypes.Name, dto.Username ?? ""),
+        new("USERID", dto.UserId.ToString()),
+        new("JWT", dto.Token),
+        new("FULLNAME", dto.Fullname ?? "")
     };
-    var id = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
+    // ⭐ เก็บ password ลง Claim "PWD" (ระวังเรื่อง security แต่ตรงกับ requirement ที่ขอ)
+    if (!string.IsNullOrEmpty(dto.Password))
+        claims.Add(new("PWD", dto.Password));
+
+    var id = new System.Security.Claims.ClaimsIdentity(
+        claims, CookieAuthenticationDefaults.AuthenticationScheme);
+
     var cp = new System.Security.Claims.ClaimsPrincipal(id);
     await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, cp);
 
@@ -149,6 +156,7 @@ app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos Dtos) =>
 .AllowAnonymous()
 .DisableAntiforgery();
 
+// ===== Logout =====
 app.MapPost("/auth/logout", async (HttpContext ctx) =>
 {
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -177,7 +185,7 @@ app.MapRazorComponents<App>()
 
 app.Run();
 
+// ======================
 // Dtos set-session
-public record SetSessionDtos(string Token, int UserId, string? Fullname, string? Username);
-
-public class AuthTokenProvider { public string Token { get; } public AuthTokenProvider(string t) => Token = t; }
+// ======================
+public record SetSessionDtos(string Token, int UserId, string? Fullname, string? Username, string? Password);
