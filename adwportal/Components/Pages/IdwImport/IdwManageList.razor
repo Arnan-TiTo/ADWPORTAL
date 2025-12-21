@@ -6,6 +6,9 @@
 @using adwportal.Models
 @using adwportal.Services
 @using adwportal.States
+
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider Auth
 @inject AuthTokenProvider TokenProvider
 @inject NavigationManager Nav
 @inject IdwImportService Idw
@@ -13,34 +16,121 @@
 @inject IdwListState State
 
 <h3>IDW Manage</h3>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
 <div class="card mb-3">
     <div class="card-body">
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="form-label">Batch No</label>
-                <input class="form-control" @bind="State.BatchNo" @bind:event="oninput" />
+                <div class="input-group">
+                    <input class="form-control" @bind="State.BatchNo" @bind:event="oninput" />
+                    <button type="button" class="btn btn-outline-secondary" @onclick="OpenBatchFinder">ค้นหา</button>
+                </div>
             </div>
             <div class="col-md-3">
                 <label class="form-label">Order No.</label>
                 <input class="form-control"
                        @bind-value="OrderNo" @bind-value:event="oninput"
                        disabled="@(!HasBatchLoaded)" />
-
             </div>
             <div class="col-md-3">
                 <label class="form-label">SKU</label>
-
                 <input class="form-control"
                        @bind-value="Sku" @bind-value:event="oninput"
                        disabled="@(!HasBatchLoaded)" />
             </div>
             <div class="col-md-3 d-flex gap-2">
-                <button class="btn btn-primary mt-auto" @onclick="Search">Search</button>
-                <button class="btn btn-outline-secondary mt-auto" @onclick="Clear">Clear</button>
+                <button class="btn btn-primary mt-auto" @onclick="Search" disabled="@loading">Search</button>
+                <button class="btn btn-outline-secondary mt-auto" @onclick="Clear" disabled="@loading">Clear</button>
             </div>
         </div>
     </div>
 </div>
+
+@* ===== Batch finder (IN-PAGE SECTION) ===== *@
+@if (showBatchFinder)
+{
+    <div class="card mb-3 border-info">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <div class="fw-semibold">ค้นหา Batch No</div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CloseBatchFinder">ปิด</button>
+        </div>
+
+        <div class="card-body">
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Filter Batch (contains)</label>
+                    <input class="form-control" @bind="batchFilter" @bind:event="oninput" placeholder="เช่น 2025-12" />
+                </div>
+                <div class="col-md-6 d-flex gap-2">
+                    <button class="btn btn-primary mt-auto" @onclick="SearchBatches" disabled="@batchLoading">
+                        @(batchLoading ? "Loading..." : "ค้นหา")
+                    </button>
+                    <button class="btn btn-outline-secondary mt-auto" @onclick="ClearBatchSearch" disabled="@batchLoading">
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(batchError))
+            {
+                <div class="alert alert-danger">@batchError</div>
+            }
+
+            <div class="table-responsive" style="max-height:55vh; overflow:auto;">
+                <table class="table table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:220px;">Batch No</th>
+                            <th>File</th>
+                            <th>Company</th>
+                            <th>Platform</th>
+                            <th>Logistic</th>
+                            <th style="width:170px;">Imported At</th>
+                            <th style="width:90px;">Rows</th>
+                            <th style="width:90px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (batchItems.Count == 0)
+                        {
+                            <tr><td colspan="8" class="text-center text-muted">ไม่พบข้อมูล</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var b in batchItems)
+                            {
+                                <tr>
+                                    <td>@b.BatchNo</td>
+                                    <td>@b.FileName</td>
+                                    <td>@(b.CompanyName ?? "-")</td>
+                                    <td>@(b.PlatformName ?? "-")</td>
+                                    <td>@(b.LogisticName ?? "-")</td>
+                                    <td>@b.ImportedAt.ToString("dd-MM-yyyy HH:mm")</td>
+                                    <td>@b.RowCount</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success" @onclick="() => SelectBatchAndClose(b.BatchNo)">
+                                            เลือก
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="form-text mt-2">
+                * กด “เลือก” เพื่อเติม Batch No ให้หน้าและปิดส่วนค้นหาอัตโนมัติ
+            </div>
+        </div>
+    </div>
+}
 
 @if (loading)
 {
@@ -48,7 +138,7 @@
 }
 else if (!HasBatchLoaded)
 {
-    <div class="alert alert-info">กรอก Batch No เพื่อค้นหา </div>
+    <div class="alert alert-info">กรอก Batch No เพื่อค้นหา</div>
 }
 else
 {
@@ -156,6 +246,14 @@ else
     string? token = string.Empty;
     PaginationState Pag = new();
     bool HasBatchLoaded => State.Source.Count > 0;
+    private string? error;
+
+    // ===== Batch finder (in-page) =====
+    private bool showBatchFinder;
+    private string batchFilter = "";
+    private bool batchLoading;
+    private string? batchError;
+    private readonly List<IdwImportDtos> batchItems = new();
 
     string? OrderNo
     {
@@ -187,11 +285,54 @@ else
         }
     }
 
-
     protected override async Task OnInitializedAsync()
     {
-        var resp = await Idw.LoginAsync("admin", "123456yjm");
-        token = resp?.Token ?? "";
+        try
+        {
+            // 1) ลองอ่านจาก AuthTokenProvider ก่อน
+            token = TokenProvider.IdwToken;
+
+            // 2) ถ้ายังว่าง ให้ใช้ username/password จาก Claims ไป login ใหม่
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var user = authState.User;
+
+                var username =
+                    user.Identity?.Name
+                    ?? user.FindFirst("USERNAME")?.Value;
+
+                var password = TokenProvider.Password;
+
+                if (!string.IsNullOrWhiteSpace(username) &&
+                    !string.IsNullOrWhiteSpace(password))
+                {
+                    var login = await Idw.LoginAsync(username, password);
+
+                    if (!string.IsNullOrWhiteSpace(login?.Token))
+                    {
+                        token = login!.Token;
+                        TokenProvider.IdwToken = token;
+                    }
+                    else
+                    {
+                        token = TokenProvider.IdwToken;
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                error = "Token is empty. กรุณาเข้า Dashboard (หน้าแรก) หรือ login ใหม่อีกครั้ง";
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return;
+        }
+
         if (string.IsNullOrEmpty(token)) return;
 
         if (State.HasData && State.Source.Count > 0 && !State.Dirty)
@@ -234,12 +375,14 @@ else
             var first = await Idw.SearchAsync(token, batchNo, null, null, p, fetchSize);
             all.AddRange(first.Items);
             var total = first.TotalItems;
+
             while (all.Count < total)
             {
                 p++;
                 var pr = await Idw.SearchAsync(token, batchNo, null, null, p, fetchSize);
                 all.AddRange(pr.Items);
             }
+
             State.Source = all;
             Pag.SetTotal(all.Count);
         }
@@ -252,13 +395,18 @@ else
     void ApplyClientFilter()
     {
         IEnumerable<IdwOrderDtos> q = State.Source;
+
         if (!string.IsNullOrWhiteSpace(State.OrderNo))
-            q = q.Where(x => !string.IsNullOrEmpty(x.OrderNo) && x.OrderNo.Contains(State.OrderNo!, StringComparison.OrdinalIgnoreCase));
+            q = q.Where(x => !string.IsNullOrEmpty(x.OrderNo) &&
+                             x.OrderNo.Contains(State.OrderNo!, StringComparison.OrdinalIgnoreCase));
+
         if (!string.IsNullOrWhiteSpace(State.Sku))
-            q = q.Where(x => !string.IsNullOrEmpty(x.Sku) && x.Sku.Contains(State.Sku!, StringComparison.OrdinalIgnoreCase));
+            q = q.Where(x => !string.IsNullOrEmpty(x.Sku) &&
+                             x.Sku.Contains(State.Sku!, StringComparison.OrdinalIgnoreCase));
 
         var list = q.ToList();
         Pag.SetTotal(list.Count);
+
         var skip = (Pag.Page - 1) * Pag.PageSize;
         State.Data = new PagedResult<IdwOrderDtos>
         {
@@ -292,6 +440,13 @@ else
         State.Source.Clear();
         State.Data = new() { Page = 1, Size = State.Size, Items = new() };
         Pag = new PaginationState { };
+
+        // ปิดส่วนค้นหา batch ด้วย (ตามที่ต้องการ)
+        showBatchFinder = false;
+        batchFilter = "";
+        batchItems.Clear();
+        batchError = null;
+
         return Task.CompletedTask;
     }
 
@@ -301,6 +456,108 @@ else
         Pag.SetTotal(State.Data.TotalItems);
         Pag.GoTo(State.Page);
         ApplyClientFilter();
+    }
+
+    // ===== Batch finder handlers (in-page) =====
+    async Task OpenBatchFinder()
+    {
+        showBatchFinder = true;
+        batchError = null;
+
+        // preload filter จากช่อง Batch No
+        batchFilter = State.BatchNo ?? "";
+
+        // preload ครั้งแรก
+        await SearchBatches();
+    }
+
+    void CloseBatchFinder()
+    {
+        showBatchFinder = false;
+        batchError = null;
+        batchLoading = false;
+        // จะเคลียร์ list หรือไม่ก็ได้—ตอนนี้คงไว้เพื่อกลับมาเปิดแล้วเห็นรายการเดิม
+        // batchItems.Clear();
+    }
+
+    void ClearBatchSearch()
+    {
+        batchFilter = "";
+        batchItems.Clear();
+        batchError = null;
+    }
+
+    async Task SearchBatches()
+    {
+        if (batchLoading) return;
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            batchError = "Token is empty. กรุณาเข้า Dashboard หรือ login ใหม่";
+            return;
+        }
+
+        batchLoading = true;
+        batchError = null;
+        try
+        {
+            batchItems.Clear();
+            var isEmpty = string.IsNullOrWhiteSpace(batchFilter);
+
+            // ถ้าไม่ใส่ filter: ให้ดึง Top 20 batch ล่าสุด
+            // (ดึงมาเผื่อซ้ำ batch เดียวกันหลายแถวเลยใช้ size=200 แล้วค่อย distinct)
+            var primary = await Idw.SearchImportsAsync(token!, isEmpty ? null : batchFilter, page: 1, size: 200);
+
+            IEnumerable<IdwImportDtos> src = primary.Items;
+
+            // ถ้าใส่ filter แล้วได้ว่าง ลอง fallback: ดึงล่าสุดจำนวนมาก แล้วกรองแบบ contains ฝั่ง client
+            if (!isEmpty && (src == null || !src.Any(x => !string.IsNullOrWhiteSpace(x.BatchNo))))
+            {
+                var fb = await Idw.SearchImportsAsync(token!, null, page: 1, size: 2000);
+                src = fb.Items;
+            }
+
+            if (!isEmpty)
+            {
+                var f = batchFilter.Trim();
+                src = src.Where(x => !string.IsNullOrWhiteSpace(x.BatchNo)
+                                     && x.BatchNo!.Contains(f, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var dedup = src
+                .Where(x => !string.IsNullOrWhiteSpace(x.BatchNo))
+                .GroupBy(x => x.BatchNo)
+                .Select(g => g.OrderByDescending(x => x.ImportedAt).First())
+                .OrderByDescending(x => x.ImportedAt);
+
+            if (isEmpty)
+                dedup = dedup.Take(20).OrderByDescending(x => x.ImportedAt);
+
+            batchItems.AddRange(dedup);
+        }
+        catch (Exception ex)
+        {
+            batchError = ex.Message;
+        }
+        finally
+        {
+            batchLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    async Task SelectBatchAndClose(string? batchNo)
+    {
+        if (string.IsNullOrWhiteSpace(batchNo)) return;
+
+        State.BatchNo = batchNo;
+
+        // ปิดส่วนค้นหาเมื่อเลือก
+        showBatchFinder = false;
+        batchError = null;
+        batchLoading = false;
+
+        await Search();
     }
 
     async Task PatchRow(long id)

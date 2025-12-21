@@ -1,0 +1,561 @@
+﻿@page "/IdwImport"
+@using System.Net.Http.Headers
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components
+@using System.Text
+@using adwportal.Models
+@using adwportal.Dtos
+@using adwportal.Services
+
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider Auth
+@inject AuthTokenProvider TokenProvider
+
+@inject IHttpClientFactory ClientFactory
+@inject IJSRuntime JS
+@inject IOptions<ApiSettings> Options
+@inject IdwImportService IdwImportService
+@inject ShopService ShopSvc
+@inject NavigationManager Navigation
+
+<h3>Import Data</h3>
+
+<div class="card mb-3">
+    <div class="card-body">
+
+        <!-- ===== Dropdowns: Company(จาก partners) / Shop / Platform / Logistic ===== -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <label class="form-label">Company</label>
+                <!-- ค่า value คือ Partner.Id แต่โชว์ชื่อบริษัท -->
+                <InputSelect class="form-select"
+                             @bind-Value="SelectedPartnerDbId"
+                             TValue="int?"
+                             disabled="@isLookupLoading">
+                    <option value="">-- Select company --</option>
+                    @if (partners is not null)
+                    {
+                        @foreach (var p in partners)
+                        {
+                            <option value="@p.Id">@((p.CompanyName ?? "(no company)"))</option>
+                        }
+                    }
+                </InputSelect>
+                @if (SelectedPartnerDbId is not null)
+                {
+                    <div class="form-text">
+                        Partner (ext): @CurrentPartnerExternalIdText
+                    </div>
+                }
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Shop</label>
+                <InputSelect class="form-select"
+                             @bind-Value="selectedShopDbId"
+                             TValue="int?"
+                             disabled="@(isLookupLoading || shops.Count == 0)">
+                    <option value="">-- @(shops.Count > 0 ? "Select shop" : "No shop available") --</option>
+                    @foreach (var s in shops)
+                    {
+                        <option value="@s.Id">@((s.Name ?? "(no name)")) [@s.ShopId]</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Platform</label>
+                <InputSelect class="form-select" @bind-Value="selectedPlatformId" TValue="int?" disabled="@isLookupLoading">
+                    <option value="">-- Select platform --</option>
+                    @if (platforms is not null)
+                    {
+                        @foreach (var p in platforms)
+                        {
+                            <option value="@p.Id">@p.Value1</option>
+                        }
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Logistic</label>
+                <InputSelect class="form-select" @bind-Value="selectedLogisticId" TValue="int?" disabled="@isLookupLoading">
+                    <option value="">-- Select logistic --</option>
+                    @if (logistics is not null)
+                    {
+                        @foreach (var l in logistics)
+                        {
+                            <option value="@l.Id">@l.Value1</option>
+                        }
+                    }
+                </InputSelect>
+            </div>
+        </div>
+        <!-- ===== /Dropdowns ===== -->
+
+        <InputFile OnChange="OnFileSelected" />
+
+        @if (!string.IsNullOrWhiteSpace(selectedFileName))
+        {
+            <p class="mt-2"><strong>Selected:</strong> @selectedFileName</p>
+            <div class="border p-2 bg-light" style="max-height:200px; overflow:auto">
+                <pre>@previewText</pre>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-success me-2" @onclick="Save" disabled="@DisableSave">Save</button>
+                <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+            </div>
+        }
+    </div>
+</div>
+
+@if (lastUpload != null)
+{
+    <div class="card mt-3">
+        <div class="card-body">
+            <h5>Import Summary</h5>
+            <div class="row">
+                <div class="col-md-3"><strong>ImportId:</strong> @lastUpload.importId</div>
+                <div class="col-md-3"><strong>Inserted Order:</strong> @lastUpload.rows</div>
+                <div class="col-md-3"><strong>Skipped Order:</strong> @lastUpload.skippedDb</div>
+                <div class="col-md-3"><strong>Skipped File:</strong> @lastUpload.skippedFile</div>
+            </div>
+
+            @if (lastUpload.skippedOrders != null && lastUpload.skippedOrders.Any())
+            {
+                <div class="mt-3">
+                    <h6>Skipped Orders</h6>
+                    <table class="table table-sm table-bordered">
+                        <thead>
+                            <tr>
+                                <th>OrderNo</th>
+                                <th>Reason</th>
+                                <th>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in lastUpload.skippedOrders)
+                            {
+                                <tr>
+                                    <td>@s.OrderNo</td>
+                                    <td>@s.Reason</td>
+                                    <td>@s.Detail</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (lastImported != null)
+{
+    <div class="card mt-3">
+        <div class="card-body">
+            <h5>Batch Detail</h5>
+            <p><strong>BatchNo:</strong> @lastImported.BatchNo</p>
+            <p><strong>File:</strong> @lastImported.FileName</p>
+            <p><strong>ImportedBy:</strong> @lastImported.ImportedBy</p>
+            <p><strong>ImportedAt:</strong> @lastImported.ImportedAt</p>
+            <p><strong>Status:</strong> @lastImported.Status</p>
+            <p><strong>RowCount:</strong> @(importedRows?.Count ?? lastImported.RowCount)</p>
+
+            <div class="mt-3">
+                <button class="btn btn-danger" @onclick="Delete" disabled="@isDelete">Delete</button>
+            </div>
+
+            <table class="table table-sm table-bordered mt-3">
+                <thead>
+                    <tr>
+                        <th>Page</th>
+                        <th>OrderNo</th>
+                        <th>PickupDate</th>
+                        <th>ShipByDate</th>
+                        <th>SenderName</th>
+                        <th>SenderAddress</th>
+                        <th>ReceiverName</th>
+                        <th>ReceiverAddress</th>
+                        <th>ItemName</th>
+                        <th>IsCOD</th>
+                        <th>ItemVariant</th>
+                        <th>Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (importedRows != null && importedRows.Any())
+                    {
+                        @foreach (var r in importedRows)
+                        {
+                            <tr>
+                                <td><!-- ไม่มี page ใน IdwOrderDto --></td>
+                                <td>@r.OrderNo</td>
+                                <td>@r.PickupDate?.ToString("dd-MM-yyyy")</td>
+                                <td>@r.ShipByDate?.ToString("dd-MM-yyyy")</td>
+                                <td>@r.SenderName</td>
+                                <td>@r.SenderAddress</td>
+                                <td>@r.ReceiverName</td>
+                                <td>@r.ReceiveAddress</td>
+                                <td>@r.ProductName</td>
+                                <td>@r.Cod</td>
+                                <td>@r.Variant</td>
+                                <td>@r.Qty</td>
+                            </tr>
+                        }
+                    }
+                    else if (lastImported?.Rows != null && lastImported.Rows.Any())
+                    {
+                        @* เผื่อ API คืน Rows ใน IdwImportDtos *@
+                        @foreach (var r in lastImported.Rows)
+                        {
+                            <tr>
+                                <td>@r.PageNo</td>
+                                <td>@r.OrderNo</td>
+                                <td>@r.PickupDate?.ToString("dd-MM-yyyy")</td>
+                                <td>@r.ShipByDate?.ToString("")</td>
+                                <td>@r.SenderName</td>
+                                <td>@r.SenderAddress</td>
+                                <td>@r.ReceiverName</td>
+                                <td>@r.ReceiverAddress</td>
+                                <td>@r.ItemName</td>
+                                <td>@(r.IsCod == true ? "Y" : r.IsCod == false ? "N" : null)</td>
+                                <td>@r.ItemVariant</td>
+                                <td>@r.Qty</td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="12" class="text-muted text-center">No rows found</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <button class="btn btn-outline-secondary" @onclick="ClearImported">Clear</button>
+        </div>
+    </div>
+}
+
+@code {
+    private string? tokenRaw;
+    private string? token;
+    private string? error;
+    private IBrowserFile? selectedFile;
+    private string? selectedFileName;
+    private string? previewText;
+    private bool? isSaving;
+    private bool? isDelete;
+
+    private UploadResponseDtos? lastUpload;
+    private IdwImportDtos? lastImported;
+
+    // แถวที่จะแสดง (fallback มาจาก SearchAsync)
+    private List<IdwOrderDtos> importedRows = new();
+
+    private MemoryStream? cachedFileStream;
+    private string? importId;
+
+    private bool isLookupLoading = false;
+
+    // partners (รวม CompanyName)
+    private List<MdwPartnerDtos>? partners;
+    private List<MiscItemDtos>? platforms;
+    private List<MiscItemDtos>? logistics;
+
+    private readonly List<ShopDtos> shops = new();
+    private int? selectedShopDbId;
+
+    private int? _selectedPartnerDbId;
+    private int? SelectedPartnerDbId
+    {
+        get => _selectedPartnerDbId;
+        set
+        {
+            if (_selectedPartnerDbId != value)
+            {
+                _selectedPartnerDbId = value;
+                _ = OnPartnerChanged();
+            }
+        }
+    }
+
+    private int? selectedPlatformId;
+    private int? selectedLogisticId;
+
+    private bool DisableSave => isSaving == true
+                                || selectedFile == null
+                                || isLookupLoading
+                                || !selectedPlatformId.HasValue
+                                || !selectedLogisticId.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // 1) ลองอ่านจาก AuthTokenProvider ก่อน (กรณีมาจาก Dashboard ใน circuit เดียวกัน)
+            token = TokenProvider.IdwToken;
+
+            // 2) ถ้ายังว่าง ให้ใช้ username/password จาก Claims ไป login ใหม่
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var user = authState.User;
+
+                var username =
+                    user.Identity?.Name
+                    ?? user.FindFirst("USERNAME")?.Value;
+
+                var password = TokenProvider.Password;
+
+                if (!string.IsNullOrWhiteSpace(username) &&
+                    !string.IsNullOrWhiteSpace(password))
+                {
+                    await LoginAsync(username, password);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                error = "Token is empty. กรุณาเข้า Dashboard (หน้าแรก) หรือ login ใหม่อีกครั้ง";
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+
+        await LoadLookupsAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(token)) return;
+        isLookupLoading = true;
+        try
+        {
+            var ct = CancellationToken.None;
+
+            partners = await IdwImportService.GetPartnersAsync(token!, partnerExternalId: null, ct);
+            platforms = await IdwImportService.GetPlatformsAsync(token!, ct);
+            logistics = await IdwImportService.GetLogisticsAsync(token!, ct);
+
+            SelectedPartnerDbId ??= partners?.FirstOrDefault()?.Id;
+            selectedPlatformId ??= platforms?.FirstOrDefault()?.Id;
+            selectedLogisticId ??= logistics?.FirstOrDefault()?.Id;
+
+            await LoadShopsForSelectedPartnerAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load lookups failed: {ex.Message}", "error");
+        }
+        finally
+        {
+            isLookupLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnPartnerChanged()
+    {
+        selectedShopDbId = null;
+        await LoadShopsForSelectedPartnerAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadShopsForSelectedPartnerAsync()
+    {
+        shops.Clear();
+
+        if (SelectedPartnerDbId is null || string.IsNullOrWhiteSpace(token))
+            return;
+
+        try
+        {
+            var list = await ShopSvc.GetShopsAsync(token!, SelectedPartnerDbId.Value);
+            shops.AddRange((list ?? new()).OrderBy(s => s.Name));
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load shops failed: {ex.Message}", "error");
+        }
+    }
+
+    private string CurrentPartnerExternalIdText
+        => partners?.FirstOrDefault(p => p.Id == SelectedPartnerDbId)?.PartnerId.ToString() ?? "-";
+
+    private static string? NormalizeToken(string? t)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return null;
+        t = t.Trim().Trim('"');
+        if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            t = t.Substring(7).Trim();
+        return t;
+    }
+
+    private static bool Is401(Exception ex) =>
+        ex.Message.Contains("401") || ex.Message.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase);
+
+    private async Task LoginAsync(string user, string pass)
+    {
+        var resp = await IdwImportService.LoginAsync(user, pass);
+        tokenRaw = resp?.Token;
+        token = NormalizeToken(tokenRaw);
+
+        if (string.IsNullOrWhiteSpace(token))
+            await JS.InvokeVoidAsync("showToast", "Login failed (no token)", "error");
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        selectedFileName = selectedFile.Name;
+
+        await using var stream = selectedFile.OpenReadStream(maxAllowedSize: 10_000_000);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+
+        previewText = Encoding.UTF8.GetString(ms.ToArray());
+        if (previewText.Length > 1000) previewText = previewText[..1000] + "... (truncated)";
+
+        cachedFileStream = new MemoryStream(ms.ToArray());
+    }
+
+    private async Task<UploadResponseDtos> DoUploadAsync()
+    {
+        var bytes = cachedFileStream!.ToArray();
+        await using var ms = new MemoryStream(bytes, writable: false);
+        return await IdwImportService.UploadImportAsync(
+            token!,
+            ms,
+            selectedFile!.Name,
+            shopId: selectedShopDbId,
+            miscIdPlatform: selectedPlatformId,
+            miscIdLogistic: selectedLogisticId,
+            CancellationToken.None
+        );
+    }
+
+    private async Task LoadRowsByBatchAsync(string? batchNo)
+    {
+        importedRows.Clear();
+        if (string.IsNullOrWhiteSpace(batchNo) || string.IsNullOrWhiteSpace(token)) return;
+
+        try
+        {
+            // ดึงรายการออเดอร์ทั้งหมดใน batch (ปรับ size ถ้าไฟล์ใหญ่)
+            var page = await IdwImportService.SearchAsync(
+                token!, batchNo, orderNo: null, sku: null,
+                page: 1, size: 1000, CancellationToken.None);
+
+            importedRows = page.Items ?? new List<IdwOrderDtos>();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Load rows failed: {ex.Message}", "error");
+        }
+    }
+
+    private async Task Save()
+    {
+        if (selectedFile == null || string.IsNullOrWhiteSpace(token) || cachedFileStream == null) return;
+        isSaving = true;
+        try
+        {
+            try
+            {
+                lastUpload = await DoUploadAsync();
+            }
+            catch (Exception ex) when (Is401(ex))
+            {
+                await LoginAsync("admin", "123456yjm");
+                lastUpload = await DoUploadAsync();
+            }
+
+            if (lastUpload != null && lastUpload.importId > 0)
+            {
+                importId = lastUpload.importId.ToString();
+
+                await JS.InvokeVoidAsync("showToast",
+                    $"Import {importId}: +{lastUpload.rows}, skippedDb={lastUpload.skippedDb}, skippedFile={lastUpload.skippedFile}",
+                    "success");
+
+                // 1) พยายามโหลดรายละเอียดตาม id (ถ้า API มี Rows)
+                lastImported = await IdwImportService.GetImportAsync(token!, lastUpload.importId) ?? new IdwImportDtos
+                {
+                    BatchNo = lastUpload.batchNo,
+                    RowCount = lastUpload.rows
+                };
+
+                // 2) Fallback: ถ้าไม่มี Rows ใน lastImported ให้ดึงด้วย batchNo
+                if (lastImported.Rows == null || lastImported.Rows.Count == 0)
+                {
+                    await LoadRowsByBatchAsync(lastUpload.batchNo);
+                }
+                else
+                {
+                    importedRows.Clear(); // ใช้ Rows ที่มากับ API
+                }
+
+                // clear file buffer
+                selectedFile = null;
+                selectedFileName = null;
+                previewText = null;
+                cachedFileStream?.Dispose();
+                cachedFileStream = null;
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("showToast", "Import failed", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", ex.Message, "error");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Delete()
+    {
+        if (string.IsNullOrWhiteSpace(token) || lastImported?.BatchNo is null) return;
+
+        var ok = await JS.InvokeAsync<bool>("confirm", $"Delete batch '{lastImported.BatchNo}' and all its rows?");
+        if (!ok) return;
+
+        isDelete = true;
+        try
+        {
+            await IdwImportService.DeleteImportByBatchAsync(token!, lastImported.BatchNo);
+            await JS.InvokeVoidAsync("showToast", $"Deleted batch {lastImported.BatchNo}", "success");
+            lastImported = null;
+            importId = null;
+            selectedFile = null;
+            selectedFileName = null;
+            previewText = null;
+            lastUpload = null;
+            importedRows.Clear();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", $"Delete failed: {ex.Message}", "error");
+        }
+        finally
+        {
+            isDelete = false;
+            StateHasChanged();
+        }
+    }
+
+    private void IdwImportEditForm(long id) => Navigation.NavigateTo($"/IdwImportEdit/{id}");
+    private void Cancel() { selectedFile = null; selectedFileName = null; previewText = null; }
+    private void ClearImported() { lastImported = null; lastUpload = null; importedRows.Clear(); }
+}

@@ -1,0 +1,840 @@
+﻿@page "/UserEdit/{id:int}"
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject IHttpClientFactory ClientFactory
+@inject IOptions<ApiSettings> Options
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<h3>@(id == 0 ? "Create User" : $"Edit User #{id}")</h3>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<div class="card">
+    <div class="card-body">
+        <EditForm Model="model" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <div class="row g-3">
+                <!-- Username -->
+                <div class="col-md-4">
+                    <label class="form-label">Username</label>
+                    <InputText class="form-control" @bind-Value="model.Username" />
+                </div>
+
+                <!-- Password -->
+                <div class="col-md-4">
+                    <label class="form-label">Password @(isExisting ? "(leave blank to keep)" : "")</label>
+                    <InputText type="password" class="form-control" @bind-Value="password" />
+                </div>
+
+                <!-- Role (string) -->
+                <div class="col-md-4">
+                    <label class="form-label">Role</label>
+                    <InputSelect class="form-select" @bind-Value="model.Role">
+                        <option value="Admin">Admin</option>
+                        <option value="FrontLine">FrontLine</option>
+                        <option value="SaleReport">SaleReport</option>
+                    </InputSelect>
+                </div>
+
+                <!-- Fullname / Email / Phone -->
+                <div class="col-md-6">
+                    <label class="form-label">Fullname</label>
+                    <InputText class="form-control" @bind-Value="model.Fullname" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Email</label>
+                    <InputText class="form-control" @bind-Value="model.Email" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Phone</label>
+                    <InputText class="form-control" @bind-Value="model.Phone" />
+                </div>
+
+                <!-- QR (readonly) -->
+                <div class="col-md-12">
+                    <label class="form-label">QR Content (read-only)</label>
+                    <input class="form-control" value="@model.QrLogin" disabled />
+                </div>
+
+                <!-- Actions -->
+                <div class="col-12">
+                    <div class="d-flex align-items-start gap-3">
+                        <!-- Left: Save / Back -->
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button class="btn btn-primary" type="submit">Save</button>
+                            <button class="btn btn-outline-secondary" type="button" @onclick="Back">Back</button>
+                        </div>
+
+                        <span class="ms-auto"></span>
+
+                        <!-- Right: QR + buttons + status -->
+                        <div class="d-flex align-items-start gap-3">
+                            @if (!string.IsNullOrWhiteSpace(model.QrLogin))
+                            {
+                                <div class="text-center" style="width:160px;">
+                                    <img src="@BuildQrImageUrl(model.QrLogin, 140)"
+                                         alt="QR" width="140" height="140"
+                                         class="border rounded bg-white p-1 shadow-sm" />
+                                    <div class="small text-muted mt-1">ภาพ QR ปัจจุบัน</div>
+                                </div>
+                            }
+
+                            <div class="d-flex flex-column">
+                                <div class="d-flex gap-2 flex-wrap mb-2">
+                                    @if (!string.IsNullOrWhiteSpace(model.QrLogin))
+                                    {
+                                        <button class="btn btn-outline-secondary"
+                                                type="button"
+                                                disabled="@string.IsNullOrWhiteSpace(model.QrLogin)"
+                                                @onclick="DownloadCurrentQr">
+                                            Download QR
+                                        </button>
+                                    }
+
+                                    <button class="btn btn-outline-info" type="button"
+                                            title="Generate new QR and preview for download"
+                                            @onclick="GenerateQr">
+                                        Gen QR
+                                    </button>
+
+                                    @if (model.IsApproveQr == 1)
+                                    {
+                                        <button class="btn btn-outline-warning" type="button" @onclick="Revoke">
+                                            Revoke QR
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-success" type="button" @onclick="Approve">
+                                            Approve QR
+                                        </button>
+                                    }
+
+                                    @if (model.IsActive == 1)
+                                    {
+                                        <button class="btn btn-outline-danger" type="button" @onclick="Deactivate">Deactivate</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-outline-success" type="button" @onclick="Activate">Activate</button>
+                                    }
+                                </div>
+
+                                <div class="d-flex gap-4 align-items-center">
+                                    <div>
+                                        <span class="me-1">QR Status:</span>
+                                        @if (model.IsApproveQr == 1)
+                                        {
+                                            <span class="badge bg-success">Approved</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning text-dark">Pending</span>
+                                        }
+                                    </div>
+                                    <div>
+                                        <span class="me-1">Account Status:</span>
+                                        @if (model.IsActive == 1)
+                                        {
+                                            <span class="badge bg-success">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@if (!isExisting)
+{
+    <div class="alert alert-info mt-3">
+        Save user first, then you can manage locations.
+    </div>
+}
+else
+{
+    <div class="card mt-3">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h5 class="card-title mb-0">User Locations</h5>
+                <div class="text-muted small">
+                    <span class="me-2">User: @id</span>
+                    <span class="badge bg-secondary">@rows.Count assigned</span>
+                </div>
+            </div>
+
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Add Location</label>
+                    <select class="form-select" @bind="selectedLocationId" disabled="@isBusy">
+                        <option value="0">-- Select Location --</option>
+                        @foreach (var opt in locationOptions)
+                        {
+                            <option value="@opt.Id">@opt.Name (@opt.Id)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100" disabled="@isBusy" @onclick="AddLocation">
+                        + Add
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex gap-2 justify-content-end">
+                        <button class="btn btn-outline-secondary" disabled="@isBusy" @onclick="LoadUserLocations">
+                            Refresh
+                        </button>
+                        <button class="btn btn-success" disabled="@isBusy" title="Replace all mappings with current table"
+                                @onclick="SaveReplaceAll">
+                            Save (Replace All)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">Location ID</th>
+                            <th>Location Name</th>
+                            <th style="width: 240px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (rows.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="3" class="text-muted">No locations assigned.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var r in rows.OrderBy(x => x.LocationName))
+                            {
+                                <tr>
+                                    <td>@r.LocationId</td>
+                                    <td>
+                                        @if (!r.IsEditing)
+                                        {
+                                            @r.LocationName
+                                        }
+                                        else
+                                        {
+                                            <select class="form-select form-select-sm" @bind="r.EditLocationId" disabled="@isBusy">
+                                                <option value="0">-- Select Location --</option>
+                                                @foreach (var opt in locationOptions)
+                                                {
+                                                    <option value="@opt.Id">@opt.Name (@opt.Id)</option>
+                                                }
+                                            </select>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!r.IsEditing)
+                                        {
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-secondary" disabled="@isBusy"
+                                                        @onclick="EventCallback.Factory.Create<MouseEventArgs>(this, () => BeginEdit(r))">
+                                                    Edit
+                                                </button>
+
+                                                <button class="btn btn-outline-danger" disabled="@isBusy"
+                                                        @onclick="EventCallback.Factory.Create<MouseEventArgs>(this, () => DeleteRow(r))">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-success" disabled="@isBusy"
+                                                        @onclick="EventCallback.Factory.Create<MouseEventArgs>(this, () => ApplyEdit(r))">
+                                                    Save
+                                                </button>
+
+                                                <button class="btn btn-outline-secondary" disabled="@isBusy"
+                                                        @onclick="EventCallback.Factory.Create<MouseEventArgs>(this, () => CancelEdit(r))">
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (isBusy)
+            {
+                <div class="text-center text-muted small mt-2">Processing...</div>
+            }
+        </div>
+    </div>
+}
+
+@if (showQrModal && !string.IsNullOrWhiteSpace(qrImageUrl))
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.35);">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">QR Preview</h5>
+                    <button class="btn-close" type="button" @onclick="CloseQrModal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="@qrImageUrl" alt="QR" class="img-fluid border rounded bg-white p-2" />
+                    <div class="small text-muted mt-2 text-break">@model.QrLogin</div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between">
+                    <button class="btn btn-outline-secondary" @onclick="DownloadPreviewQr">
+                        Download PNG
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int id { get; set; }
+
+    // ---------- Fixed token ----------
+    private const string FIXED_TOKEN = "9f4d7c83-21a4-4aaf-9401-6a21717e5460";
+
+    // ---------- JS-safe (prerender) ----------
+    private bool _isClientReady;
+    private readonly Queue<(string msg, string type)> _toastQueue = new();
+    private async Task SafeToast(string message, string type = "info")
+    {
+        if (_isClientReady) await JS.InvokeVoidAsync("showToast", message, type);
+        else _toastQueue.Enqueue((message, type));
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _isClientReady = true;
+        while (_toastQueue.Count > 0) { var (m, t) = _toastQueue.Dequeue(); await JS.InvokeVoidAsync("showToast", m, t); }
+
+        try
+        {
+            loading = true;
+            if (isExisting)
+            {
+                await LoadUser();
+                await LoadLocationOptions();
+                await LoadUserLocations();
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            await SafeToast(ex.Message, "error");
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ---------- UI / State ----------
+    private UserEditModel model = new() { Role = "FrontLine", IsActive = 0 };
+    private bool isExisting => id != 0;
+    private string? password;
+
+    private bool loading;
+    private string? error;
+
+    // QR modal
+    private bool showQrModal;
+    private string? qrImageUrl;
+    private bool sendingMail;
+
+    // Locations
+    private List<LocationOption> locationOptions = new();
+    private List<UserLocationView> rows = new();
+    private int selectedLocationId;
+    private bool isBusy;
+
+    // ---------- Base URL ----------
+    private string BaseSafe => RequireAbsoluteUrl(Options?.Value?.ApiBaseUrl);
+    private static string RequireAbsoluteUrl(string? url)
+    {
+        var s = (url ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(s))
+            throw new InvalidOperationException("ApiBaseUrl is empty. Set ApiSettings:ApiBaseUrl in appsettings.");
+        if (!Uri.TryCreate(s, UriKind.Absolute, out var u))
+            throw new InvalidOperationException($"ApiBaseUrl is not an absolute URL: '{s}'");
+        var abs = u.ToString();
+        if (!abs.EndsWith("/")) abs += "/";
+        return abs;
+    }
+    private static string StripBearer(string? tok)
+    {
+        if (string.IsNullOrWhiteSpace(tok)) return string.Empty;
+        var t = tok.Trim();
+        if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) t = t["Bearer ".Length..].Trim();
+        return t;
+    }
+
+    private HttpClient MakeClient()
+    {
+        var c = ClientFactory.CreateClient();
+        c.BaseAddress = new Uri(BaseSafe, UriKind.Absolute);
+        c.DefaultRequestHeaders.Accept.Clear();
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        var t = StripBearer(FIXED_TOKEN);
+        c.DefaultRequestHeaders.Authorization =
+            string.IsNullOrWhiteSpace(t) ? null : new AuthenticationHeaderValue("Bearer", t);
+        return c;
+    }
+
+    // ---------- Data loaders ----------
+    private async Task LoadUser()
+    {
+        var res = await MakeClient().GetFromJsonAsync<UserEditModel>($"api/Users/{id}");
+        if (res != null)
+        {
+            model = res;
+            model.Role = CanonicalRole(model.Role);
+        }
+    }
+
+    private static string CanonicalRole(string? role)
+    {
+        if (string.IsNullOrWhiteSpace(role)) return "";
+        var r = role.Trim().Replace(" ", "").Replace("_", "");
+        return r.ToLowerInvariant() switch
+        {
+            "admin" => "Admin",
+            "frontline" => "FrontLine",
+            "salereport" => "SaleReport",
+            _ => role
+        };
+    }
+
+    // ---------- Save / Back ----------
+    private async Task Save()
+    {
+        try
+        {
+            var client = MakeClient();
+            HttpResponseMessage resp;
+
+            var payload = new SaveUserDtos
+            {
+                Username = model.Username ?? string.Empty,
+                Password = password ?? string.Empty,  // ว่าง = ไม่เปลี่ยน
+                Fullname = model.Fullname ?? string.Empty,
+                Phone = model.Phone ?? string.Empty,
+                Email = model.Email ?? string.Empty,
+                Role = CanonicalRole(model.Role),
+                IsActive = model.IsActive
+            };
+
+            resp = id == 0
+                ? await client.PostAsJsonAsync("api/Users", payload)
+                : await client.PutAsJsonAsync($"api/Users/{id}", payload);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                await SafeToast("Saved.", "success");
+                if (id == 0)
+                {
+                    var created = await resp.Content.ReadFromJsonAsync<UserIdResponse>();
+                    if (created != null) Nav.NavigateTo($"/UserEdit/{created.Id}");
+                }
+            }
+            else
+            {
+                var msg = await resp.Content.ReadAsStringAsync();
+                await SafeToast($"Save failed: {msg}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await SafeToast($"Save error: {ex.Message}", "error");
+        }
+    }
+
+    private void Back() => Nav.NavigateTo("/UserList");
+
+    // ---------- QR actions ----------
+    private async Task Approve()
+    {
+        var resp = await MakeClient().PutAsync($"api/Users/{id}/approve-qr", null);
+        if (resp.IsSuccessStatusCode)
+        {
+            model.IsApproveQr = 1;
+            await SafeToast("QR approved.", "success");
+        }
+        else
+        {
+            await SafeToast($"Approve failed: {await resp.Content.ReadAsStringAsync()}", "error");
+        }
+    }
+
+    private async Task Revoke()
+    {
+        var resp = await MakeClient().PutAsync($"api/Users/{id}/revoke-qr", null);
+        if (resp.IsSuccessStatusCode)
+        {
+            model.IsApproveQr = 0;
+            await SafeToast("QR revoked.", "success");
+        }
+        else
+        {
+            await SafeToast($"Revoke failed: {await resp.Content.ReadAsStringAsync()}", "error");
+        }
+    }
+
+    private string BuildQrImageUrl(string? text, int size = 280)
+        => string.IsNullOrWhiteSpace(text)
+            ? ""
+            : $"https://quickchart.io/qr?size={size}&text={Uri.EscapeDataString(text)}";
+
+    private void CloseQrModal()
+    {
+        showQrModal = false;
+        qrImageUrl = null;
+    }
+
+    private async Task DownloadQr(string url)
+    {
+        var file = $"qr-{(model.Username ?? "user")}-{DateTime.UtcNow:yyyyMMddHHmmss}.png";
+        await JS.InvokeVoidAsync("downloadFileFromUrl", url, file);
+    }
+
+    private async Task DownloadCurrentQr()
+    {
+        if (string.IsNullOrWhiteSpace(model.QrLogin))
+        {
+            await SafeToast("No QR to download.", "warning");
+            return;
+        }
+        var url = BuildQrImageUrl(model.QrLogin, 512);
+        await DownloadQr(url);
+    }
+
+    private async Task DownloadPreviewQr()
+    {
+        if (!string.IsNullOrWhiteSpace(qrImageUrl))
+            await DownloadQr(qrImageUrl!);
+    }
+
+    private async Task GenerateQr()
+    {
+        if (!isExisting)
+        {
+            await SafeToast("Save user ก่อน แล้วค่อย Gen QR", "warning");
+            return;
+        }
+        var ok = await JS.InvokeAsync<bool>("confirmToast",
+            "Generate new QR? คุณจะเห็นภาพเพื่อดาวน์โหลดได้ทันที",
+            "Generate", "Cancel", "info");
+        if (!ok) return;
+
+        try
+        {
+            var client = MakeClient();
+            var resp = await client.PostAsync($"api/Users/{id}/generate-qr?email=false", null);
+            if (!resp.IsSuccessStatusCode)
+            {
+                resp = await client.PostAsync($"api/Users/{id}/generate-qr", null);
+            }
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var x = await resp.Content.ReadFromJsonAsync<GenQrResponse>();
+                model.QrLogin = x?.Qr ?? model.QrLogin;
+
+                qrImageUrl = BuildQrImageUrl(model.QrLogin, 512);
+                showQrModal = true;
+
+                await SafeToast("QR generated. ดาวน์โหลดได้จากหน้าต่างที่แสดง", "success");
+            }
+            else
+            {
+                await SafeToast($"Generate failed: {await resp.Content.ReadAsStringAsync()}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await SafeToast($"Generate failed: {ex.Message}", "error");
+        }
+    }
+
+    // ---------- Active / Inactive ----------
+    private async Task Activate()
+    {
+        var resp = await MakeClient().PutAsync($"api/Users/{id}/activate", null);
+        if (resp.IsSuccessStatusCode)
+        {
+            model.IsActive = 1;
+            await SafeToast("User activated.", "success");
+        }
+        else
+        {
+            await SafeToast($"Activate failed: {await resp.Content.ReadAsStringAsync()}", "error");
+        }
+    }
+
+    private async Task Deactivate()
+    {
+        var resp = await MakeClient().PutAsync($"api/Users/{id}/deactivate", null);
+        if (resp.IsSuccessStatusCode)
+        {
+            model.IsActive = 0;
+            await SafeToast("User deactivated.", "success");
+        }
+        else
+        {
+            await SafeToast($"Deactivate failed: {await resp.Content.ReadAsStringAsync()}", "error");
+        }
+    }
+
+    // ---------- Locations ----------
+    private async Task LoadLocationOptions()
+    {
+        try
+        {
+            var data = await MakeClient().GetFromJsonAsync<List<LocationOption>>("api/locations/dropdown");
+            locationOptions = data ?? new List<LocationOption>();
+        }
+        catch (Exception ex)
+        {
+            await SafeToast($"Load locations failed: {ex.Message}", "error");
+        }
+    }
+
+    private async Task LoadUserLocations()
+    {
+        isBusy = true;
+        try
+        {
+            var data = await MakeClient().GetFromJsonAsync<List<UserLocationDtos>>($"api/userlocations/user/{id}");
+            var list = data ?? new List<UserLocationDtos>();
+            rows = list
+                .Select(d => new UserLocationView
+                {
+                    UserId = d.UserId,
+                    LocationId = d.LocationId,
+                    LocationName = locationOptions.FirstOrDefault(o => o.Id == d.LocationId)?.Name ?? $"#{d.LocationId}",
+                    EditLocationId = d.LocationId
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await SafeToast($"Load mappings failed: {ex.Message}", "error");
+        }
+        finally { isBusy = false; }
+    }
+
+    private async Task AddLocation()
+    {
+        if (selectedLocationId <= 0)
+        {
+            await SafeToast("Please select a location.", "warning");
+            return;
+        }
+
+        if (rows.Any(r => r.LocationId == selectedLocationId))
+        {
+            await SafeToast("This location is already assigned.", "warning");
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            var res = await MakeClient().PostAsJsonAsync("api/userlocations", new UserLocationDtos { UserId = id, LocationId = selectedLocationId });
+            if (!res.IsSuccessStatusCode)
+            {
+                var msg = await res.Content.ReadAsStringAsync();
+                await SafeToast($"Add failed: {msg}", "error");
+                return;
+            }
+
+            var name = locationOptions.FirstOrDefault(o => o.Id == selectedLocationId)?.Name ?? $"#{selectedLocationId}";
+            rows.Add(new UserLocationView
+            {
+                UserId = id,
+                LocationId = selectedLocationId,
+                LocationName = name,
+                EditLocationId = selectedLocationId
+            });
+
+            selectedLocationId = 0;
+            await SafeToast("Added.", "success");
+        }
+        catch (Exception ex)
+        {
+            await SafeToast($"Add failed: {ex.Message}", "error");
+        }
+        finally { isBusy = false; }
+    }
+
+    private void BeginEdit(UserLocationView r)
+    {
+        r.IsEditing = true;
+        r.EditLocationId = r.LocationId;
+    }
+
+    private void CancelEdit(UserLocationView r)
+    {
+        r.IsEditing = false;
+        r.EditLocationId = r.LocationId;
+    }
+
+    private async Task ApplyEdit(UserLocationView r)
+    {
+        if (r.EditLocationId <= 0)
+        {
+            await SafeToast("Please select a location.", "warning");
+            return;
+        }
+
+        if (r.EditLocationId == r.LocationId)
+        {
+            r.IsEditing = false;
+            return;
+        }
+
+        if (rows.Any(x => x.LocationId == r.EditLocationId))
+        {
+            await SafeToast("Target location already assigned.", "warning");
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            var del = await MakeClient().DeleteAsync($"api/userlocations/user/{r.UserId}/location/{r.LocationId}");
+            if (!del.IsSuccessStatusCode)
+            {
+                await SafeToast($"Update failed (delete): {await del.Content.ReadAsStringAsync()}", "error");
+                return;
+            }
+
+            var add = await MakeClient().PostAsJsonAsync("api/userlocations", new UserLocationDtos { UserId = r.UserId, LocationId = r.EditLocationId });
+            if (!add.IsSuccessStatusCode)
+            {
+                await SafeToast($"Update failed (add): {await add.Content.ReadAsStringAsync()}", "error");
+                return;
+            }
+
+            r.LocationId = r.EditLocationId;
+            r.LocationName = locationOptions.FirstOrDefault(o => o.Id == r.LocationId)?.Name ?? $"#{r.LocationId}";
+            r.IsEditing = false;
+
+            await SafeToast("Updated.", "success");
+        }
+        catch (Exception ex)
+        {
+            await SafeToast($"Update failed: {ex.Message}", "error");
+        }
+        finally { isBusy = false; }
+    }
+
+    private async Task DeleteRow(UserLocationView r)
+    {
+        isBusy = true;
+        try
+        {
+            var res = await MakeClient().DeleteAsync($"api/userlocations/user/{r.UserId}/location/{r.LocationId}");
+            if (!res.IsSuccessStatusCode)
+            {
+                await SafeToast($"Delete failed: {await res.Content.ReadAsStringAsync()}", "error");
+                return;
+            }
+
+            rows.Remove(r);
+            await SafeToast("Deleted.", "success");
+        }
+        catch (Exception ex)
+        {
+            await SafeToast($"Delete failed: {ex.Message}", "error");
+        }
+        finally { isBusy = false; }
+    }
+
+    private async Task SaveReplaceAll()
+    {
+        isBusy = true;
+        try
+        {
+            var locIds = rows.Select(x => x.LocationId).Distinct().ToArray();
+            var res = await MakeClient().PutAsJsonAsync($"api/userlocations/user/{id}", new UpdateUserLocationsRequest { LocationIds = locIds });
+            if (!res.IsSuccessStatusCode)
+            {
+                await SafeToast($"Save failed: {await res.Content.ReadAsStringAsync()}", "error");
+                return;
+            }
+
+            await SafeToast("Saved.", "success");
+            await LoadUserLocations();
+        }
+        catch (Exception ex)
+        {
+            await SafeToast($"Save failed: {ex.Message}", "error");
+        }
+        finally { isBusy = false; }
+    }
+
+    // ===== Models / Dtos =====
+    public class UserEditModel
+    {
+        public int Id { get; set; }
+        public string? Username { get; set; }
+        public string? Fullname { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Role { get; set; }
+        public string? QrLogin { get; set; }
+        public int IsApproveQr { get; set; }
+        public int IsActive { get; set; }
+    }
+
+    public class SaveUserDtos
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string Fullname { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public int IsActive { get; set; }
+    }
+
+    public class UserIdResponse { public int Id { get; set; } }
+    public class GenQrResponse { public string Qr { get; set; } = string.Empty; }
+
+    public class LocationOption { public int Id { get; set; } public string Name { get; set; } = ""; }
+    public class UserLocationDtos { public int UserId { get; set; } public int LocationId { get; set; } }
+    public class UpdateUserLocationsRequest { public int[] LocationIds { get; set; } = Array.Empty<int>(); }
+    public class UserLocationView
+    {
+        public int UserId { get; set; }
+        public int LocationId { get; set; }
+        public string LocationName { get; set; } = "";
+        public bool IsEditing { get; set; } = false;
+        public int EditLocationId { get; set; }
+    }
+}

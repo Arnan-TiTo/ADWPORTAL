@@ -28,6 +28,151 @@ public class IdwImportService
 
     private static JsonSerializerOptions JsonOpts => new() { PropertyNameCaseInsensitive = true };
 
+    // === Loose JSON parsing helpers (รองรับ response หลายรูปแบบ และ key แบบ snake_case) ===
+    private static bool TryGetProp(JsonElement obj, string name, out JsonElement value)
+    {
+        if (obj.ValueKind == JsonValueKind.Object && obj.TryGetProperty(name, out value))
+            return true;
+        value = default;
+        return false;
+    }
+
+    private static string? GetStringAny(JsonElement obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            if (TryGetProp(obj, n, out var v))
+            {
+                if (v.ValueKind == JsonValueKind.String) return v.GetString();
+                if (v.ValueKind == JsonValueKind.Number) return v.GetRawText();
+            }
+        }
+        return null;
+    }
+
+    private static int GetIntAny(JsonElement obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            if (TryGetProp(obj, n, out var v))
+            {
+                if (v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i)) return i;
+                if (v.ValueKind == JsonValueKind.String && int.TryParse(v.GetString(), out var s)) return s;
+            }
+        }
+        return 0;
+    }
+
+    private static long GetLongAny(JsonElement obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            if (TryGetProp(obj, n, out var v))
+            {
+                if (v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var i)) return i;
+                if (v.ValueKind == JsonValueKind.String && long.TryParse(v.GetString(), out var s)) return s;
+            }
+        }
+        return 0;
+    }
+
+    private static DateTime GetDateAny(JsonElement obj, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            if (TryGetProp(obj, n, out var v))
+            {
+                if (v.ValueKind == JsonValueKind.String && DateTime.TryParse(v.GetString(), out var dt))
+                    return dt;
+            }
+        }
+        return DateTime.MinValue;
+    }
+
+    private static PagedResult<IdwImportDtos>? TryParseImportsLoose(string json, int page, int size)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            JsonElement arr;
+            int total = 0;
+
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                arr = root;
+                total = arr.GetArrayLength();
+            }
+            else if (root.ValueKind == JsonValueKind.Object)
+            {
+                // common wrappers: { items: [...] }, { data: [...] }, { result: { items: [...] } }
+                if (TryGetProp(root, "items", out arr) || TryGetProp(root, "Items", out arr) ||
+                    TryGetProp(root, "data", out arr) || TryGetProp(root, "Data", out arr))
+                {
+                    // ok
+                }
+                else if (TryGetProp(root, "result", out var resultObj) && resultObj.ValueKind == JsonValueKind.Object &&
+                         (TryGetProp(resultObj, "items", out arr) || TryGetProp(resultObj, "Items", out arr) ||
+                          TryGetProp(resultObj, "data", out arr) || TryGetProp(resultObj, "Data", out arr)))
+                {
+                    // ok
+                }
+                else
+                {
+                    return null;
+                }
+
+                total = GetIntAny(root, "totalItems", "TotalItems", "total", "Total", "total_items")
+                        ;
+                if (total <= 0 && arr.ValueKind == JsonValueKind.Array) total = arr.GetArrayLength();
+            }
+            else
+            {
+                return null;
+            }
+
+            if (arr.ValueKind != JsonValueKind.Array) return null;
+
+            var items = new List<IdwImportDtos>();
+            foreach (var it in arr.EnumerateArray())
+            {
+                if (it.ValueKind != JsonValueKind.Object) continue;
+
+                var dto = new IdwImportDtos
+                {
+                    Id = GetLongAny(it, "id", "Id"),
+                    BatchNo = GetStringAny(it, "batchNo", "BatchNo", "batch_no", "batchno"),
+                    FileName = GetStringAny(it, "fileName", "FileName", "file_name"),
+                    CompanyName = GetStringAny(it, "companyName", "CompanyName", "company_name"),
+                    PlatformName = GetStringAny(it, "platformName", "PlatformName", "platform_name"),
+                    LogisticName = GetStringAny(it, "logisticName", "LogisticName", "logistic_name"),
+                    RowCount = GetIntAny(it, "rowCount", "RowCount", "row_count"),
+                    ImportedAt = GetDateAny(it, "importedAt", "ImportedAt", "imported_at", "createdAt", "CreatedAt", "created_at")
+                };
+
+                // บาง API อาจเก็บ miscIdPlatform/miscIdLogistic/companyId มา
+                dto.CompanyId = GetIntAny(it, "companyId", "CompanyId", "company_id");
+                dto.MiscIdPlatform = GetIntAny(it, "miscIdPlatform", "MiscIdPlatform", "misc_id_platform");
+                dto.MiscIdLogistic = GetIntAny(it, "miscIdLogistic", "MiscIdLogistic", "misc_id_logistic");
+
+                items.Add(dto);
+            }
+
+            return new PagedResult<IdwImportDtos>
+            {
+                Page = page,
+                Size = size,
+                TotalItems = total <= 0 ? items.Count : total,
+                Items = items
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private HttpClient CreateClient(string? token)
     {
         var http = _factory.CreateClient("IdwApiBaseUrl"); // reuse same named client
@@ -105,6 +250,135 @@ public class IdwImportService
 
         if (!res.IsSuccessStatusCode) return null;
         return JsonSerializer.Deserialize<IdwImportDtos>(json, JsonOpts);
+    }
+
+    /// <summary>
+    /// ค้นหารายการ Import เพื่อใช้เลือก Batch No (รองรับหลายรูปแบบ response)
+    /// </summary>
+    public async Task<PagedResult<IdwImportDtos>> SearchImportsAsync(
+        string token,
+        string? batchContains,
+        int page = 1,
+        int size = 50,
+        CancellationToken ct = default)
+    {
+        using var http = CreateClient(token);
+
+        // พยายามเรียก endpoint ที่มักพบ: GET api/TblImport (อาจรองรับ query)
+        async Task<(bool ok, int status, string body, string url)> TryGet(string url)
+        {
+            var res = await http.GetAsync(url, ct);
+            var body = await res.Content.ReadAsStringAsync(ct);
+            return (res.IsSuccessStatusCode, (int)res.StatusCode, body ?? "", url);
+        }
+
+        var qs = new Dictionary<string, string?>();
+        // backend บางตัวใช้ชื่อ query ไม่เหมือนกัน (batchNo/batch/batch_contains)
+        if (!string.IsNullOrWhiteSpace(batchContains))
+        {
+            qs["batchNo"] = batchContains;
+            qs["batch"] = batchContains;
+            qs["q"] = batchContains;
+        }
+        if (page > 0) qs["page"] = page.ToString(CultureInfo.InvariantCulture);
+        if (size > 0) qs["size"] = size.ToString(CultureInfo.InvariantCulture);
+
+        string url1 = qs.Count > 0
+            ? Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/TblImport", qs)
+            : "api/TblImport";
+
+        // fallback urls (บาง backend จะใช้ /list หรือ /search หรือ /batch)
+        string url2 = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/TblImport/list", qs);
+        string url3 = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/TblImport/search", qs);
+        string url4 = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/TblImport/batch", qs);
+        string url5 = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/TblImport/batches", qs);
+
+        // extra fallbacks (newer IDW controllers)
+        string url6 = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/idw/imports", qs);
+        string url7 = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/idw/imports/list", qs);
+        string url8 = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/idw/imports/search", qs);
+        string url9 = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/idw/import/batches", qs);
+
+        var tries = new[] { url1, url2, url3, url4, url5, url6, url7, url8, url9 };
+        string lastJson = "";
+
+        var errors = new List<string>();
+
+        static string Trunc(string s, int n = 300)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return "(empty body)";
+            s = s.Replace("\r", " ").Replace("\n", " ");
+            return s.Length <= n ? s : s.Substring(0, n) + "...";
+        }
+
+        foreach (var u in tries)
+        {
+            var (ok, status, json, url) = await TryGet(u);
+            lastJson = json;
+
+            if (!ok)
+            {
+                errors.Add($"{status} {url} :: {Trunc(json)}");
+                continue;
+            }
+
+            // fallback (ถ้า parse ได้แต่ไม่ match field)
+            PagedResult<IdwImportDtos>? parsedPaged = null;
+
+            // 1) PagedResult<IdwImportDtos>
+            try
+            {
+                var paged = JsonSerializer.Deserialize<PagedResult<IdwImportDtos>>(json, JsonOpts);
+                if (paged?.Items is not null)
+                {
+                    parsedPaged = paged;
+                    // ถ้าไม่มีข้อมูล ก็ถือว่า OK (ผลลัพธ์ว่าง)
+                    if (paged.Items.Count == 0) return paged;
+
+                    // ถ้า parse ได้และมี batchNo มาแล้ว ถือว่า OK
+                    if (paged.Items.Any(x => !string.IsNullOrWhiteSpace(x.BatchNo)))
+                        return paged;
+
+                    // แต่ถ้า Items มีจริงแต่ batchNo ว่างหมด (มักเกิดจากชื่อ key ไม่ match) ให้ลอง loose parser ต่อ
+                }
+            }
+            catch { /* ignore */ }
+
+            // 1.1) Loose parse (รองรับ wrapper และ snake_case)
+            var loose = TryParseImportsLoose(json, page, size);
+            if (loose?.Items is not null)
+            {
+                if (loose.Items.Count == 0) return loose;
+                if (loose.Items.Any(x => !string.IsNullOrWhiteSpace(x.BatchNo))) return loose;
+            }
+
+            // 2) List<IdwImportDtos>
+            try
+            {
+                var list = JsonSerializer.Deserialize<List<IdwImportDtos>>(json, JsonOpts);
+                if (list is not null)
+                {
+                    return new PagedResult<IdwImportDtos>
+                    {
+                        Page = page,
+                        Size = size,
+                        TotalItems = list.Count,
+                        Items = list
+                    };
+                }
+            }
+            catch { /* ignore */ }
+
+            // 2.1) Loose parse list root
+            var loose2 = TryParseImportsLoose(json, page, size);
+            if (loose2?.Items is not null && loose2.Items.Count > 0)
+                return loose2;
+
+            // สุดท้าย ถ้า parse PagedResult ได้แล้ว อย่างน้อยก็คืนมันไปก่อน
+            if (parsedPaged is not null) return parsedPaged;
+        }
+
+        throw new Exception("SearchImports failed. Tried endpoints:\n" + string.Join("\n", errors));
     }
 
     // ===== Search (ยังรองรับหลายทรงของ API) =====

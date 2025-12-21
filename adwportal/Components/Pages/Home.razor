@@ -6,6 +6,7 @@
 @using Microsoft.Extensions.Options
 @using Microsoft.AspNetCore.Components.Authorization
 @using adwportal.Models
+@using adwportal.Dtos
 @using adwportal.Services
 
 @inject IHttpClientFactory ClientFactory
@@ -15,6 +16,7 @@
 @inject IdwImportService IdwSvc
 @inject MdwMarketplaceService MdwSvc
 @inject AuthTokenProvider TokenProvider
+@inject MiscService MiscSvc
 
 @implements IDisposable
 
@@ -45,7 +47,7 @@
 </style>
 
 <h3 class="mb-3 d-flex align-items-center justify-content-between">
-    <span>Dashboard</span>
+    <span>Dashboard (@DashboardPlatform)</span>
     <div class="d-flex gap-2 align-items-center">
         <button class="btn btn-sm btn-outline-primary" @onclick="ManualRefresh" disabled="@isLoading">
             @if (isLoading)
@@ -136,9 +138,10 @@
             <label class="muted-small mb-0">Platform</label>
             <select class="form-select form-select-sm" style="width:160px" @bind="jobPlatformFilter">
                 <option value="">(All)</option>
-                <option value="Shopee">Shopee</option>
-                <option value="Lazada">Lazada</option>
-                <option value="TikTok">TikTok</option>
+                @foreach (var p in platformOptions)
+                {
+                    <option value="@p">@p</option>
+                }
             </select>
         </div>
     </div>
@@ -199,6 +202,9 @@
 </div>
 
 @code {
+    // ===== Dashboard แสดงทุก platform =====
+    private const string DashboardPlatform = "All"; // แสดงทุก platform
+
     private string? error;
 
     // ===== STATE =====
@@ -206,6 +212,9 @@
     private List<JobLogDto> jobList = new();
     private List<JobLogDto> filteredJobs = new();
     private string jobPlatformFilter = "";
+
+    // Platform dropdown options (from Misc where Type='Platform')
+    private List<string> platformOptions = new();
 
     private bool isLoading = false;
     private DateTime lastRefreshedUtc = DateTime.MinValue;
@@ -323,14 +332,55 @@
         return t;
     }
 
+    private static string CanonicalPlatform(string? platform)
+    {
+        if (string.IsNullOrWhiteSpace(platform)) return "";
+        var p = platform.Trim();
+        if (p.Equals("tiktok", StringComparison.OrdinalIgnoreCase) || p.Equals("tik tok", StringComparison.OrdinalIgnoreCase)) return "TikTok";
+        if (p.Equals("shopee", StringComparison.OrdinalIgnoreCase)) return "Shopee";
+        if (p.Equals("lazada", StringComparison.OrdinalIgnoreCase)) return "Lazada";
+        return p;
+    }
+
+    private async Task EnsurePlatformOptions()
+    {
+        if (platformOptions.Count > 0) return;
+        if (string.IsNullOrWhiteSpace(idwToken)) return;
+        try
+        {
+            var plats = await MiscSvc.GetMiscAsync(idwToken, type: "Platform");
+            platformOptions = (plats ?? new List<MiscDtos>())
+                .Where(x => x.IsActive)
+                .Select(x => CanonicalPlatform(!string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToList();
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
     /// <summary>
-    /// ใช้ username/password จาก login (เก็บใน Claims) ไป login MDW + IDW เพื่อเอา token
+    /// ใช้ username/password จาก login (เก็บใน Session ผ่าน TokenProvider) ไป login MDW + IDW เพื่อเอา token
     /// </summary>
     private async Task RefreshToken()
     {
         try
         {
             isLoadingToken = true;
+
+            // 1. ถ้ามี Token อยู่แล้ว ให้ใช้เลย ไม่ต้อง Login ใหม่
+            if (!string.IsNullOrEmpty(TokenProvider.MdwToken) && !string.IsNullOrEmpty(TokenProvider.IdwToken))
+            {
+                mdwToken = TokenProvider.MdwToken;
+                idwToken = TokenProvider.IdwToken;
+                error = null;
+                await EnsurePlatformOptions();
+                return;
+            }
 
             var authState = await Auth.GetAuthenticationStateAsync();
             var user = authState.User;
@@ -340,13 +390,11 @@
                 user.Identity?.Name
                 ?? user.FindFirst("USERNAME")?.Value;
 
-            // password: ต้องมี claim "PWD" ที่เซ็ตตอน login
-            var password =
-                user.FindFirst("PWD")?.Value
-                ?? user.FindFirst("PASSWORD")?.Value;
+            // password: เอาจาก Session (ผ่าน TokenProvider) แทน Claim
+            var password = TokenProvider.Password;
 
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
-                throw new Exception("ไม่พบ username/password ใน session (ต้องเพิ่ม claim Password ตอน login)");
+                throw new Exception("ไม่พบ username/password ใน session (กรุณา Login ใหม่)");
 
             // ===== MDW login =====
             var loginMdw = await MdwSvc.LoginAsync(username, password);
@@ -359,6 +407,8 @@
             // >>> เก็บลง AuthTokenProvider ให้หน้าอื่น reuse ได้ <<<
             TokenProvider.MdwToken = mdwToken;
             TokenProvider.IdwToken = idwToken;
+
+            await EnsurePlatformOptions();
 
             error = null;
         }
@@ -435,6 +485,11 @@
                 TokenStatus = t.TokenStatus ?? ""
             }).ToList() ?? new();
 
+            // แสดงทุก token (ไม่ filter ตาม platform)
+            // tokenList = tokenList
+            //     .Where(x => string.Equals(x.Channel, DashboardPlatform, StringComparison.OrdinalIgnoreCase))
+            //     .ToList();
+
             jobList = dashResp.jobs ?? new();
 
             ApplyFilter();
@@ -455,12 +510,17 @@
 
     private void ApplyFilter()
     {
-        if (string.IsNullOrWhiteSpace(jobPlatformFilter))
-            filteredJobs = jobList.ToList();
-        else
-            filteredJobs = jobList
-                .Where(j => string.Equals(j.Platform, jobPlatformFilter, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+        // เริ่มจากแสดงทุก job (ไม่ filter ตาม DashboardPlatform)
+        IEnumerable<JobLogDto> query = jobList;
+
+        // ถ้า user เลือก filter เพิ่มจาก dropdown
+        if (!string.IsNullOrWhiteSpace(jobPlatformFilter))
+        {
+            query = query.Where(j =>
+                string.Equals(j.Platform, jobPlatformFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        filteredJobs = query.ToList();
     }
 
     private void ShowDetails(TokenUi t)

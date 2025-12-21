@@ -1,0 +1,561 @@
+﻿@page "/normalize"
+@using System.Text
+@using System.Text.Json
+@using System.Globalization
+@using adwportal.Dtos
+@using adwportal.Services
+@using Microsoft.AspNetCore.Components.Forms
+
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider Auth
+@inject AuthTokenProvider TokenProvider
+
+@inject IHttpClientFactory ClientFactory
+@inject MdwMarketplaceService MdwSvc
+@inject IdwImportService Idw
+@inject IJSRuntime JS
+
+
+<h3 class="mb-3">MDW — Normalize Orders</h3>
+<p class="text-muted">เลือกโหมดและกรอกพารามิเตอร์ให้ตรงกับเส้น จากนั้นกด Call</p>
+@* <span class="text-muted">(@(_mdwToken ?? "mdwToken is null"))</span> *@
+
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+
+            <!-- mode -->
+            <div class="col-12">
+                <label class="form-label d-block">Mode</label>
+                <InputRadioGroup TValue="string" @bind-Value="mode">
+                    <div class="form-check form-check-inline">
+                        <InputRadio TValue="string" class="form-check-input" Value="orderRef" id="modeRef" />
+                        <label class="form-check-label" for="modeRef">by-ref</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <InputRadio TValue="string" class="form-check-input" Value="orderList" id="modeList" />
+                        <label class="form-check-label" for="modeList">by-list</label>
+                    </div>
+                </InputRadioGroup>
+            </div>
+
+            <!-- common -->
+            <div class="col-md-3">
+                <label class="form-label">Platform</label>
+                <select class="form-select" @bind="Platform">
+                    <option value="">(All)</option>
+                    <option>Shopee</option>
+                    <option>TikTok</option>
+                </select>
+            </div>
+
+            <div class="col-md-5">
+                <label class="form-label">Shop (filtered by Platform)</label>
+                <select class="form-select" @bind="SelectedShopId">
+                    <option value="">-- Select shop --</option>
+                    @foreach (var s in FilteredShops)
+                    {
+                        <option value="@s.Id">
+                            @($"{s.Name ?? "-"}  ·  {s.ShopId}  ·  {s.Platform}")
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Shop Id</label>
+                <input class="form-control" @bind="shopIdStr" />
+            </div>
+
+            @if (IsByRef)
+            {
+                <div class="col-md-5">
+                    <label class="form-label">orderRef</label>
+                    <input class="form-control" @bind="orderRef" />
+                </div>
+            }
+            else if (IsByList)
+            {
+                <div class="col-md-3">
+                    <label class="form-label">timeRangeField</label>
+                    <select class="form-select" @bind="timeRangeField">
+                        <option>update_time</option>
+                        <option>create_time</option>
+                        <option>paid_time</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">timeFrom (epoch sec)</label>
+                    <div class="input-group">
+                        <input class="form-control" type="number" @bind="TimeFrom" @bind:event="oninput" />
+                        <button class="btn btn-outline-secondary" @onclick="() => SetFromNow(-24)">-24h</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => SetFromNow(-1)">-1h</button>
+                    </div>
+                    <div class="form-text">หรือเลือกวันที่ด้านล่าง</div>
+                    <input class="form-control mt-1" type="datetime-local" @bind="FromLocalDT" />
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">timeTo (epoch sec)</label>
+                    <div class="input-group">
+                        <input class="form-control" type="number" @bind="TimeTo" @bind:event="oninput" />
+                        <button class="btn btn-outline-secondary" @onclick="SetToNow">now</button>
+                    </div>
+                    <div class="form-text">หรือเลือกวันที่ด้านล่าง</div>
+                    <input class="form-control mt-1" type="datetime-local" @bind="ToLocalDT" />
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">pageSize</label>
+                    <input class="form-control" type="number" @bind="pageSize" min="1" max="200" />
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">sellerId (optional)</label>
+                    <input class="form-control" @bind="sellerId" />
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">env</label>
+                    <select class="form-select" @bind="env">
+                        <option>prod</option>
+                        <option>sandbox</option>
+                    </select>
+                </div>
+            }
+
+            <div class="col-12 d-flex gap-2 align-items-end">
+                <button class="btn btn-primary" @onclick="CallApi" disabled="@busy">@(busy ? "Calling..." : "Call API")</button>
+                <button class="btn btn-outline-secondary" @onclick="ResetForm" disabled="@busy">Reset</button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(lastUrl))
+{
+    <div class="mb-2">
+        <div class="small text-muted">Requested</div>
+        <code class="d-inline-block text-break">@($"{lastMethod ?? "POST"} {lastUrl}")</code>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(lastBody))
+{
+    <div class="card mb-3">
+        <div class="card-header">Request JSON</div>
+        <div class="card-body">
+            <pre class="mb-0" style="white-space:pre-wrap">@lastBody</pre>
+        </div>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+@if (!string.IsNullOrWhiteSpace(info))
+{
+    <div class="alert alert-success">@info</div>
+}
+@if (!string.IsNullOrWhiteSpace(jsonPretty))
+{
+    <div class="card">
+        <div class="card-header">Response JSON</div>
+        <div class="card-body">
+            <pre class="mb-0" style="white-space:pre-wrap">@jsonPretty</pre>
+        </div>
+    </div>
+}
+
+@code {
+    // ===== Last Request Info =====
+    private string? lastMethod;
+    private string? lastBody;
+    private string? lastUrl;
+
+    // ===== Types / State =====
+    private record ShopRow(
+      int Id, long ShopId, string? Name,
+      int PartnerId, long PartnerExtId,
+      string? Country, string? Platform, DateTime CreatedAt);
+
+    private string mode = "by-list";
+    private bool IsByRef => string.Equals(mode, "by-ref", StringComparison.OrdinalIgnoreCase);
+    private bool IsByList => string.Equals(mode, "by-list", StringComparison.OrdinalIgnoreCase);
+
+    private string platform = "";
+    private string shopIdStr = "";
+    private string orderRef = "by-ref";
+    private string orderList = "by-list";
+
+    // time window (backing fields)
+    private long _timeFrom;
+    private long _timeTo;
+    private DateTime _fromLocal = DateTime.Now.AddHours(-1);
+    private DateTime _toLocal = DateTime.Now;
+
+    private string timeRangeField = "update_time";
+    private int pageSize = 50;
+    private string? sellerId;
+    private string env = "prod";
+
+    private bool busy;
+    private string? jsonPretty;
+    private string? error;
+    private string? info;
+
+    private HttpClient? _mdw;
+    private HttpClient? _idw;
+    private string? _mdwToken;
+    private string? _idwToken;
+
+    // shops
+    private List<ShopRow> allShops = new();
+    private int? selectedShopId;
+    private int? SelectedShopId
+    {
+        get => selectedShopId;
+        set
+        {
+            if (selectedShopId == value) return;
+            selectedShopId = value;
+            ApplySelectedShop();
+        }
+    }
+
+    // เปลี่ยน Platform แล้วล้าง shop selection + shopId
+
+    private string Platform
+    {
+        get => platform;
+        set
+        {
+            var canon = CanonicalPlatform(value);
+
+            // ถ้าไม่ใช่ platform ที่ support ให้บังคับเป็น empty (All)
+            if (!string.IsNullOrEmpty(canon) && 
+                !string.Equals(canon, "Shopee", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(canon, "TikTok", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(canon, "Lazada", StringComparison.OrdinalIgnoreCase))
+            {
+                canon = "";
+            }
+
+            if (platform != canon)
+            {
+                platform = canon;
+                SelectedShopId = null;
+                shopIdStr = "";
+
+                // เลือก shop ตัวแรกของ platform ที่เลือก (กันเคส UI ดูเหมือนไม่กรอง)
+                var first = FilteredShops.FirstOrDefault();
+                if (first is not null)
+                    SelectedShopId = first.Id;
+            }
+        }
+    }
+
+    //Get All on production
+    // private IEnumerable<ShopRow> FilteredShops =>
+    //   allShops.Where(s => string.Equals(CanonicalPlatform(s.Platform), platform, StringComparison.OrdinalIgnoreCase))
+    //           .OrderBy(s => s.Name ?? s.ShopId.ToString());
+
+    //for platform review
+    private IEnumerable<ShopRow> FilteredShops =>
+        allShops
+            .Where(s =>
+                string.IsNullOrWhiteSpace(platform) ||
+                string.Equals(
+                    CanonicalPlatform(s.Platform),
+                    platform,
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Name ?? s.ShopId.ToString());
+
+    // ===== Lifecycle =====
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            _idwToken = TokenProvider.IdwToken;
+            _mdwToken = TokenProvider.MdwToken;
+
+            _idw = ClientFactory.CreateClient("IdwApiBaseUrl");
+            _idw.DefaultRequestHeaders.Authorization =
+                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _idwToken);
+            _mdw = ClientFactory.CreateClient("MdwApiBaseUrl");
+            _mdw.DefaultRequestHeaders.Authorization =
+                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _mdwToken);
+
+
+            if (string.IsNullOrWhiteSpace(_idwToken) || string.IsNullOrWhiteSpace(_mdwToken))
+            {
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var user = authState.User;
+
+                var username =
+                    user.Identity?.Name
+                    ?? user.FindFirst("USERNAME")?.Value;
+
+                var password = TokenProvider.Password;
+
+                if (!string.IsNullOrWhiteSpace(username) &&
+                    !string.IsNullOrWhiteSpace(password))
+                {
+
+                    // MDW login
+                    var loginMdw = await MdwSvc.LoginAsync(username, password);
+                    _mdwToken = NormalizeToken(loginMdw?.Token) ?? throw new Exception("Login MDW failed");
+
+
+                    // IDW login (โหลด shops)
+                    var loginIdw = await Idw.LoginAsync(username, password);
+                    _idwToken = NormalizeToken(loginIdw?.Token) ?? throw new Exception("Login IDW failed");
+
+
+                    if (!string.IsNullOrWhiteSpace(_idwToken))
+                    {
+                        // cache ใส่ provider ให้หน้าอื่นใช้ต่อ
+                        TokenProvider.IdwToken = _idwToken;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(_mdwToken))
+                    {
+                        // cache ใส่ provider ให้หน้าอื่นใช้ต่อ
+                        TokenProvider.MdwToken = _mdwToken;
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(_idwToken))
+            {
+                error = "Missing IDW token. Please go to Home page (/) to initialize external tokens.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_mdwToken))
+            {
+                error = "Missing MDW token. Please go to Home page (/) to initialize external tokens.";
+                return;
+            }
+
+            await LoadShopsAsync();
+
+            // init default window
+            _toLocal = DateTime.Now;
+            _timeTo = ToUnix(_toLocal);
+            _fromLocal = _toLocal.AddHours(-1);
+            _timeFrom = ToUnix(_fromLocal);
+
+            StateHasChanged();
+        }
+        catch (Exception ex) { error = ex.Message; StateHasChanged(); }
+    }
+
+    // ===== Helpers =====
+    private static string CanonicalPlatform(string? p)
+    {
+        var x = (p ?? "").Trim().ToLowerInvariant();
+        // รองรับค่าที่พ่วง env/ประเทศ/ข้อความอื่น ๆ เช่น "shopee/prod", "tiktok shop" ฯลฯ
+        if (x.Contains("tiktok")) return "TikTok";
+        if (x.Contains("shopee")) return "Shopee";
+        if (x.Contains("lazada")) return "Lazada";
+        return p ?? "";
+    }
+
+    private async Task LoadShopsAsync()
+    {
+        try
+        {
+            var resp = await _idw!.GetAsync("api/shops");
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+            var list = JsonSerializer.Deserialize<List<ShopRow>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            allShops = list.Select(s => s with { Platform = CanonicalPlatform(s.Platform) }).ToList();
+
+            var first = FilteredShops.FirstOrDefault();
+            if (first is not null)
+                SelectedShopId = first.Id;
+        }
+        catch (Exception ex)
+        {
+            error = $"Load shops failed: {ex.Message}";
+        }
+    }
+
+    private void ApplySelectedShop()
+    {
+        if (!(SelectedShopId is int sid)) return;
+        var row = allShops.FirstOrDefault(s => s.Id == sid);
+        if (row is null) return;
+
+        platform = CanonicalPlatform(row.Platform);
+        shopIdStr = row.ShopId.ToString();
+    }
+
+    private static string? NormalizeToken(string? t)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return null;
+        t = t.Trim().Trim('"');
+        if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) t = t[7..].Trim();
+        return t;
+    }
+
+    // ===== epoch <-> datetime (สองทาง) =====
+    public long TimeFrom
+    {
+        get => _timeFrom;
+        set { _timeFrom = value; _fromLocal = FromUnix(_timeFrom); }
+    }
+    public long TimeTo
+    {
+        get => _timeTo;
+        set { _timeTo = value; _toLocal = FromUnix(_timeTo); }
+    }
+
+    // bind กับ <input type="datetime-local">
+    public DateTime? FromLocalDT
+    {
+        get => _fromLocal;
+        set { if (value.HasValue) { _fromLocal = DateTime.SpecifyKind(value.Value, DateTimeKind.Local); _timeFrom = ToUnix(_fromLocal); } }
+    }
+    public DateTime? ToLocalDT
+    {
+        get => _toLocal;
+        set { if (value.HasValue) { _toLocal = DateTime.SpecifyKind(value.Value, DateTimeKind.Local); _timeTo = ToUnix(_toLocal); } }
+    }
+
+    private static long ToUnix(DateTime dt)
+    {
+        var dto = new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Local));
+        return dto.ToUnixTimeSeconds();
+    }
+    private static DateTime FromUnix(long epoch)
+    {
+        try { return DateTimeOffset.FromUnixTimeSeconds(epoch).LocalDateTime; }
+        catch { return DateTime.Now; }
+    }
+
+    private void SetFromNow(int hoursOffset)
+    {
+        _fromLocal = DateTime.Now.AddHours(hoursOffset);
+        _timeFrom = ToUnix(_fromLocal);
+    }
+    private void SetToNow()
+    {
+        _toLocal = DateTime.Now;
+        _timeTo = ToUnix(_toLocal);
+    }
+
+    private void ResetForm()
+    {
+        mode = "by-list";
+        platform = "";
+        SelectedShopId = null;
+        shopIdStr = "";
+        orderRef = "";
+        orderList = "";
+
+        timeRangeField = "update_time";
+        _toLocal = DateTime.Now;
+        _timeTo = ToUnix(_toLocal);
+        _fromLocal = _toLocal.AddHours(-1);
+        _timeFrom = ToUnix(_fromLocal);
+
+        pageSize = 50;
+        sellerId = null;
+        env = "prod";
+        lastUrl = jsonPretty = error = info = lastBody = lastMethod = null;
+    }
+
+    // ===== Call MDW API =====
+    private async Task CallApi()
+    {
+        if (_mdw is null) { error = "MDW client not ready."; return; }
+
+        error = info = jsonPretty = lastUrl = lastBody = lastMethod = null;
+        busy = true;
+
+        try
+        {
+            RequireShopId();
+
+            if (IsByRef)
+            {
+                if (string.IsNullOrWhiteSpace(orderRef))
+                    throw new Exception("orderRef is required for by-ref");
+
+                var url = new StringBuilder("api/market/normalize/by-ref?");
+                url.Append("platform=").Append(Uri.EscapeDataString(platform));
+                url.Append("&shopId=").Append(Uri.EscapeDataString(shopIdStr));
+                url.Append("&orderRef=").Append(Uri.EscapeDataString(orderRef));
+
+                lastMethod = "POST";
+                lastUrl = $"{_mdw.BaseAddress}{url}";
+
+                var req = new HttpRequestMessage(HttpMethod.Post, url.ToString())
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                };
+
+                var resp = await _mdw.SendAsync(req);
+                var txt = await resp.Content.ReadAsStringAsync();
+                jsonPretty = PrettyJson(txt);
+                if (!resp.IsSuccessStatusCode) error = $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                else info = "Normalize by-ref finished.";
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(timeRangeField))
+                    throw new Exception("timeRangeField is required");
+                if (TimeFrom <= 0 || TimeTo <= 0)
+                    throw new Exception("timeFrom/timeTo are required (epoch seconds)");
+
+                var url = new StringBuilder("api/market/normalize/by-list?");
+                url.Append("platform=").Append(Uri.EscapeDataString(platform));
+                url.Append("&shopId=").Append(Uri.EscapeDataString(shopIdStr));
+                url.Append("&timeRangeField=").Append(Uri.EscapeDataString(timeRangeField));
+                url.Append("&timeFrom=").Append(TimeFrom);
+                url.Append("&timeTo=").Append(TimeTo);
+                if (pageSize > 0) url.Append("&pageSize=").Append(pageSize);
+                if (!string.IsNullOrWhiteSpace(sellerId)) url.Append("&sellerId=").Append(Uri.EscapeDataString(sellerId));
+                if (!string.IsNullOrWhiteSpace(env)) url.Append("&env=").Append(Uri.EscapeDataString(env));
+
+                lastMethod = "POST";
+                lastUrl = $"{_mdw.BaseAddress}{url}";
+
+                var req = new HttpRequestMessage(HttpMethod.Post, url.ToString())
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                };
+
+                var resp = await _mdw.SendAsync(req);
+                var txt = await resp.Content.ReadAsStringAsync();
+                jsonPretty = PrettyJson(txt);
+                if (!resp.IsSuccessStatusCode) error = $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                else info = "Normalize by-list finished.";
+            }
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; StateHasChanged(); }
+    }
+
+    private void RequireShopId()
+    {
+        if (string.IsNullOrWhiteSpace(shopIdStr))
+            throw new Exception("shopId is required");
+    }
+
+    private static string PrettyJson(string raw)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { return raw; }
+    }
+}

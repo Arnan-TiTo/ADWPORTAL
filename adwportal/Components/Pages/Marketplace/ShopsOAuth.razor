@@ -15,13 +15,13 @@
 @inject NavigationManager Nav
 @inject MdwMarketplaceService MdwSvc
 @inject IdwImportService Idw
+@inject MiscService MiscSvc
 @inject Microsoft.Extensions.Configuration.IConfiguration Cfg
 
 <h1 class="mb-3">MDW — Shops OAuth</h1>
 <p class="text-muted">
     List all shops (Shopee, TikTok Shop, Lazada, …). Click <em>Authorize</em> to start OAuth in a popup and auto-exchange the returned code.
 </p>
-<span class="text-muted">(@(_mdwToken ?? "mdwToken is null"))</span>
 
 <div class="card mb-3">
     <div class="card-body">
@@ -34,9 +34,10 @@
                 <label class="form-label">Platform</label>
                 <select class="form-select" @bind="filterPlatform">
                     <option value="">(All)</option>
-                    <option>Shopee</option>
-                    <option>TikTok</option>
-                    <option>Lazada</option>
+                    @foreach (var p in platformOptions)
+                    {
+                        <option value="@p">@p</option>
+                    }
                 </select>
             </div>
             <div class="col-md-3">
@@ -127,11 +128,28 @@
     private string? filterName;
     private string? filterPlatform;
 
+    // Platform dropdown options (from Misc where Type='Platform')
+    private List<string> platformOptions = new();
+
+    // private IEnumerable<ShopVm> ViewRows =>
+    //     rows.Where(r =>
+    //         (string.IsNullOrWhiteSpace(filterPlatform) || string.Equals(r.Platform, filterPlatform, StringComparison.OrdinalIgnoreCase)) &&
+    //         (string.IsNullOrWhiteSpace(filterName) || (r.Name ?? "").Contains(filterName, StringComparison.OrdinalIgnoreCase))
+    //     );
+
     private IEnumerable<ShopVm> ViewRows =>
-        rows.Where(r =>
-            (string.IsNullOrWhiteSpace(filterPlatform) || string.Equals(r.Platform, filterPlatform, StringComparison.OrdinalIgnoreCase)) &&
-            (string.IsNullOrWhiteSpace(filterName) || (r.Name ?? "").Contains(filterName, StringComparison.OrdinalIgnoreCase))
-        );
+    rows
+        // filter ตาม platform ที่เลือก (Shopee / TikTok / Lazada หรือ (All))
+        .Where(r =>
+            string.IsNullOrWhiteSpace(filterPlatform) ||
+            string.Equals(
+                CanonicalPlatform(r.Platform, r.Name),
+                filterPlatform,
+                StringComparison.OrdinalIgnoreCase))
+        // filter ตามชื่อร้าน
+        .Where(r =>
+            string.IsNullOrWhiteSpace(filterName) ||
+            (r.Name ?? "").Contains(filterName, StringComparison.OrdinalIgnoreCase));
 
     private readonly Dictionary<string, PendingAuth> _pending = new();
     private DotNetObjectReference<ShopsOAuth>? _selfRef;
@@ -167,9 +185,7 @@
                     user.Identity?.Name
                     ?? user.FindFirst("USERNAME")?.Value;
 
-                var password =
-                    user.FindFirst("PWD")?.Value
-                    ?? user.FindFirst("PASSWORD")?.Value;
+                var password = TokenProvider.Password;
 
                 if (!string.IsNullOrWhiteSpace(username) &&
                     !string.IsNullOrWhiteSpace(password))
@@ -204,6 +220,20 @@
             _mdwClient = ClientFactory.CreateClient("MdwApiBaseUrl");
             _mdwClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _mdwToken);
+
+            // Platform dropdown: load from Misc (Type='Platform')
+            try
+            {
+                var plats = await MiscSvc.GetMiscAsync(_idwToken!, type: "Platform");
+                platformOptions = (plats ?? new List<MiscDtos>())
+                    .Where(x => x.IsActive)
+                    .Select(x => CanonicalPlatform(!string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1))
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList();
+            }
+            catch { /* ignore */ }
 
             // 4) register JS receiver + โหลดรายการ
             _selfRef = DotNetObjectReference.Create(this);

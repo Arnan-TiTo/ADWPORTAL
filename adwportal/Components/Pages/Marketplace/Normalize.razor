@@ -13,12 +13,13 @@
 @inject IHttpClientFactory ClientFactory
 @inject MdwMarketplaceService MdwSvc
 @inject IdwImportService Idw
+@inject MiscService MiscSvc
 @inject IJSRuntime JS
 
 
 <h3 class="mb-3">MDW — Normalize Orders</h3>
 <p class="text-muted">เลือกโหมดและกรอกพารามิเตอร์ให้ตรงกับเส้น จากนั้นกด Call</p>
-<span class="text-muted">(@(_mdwToken ?? "mdwToken is null"))</span>
+@* <span class="text-muted">(@(_mdwToken ?? "mdwToken is null"))</span> *@
 
 
 <div class="card mb-3">
@@ -44,9 +45,11 @@
             <div class="col-md-3">
                 <label class="form-label">Platform</label>
                 <select class="form-select" @bind="Platform">
-                    <option>TikTok</option>
-                    <option>Shopee</option>
-                    <option>Lazada</option>
+                    <option value="">(All)</option>
+                    @foreach (var p in platformOptions)
+                    {
+                        <option value="@p">@p</option>
+                    }
                 </select>
             </div>
 
@@ -61,13 +64,11 @@
                         </option>
                     }
                 </select>
-                <div class="form-text">เลือกแล้วจะเติม Platform + Shop Id ให้อัตโนมัติ</div>
             </div>
 
             <div class="col-md-4">
                 <label class="form-label">Shop Id</label>
                 <input class="form-control" @bind="shopIdStr" />
-                <div class="form-text">แก้ไขได้เองหากต้องการ</div>
             </div>
 
             @if (IsByRef)
@@ -187,7 +188,7 @@
     private bool IsByRef => string.Equals(mode, "by-ref", StringComparison.OrdinalIgnoreCase);
     private bool IsByList => string.Equals(mode, "by-list", StringComparison.OrdinalIgnoreCase);
 
-    private string platform = "TikTok";
+    private string platform = "";
     private string shopIdStr = "";
     private string orderRef = "by-ref";
     private string orderList = "by-list";
@@ -213,6 +214,10 @@
     private string? _mdwToken;
     private string? _idwToken;
 
+    // Platform dropdown options (from Misc where Type='Platform')
+    private List<string> platformOptions = new();
+    private HashSet<string> platformAllow = new(StringComparer.OrdinalIgnoreCase);
+
     // shops
     private List<ShopRow> allShops = new();
     private int? selectedShopId;
@@ -228,24 +233,47 @@
     }
 
     // เปลี่ยน Platform แล้วล้าง shop selection + shopId
+
     private string Platform
     {
         get => platform;
         set
         {
             var canon = CanonicalPlatform(value);
+
+            // ถ้าไม่อยู่ใน list จาก Misc ให้บังคับเป็น empty (All)
+            if (!string.IsNullOrWhiteSpace(canon) && platformAllow.Count > 0 && !platformAllow.Contains(canon))
+                canon = "";
+
             if (platform != canon)
             {
                 platform = canon;
                 SelectedShopId = null;
                 shopIdStr = "";
+
+                // เลือก shop ตัวแรกของ platform ที่เลือก (กันเคส UI ดูเหมือนไม่กรอง)
+                var first = FilteredShops.FirstOrDefault();
+                if (first is not null)
+                    SelectedShopId = first.Id;
             }
         }
     }
 
+    //Get All on production
+    // private IEnumerable<ShopRow> FilteredShops =>
+    //   allShops.Where(s => string.Equals(CanonicalPlatform(s.Platform), platform, StringComparison.OrdinalIgnoreCase))
+    //           .OrderBy(s => s.Name ?? s.ShopId.ToString());
+
+    //for platform review
     private IEnumerable<ShopRow> FilteredShops =>
-      allShops.Where(s => string.Equals(CanonicalPlatform(s.Platform), platform, StringComparison.OrdinalIgnoreCase))
-              .OrderBy(s => s.Name ?? s.ShopId.ToString());
+        allShops
+            .Where(s =>
+                string.IsNullOrWhiteSpace(platform) ||
+                string.Equals(
+                    CanonicalPlatform(s.Platform),
+                    platform,
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Name ?? s.ShopId.ToString());
 
     // ===== Lifecycle =====
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -274,9 +302,7 @@
                     user.Identity?.Name
                     ?? user.FindFirst("USERNAME")?.Value;
 
-                var password =
-                    user.FindFirst("PWD")?.Value
-                    ?? user.FindFirst("PASSWORD")?.Value;
+                var password = TokenProvider.Password;
 
                 if (!string.IsNullOrWhiteSpace(username) &&
                     !string.IsNullOrWhiteSpace(password))
@@ -318,6 +344,24 @@
                 return;
             }
 
+            // load platform options from Misc (Type='Platform')
+            try
+            {
+                var plats = await MiscSvc.GetMiscAsync(_idwToken!, type: "Platform");
+                platformOptions = (plats ?? new List<MiscDtos>())
+                    .Where(x => x.IsActive)
+                    .Select(x => CanonicalPlatform(!string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1))
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList();
+                platformAllow = new HashSet<string>(platformOptions, StringComparer.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                // ignore: keep empty list
+            }
+
             await LoadShopsAsync();
 
             // init default window
@@ -335,9 +379,10 @@
     private static string CanonicalPlatform(string? p)
     {
         var x = (p ?? "").Trim().ToLowerInvariant();
-        if (x is "tiktok" or "tik tok" or "tiktokshop" or "tiktok shop") return "TikTok";
-        if (x == "shopee") return "Shopee";
-        if (x == "lazada") return "Lazada";
+        // รองรับค่าที่พ่วง env/ประเทศ/ข้อความอื่น ๆ เช่น "shopee/prod", "tiktok shop" ฯลฯ
+        if (x.Contains("tiktok")) return "TikTok";
+        if (x.Contains("shopee")) return "Shopee";
+        if (x.Contains("lazada")) return "Lazada";
         return p ?? "";
     }
 
@@ -428,7 +473,7 @@
     private void ResetForm()
     {
         mode = "by-list";
-        Platform = "TikTok";
+        platform = "";
         SelectedShopId = null;
         shopIdStr = "";
         orderRef = "";

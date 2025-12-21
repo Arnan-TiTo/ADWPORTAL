@@ -6,10 +6,16 @@
 @using adwportal.Models
 @using adwportal.Dtos
 @using adwportal.Services
+
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider Auth
+@inject AuthTokenProvider TokenProvider
+
 @inject IHttpClientFactory ClientFactory
 @inject IJSRuntime JS
 @inject IOptions<ApiSettings> Options
 @inject IdwImportService IdwImportService
+@inject MiscService MiscSvc
 @inject ShopService ShopSvc
 @inject NavigationManager Navigation
 
@@ -32,7 +38,7 @@
                     {
                         @foreach (var p in partners)
                         {
-                            <option value="@p.Id">@((p.CompanyName ?? "(no company)"))</option>
+                            <option value="@p.Id">@FormatCompanyPlatform(p)</option>
                         }
                     }
                 </InputSelect>
@@ -66,7 +72,7 @@
                     {
                         @foreach (var p in platforms)
                         {
-                            <option value="@p.Id">@p.Value1</option>
+                            <option value="@p.Id">@(!string.IsNullOrWhiteSpace(p.Name) ? p.Name : p.Value1)</option>
                         }
                     }
                 </InputSelect>
@@ -237,7 +243,7 @@
 @code {
     private string? tokenRaw;
     private string? token;
-
+    private string? error;
     private IBrowserFile? selectedFile;
     private string? selectedFileName;
     private string? previewText;
@@ -257,7 +263,7 @@
 
     // partners (รวม CompanyName)
     private List<MdwPartnerDtos>? partners;
-    private List<MiscItemDtos>? platforms;
+    private List<MiscDtos>? platforms;
     private List<MiscItemDtos>? logistics;
 
     private readonly List<ShopDtos> shops = new();
@@ -288,7 +294,41 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoginAsync("admin", "123456yjm");
+        try
+        {
+            // 1) ลองอ่านจาก AuthTokenProvider ก่อน (กรณีมาจาก Dashboard ใน circuit เดียวกัน)
+            token = TokenProvider.IdwToken;
+
+            // 2) ถ้ายังว่าง ให้ใช้ username/password จาก Claims ไป login ใหม่
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var user = authState.User;
+
+                var username =
+                    user.Identity?.Name
+                    ?? user.FindFirst("USERNAME")?.Value;
+
+                var password = TokenProvider.Password;
+
+                if (!string.IsNullOrWhiteSpace(username) &&
+                    !string.IsNullOrWhiteSpace(password))
+                {
+                    await LoginAsync(username, password);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                error = "Token is empty. กรุณาเข้า Dashboard (หน้าแรก) หรือ login ใหม่อีกครั้ง";
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+
         await LoadLookupsAsync();
     }
 
@@ -301,7 +341,7 @@
             var ct = CancellationToken.None;
 
             partners = await IdwImportService.GetPartnersAsync(token!, partnerExternalId: null, ct);
-            platforms = await IdwImportService.GetPlatformsAsync(token!, ct);
+            platforms = await MiscSvc.GetMiscAsync(token!, type: "Platform", ct: ct);
             logistics = await IdwImportService.GetLogisticsAsync(token!, ct);
 
             SelectedPartnerDbId ??= partners?.FirstOrDefault()?.Id;
@@ -348,6 +388,17 @@
 
     private string CurrentPartnerExternalIdText
         => partners?.FirstOrDefault(p => p.Id == SelectedPartnerDbId)?.PartnerId.ToString() ?? "-";
+
+    // แสดง Company-Platform (concat 2 field) ตามที่ต้องการ
+    private static string FormatCompanyPlatform(MdwPartnerDtos p)
+    {
+        var company = (p.CompanyName ?? "").Trim();
+        var plat = (p.Name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(company) && string.IsNullOrWhiteSpace(plat)) return "-";
+        if (string.IsNullOrWhiteSpace(plat)) return company;
+        if (string.IsNullOrWhiteSpace(company)) return plat;
+        return $"{company}-{plat}";
+    }
 
     private static string? NormalizeToken(string? t)
     {

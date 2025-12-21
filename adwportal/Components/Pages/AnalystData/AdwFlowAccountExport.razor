@@ -2,9 +2,17 @@
 @using System.Net.Http.Json
 @using Microsoft.AspNetCore.WebUtilities
 @using System.Globalization
+@using adwportal.Dtos
+@using adwportal.Services
+@using Microsoft.AspNetCore.Components.Authorization
 @inject IHttpClientFactory ClientFactory
 @inject IJSRuntime JS
+@inject AuthenticationStateProvider Auth
+@inject AuthTokenProvider TokenProvider
 @inject adwportal.Services.MdwMarketplaceService MdwSvc
+@inject IdwImportService IdwSvc
+@inject ShopService ShopSvc
+@inject MiscService MiscSvc
 
 <h3 class="mb-3">FlowAccount Export</h3>
 
@@ -14,17 +22,25 @@
             <DataAnnotationsValidator />
             <div class="row g-3">
                 <div class="col-md-3">
-                    <label class="form-label">Channel</label>
-                    <InputSelect class="form-select" @bind-Value="filter.Channel">
-                        <option value="">-- Select --</option>
-                        <option>Shopee</option>
-                        <option>Lazada</option>
-                        <option>TikTok</option>
+                    <label class="form-label">Platform</label>
+                    <InputSelect class="form-select" @bind-Value="SelectedPlatform">
+                        <option value="">(All)</option>
+                        @foreach (var p in platformOptions)
+                        {
+                            <option value="@p">@p</option>
+                        }
                     </InputSelect>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Shop ID</label>
-                    <InputText class="form-control" @bind-Value="filter.ShopId" />
+                    <label class="form-label">Shop</label>
+                    <InputSelect class="form-select" @bind-Value="filter.ShopId">
+                        <option value="">(All)</option>
+                        @foreach (var s in FilteredShopOptions)
+                        {
+                            <option value="@s.ShopId">@((s.Name ?? "(no name)") + " · " + s.ShopId)</option>
+                        }
+                    </InputSelect>
+                    <div class="form-text">Shop จะถูกกรองตาม Platform ที่เลือก</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Created From (TH)</label>
@@ -111,6 +127,7 @@ else
 }
 
 @code {
+
     // ===== ลำดับคอลัมน์ “ตามสเปค CSV (, )” =====
     private static readonly string[] DesiredCsvOrder = new[] {
     "order_no","sale_channel","created_at_th","confirmed_at_th","paid_at_th",
@@ -130,10 +147,35 @@ else
     // ===== state =====
     private string? _mdwToken;
     private HttpClient? _mdwClient;
+    private string? _idwToken;
+
+    private readonly List<ShopDtos> allShops = new();
+
+    // dropdown options (from Misc where Type='Platform')
+    private List<string> platformOptions = new();
+
+    // bind wrapper: เปลี่ยน Platform แล้วล้าง ShopId ถ้าไม่ตรงกับ filtered list
+    private string SelectedPlatform
+    {
+        get => filter.Channel ?? "";
+        set
+        {
+            var v = CanonicalPlatform(value);
+            if (string.Equals(filter.Channel, v, StringComparison.OrdinalIgnoreCase)) return;
+            filter.Channel = v;
+            filter.ShopId = "";
+        }
+    }
+
+    private IEnumerable<ShopDtos> FilteredShopOptions =>
+        allShops
+            .Where(s => string.IsNullOrWhiteSpace(SelectedPlatform) ||
+                        string.Equals(CanonicalPlatform(s.Platform), SelectedPlatform, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Name ?? s.ShopId.ToString());
 
     private class FilterVm
     {
-        public string Channel { get; set; } = "Shopee";
+        public string Channel { get; set; } = "";
         public string? ShopId { get; set; } = "225987929";
         public DateTime? CreatedFrom { get; set; }
         public DateTime? CreatedTo { get; set; }
@@ -159,14 +201,84 @@ else
         if (!firstRender) return;
         try
         {
-            var login = await MdwSvc.LoginAsync("admin", "123456yjm");
-            _mdwToken = NormalizeToken(login?.Token) ?? throw new Exception("Login MDW failed");
+            // --- MDW token ---
+            var mdwT = NormalizeToken(TokenProvider.MdwToken);
+            if (string.IsNullOrWhiteSpace(mdwT))
+            {
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var user = authState.User;
+
+                var username = user.Identity?.Name ?? user.FindFirst("USERNAME")?.Value;
+                var password = TokenProvider.Password;
+
+                if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
+                {
+                    var login = await MdwSvc.LoginAsync(username, password);
+                    mdwT = NormalizeToken(login?.Token);
+                    if (!string.IsNullOrWhiteSpace(mdwT))
+                        TokenProvider.MdwToken = mdwT;
+                }
+            }
+
+            _mdwToken = mdwT;
+            if (string.IsNullOrWhiteSpace(_mdwToken))
+                throw new Exception("No MDW token. Please login again.");
 
             _mdwClient = ClientFactory.CreateClient("MdwApiBaseUrl");
             _mdwClient.DefaultRequestHeaders.Authorization =
               new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _mdwToken);
 
-            await SearchAsync();
+            // --- IDW token (for shops + misc/platform) ---
+            _idwToken = NormalizeToken(TokenProvider.IdwToken);
+            if (string.IsNullOrWhiteSpace(_idwToken))
+            {
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var user = authState.User;
+                var username = user.Identity?.Name ?? user.FindFirst("USERNAME")?.Value;
+                var password = TokenProvider.Password;
+
+                if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
+                {
+                    var loginIdw = await IdwSvc.LoginAsync(username, password);
+                    _idwToken = NormalizeToken(loginIdw?.Token);
+                    if (!string.IsNullOrWhiteSpace(_idwToken))
+                        TokenProvider.IdwToken = _idwToken;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(_idwToken))
+            {
+                // Platform dropdown: load from Misc (Type='Platform')
+                var plats = await MiscSvc.GetMiscAsync(_idwToken, type: "Platform");
+                platformOptions = (plats ?? new List<MiscDtos>())
+                    .Where(x => x.IsActive)
+                    .Select(x => CanonicalPlatform(!string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1))
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList();
+
+                // Shops (IDW)
+                var shops = await ShopSvc.GetShopsAsync(_idwToken);
+                allShops.Clear();
+                allShops.AddRange((shops ?? new List<ShopDtos>())
+                    .Select(s => s with { Platform = CanonicalPlatform(s.Platform) })
+                    .OrderBy(s => s.Name));
+
+                // If default ShopId not in list, clear it
+                if (!string.IsNullOrWhiteSpace(filter.ShopId) &&
+                    !allShops.Any(x => x.ShopId.ToString() == filter.ShopId))
+                {
+                    filter.ShopId = "";
+                }
+            }
+            else
+            {
+                // allow the page to run, but show a helpful message
+                errorMessage = "IDW token is missing, so Platform/Shop dropdown may be empty.";
+            }
+
+            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex) { errorMessage = ex.Message; StateHasChanged(); }
     }
@@ -179,52 +291,67 @@ else
         return t;
     }
 
+    private static string CanonicalPlatform(string? p)
+    {
+        var x = (p ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(x)) return "";
+        if (x.Contains("tiktok")) return "TikTok";
+        if (x.Contains("shopee")) return "Shopee";
+        if (x.Contains("lazada")) return "Lazada";
+        return p?.Trim() ?? "";
+    }
+
     // ===== query data =====
     private async Task SearchAsync()
     {
-        if (_mdwClient is null) { errorMessage = "MDW client is not ready."; return; }
+        if (_mdwClient is null) { errorMessage = "Token MDW is not ready."; return; }
 
         isLoading = true; errorMessage = null;
         items = null; totalItems = 0; columns.Clear(); exportRows.Clear();
 
-        try
-        {
-            // === (1) ยิงอัปเดตจริงก่อนค้นหา ===
-            var updateQs = new Dictionary<string, string?>
+        if (filter.Channel == "" || filter.ShopId == "") {errorMessage = "Platform and Shop is require.";isLoading = false; return;}
+  
+            try
             {
-                ["channel"] = filter.Channel,
-                ["shopId"] = filter.ShopId,
-                ["dryRun"] = "false",
-                ["overwrite"] = "false"
-            };
-            var updateUrl = QueryHelpers.AddQueryString("api/adw/maintenance/update-addresses", updateQs);
-            using var updResp = await _mdwClient.PostAsync(updateUrl, content: null);
-            updResp.EnsureSuccessStatusCode();
+                // === (1) ยิงอัปเดตจริงก่อนค้นหา ===
 
-            // === (2) ค้นหา/ดึงข้อมูลตามปกติ ===
-            var url = BuildApiUrl("/api/adw/export/flowaccount/orders", withPaging: true);
-            var resp = await _mdwClient.GetFromJsonAsync<ApiResp>(url);
-            totalItems = resp?.total ?? 0;
+                var updateQs = new Dictionary<string, string?>
 
-            items = (resp?.items ?? new()).Select(RowToDict).ToList();
+                    {
+                        ["channel"] = filter.Channel,
+                        ["shopId"] = filter.ShopId,
+                        ["dryRun"] = "false",
+                        ["overwrite"] = "false"
+                    };
 
-            // คอลัมน์ล็อกตาม DesiredCsvOrder
-            columns = DesiredCsvOrder.ToList();
+                var updateUrl = QueryHelpers.AddQueryString("api/adw/maintenance/update-addresses", updateQs);
+                using var updResp = await _mdwClient.PostAsync(updateUrl, content: null);
+                updResp.EnsureSuccessStatusCode();
 
-            // สร้าง rows สำหรับ export (เป็น string พร้อมใช้)
-            foreach (var r in items)
-            {
-                var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var c in columns)
+                // === (2) ค้นหา/ดึงข้อมูลตามปกติ ===
+                var url = BuildApiUrl("/api/adw/export/flowaccount/orders", withPaging: true);
+                var resp = await _mdwClient.GetFromJsonAsync<ApiResp>(url);
+                totalItems = resp?.total ?? 0;
+
+                items = (resp?.items ?? new()).Select(RowToDict).ToList();
+
+                // คอลัมน์ล็อกตาม DesiredCsvOrder
+                columns = DesiredCsvOrder.ToList();
+
+                // สร้าง rows สำหรับ export (เป็น string พร้อมใช้)
+                foreach (var r in items)
                 {
-                    r.TryGetValue(c, out var val);
-                    d[c] = FmtCell(val);
+                    var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var c in columns)
+                    {
+                        r.TryGetValue(c, out var val);
+                        d[c] = FmtCell(val);
+                    }
+                    exportRows.Add(d);
                 }
-                exportRows.Add(d);
             }
-        }
-        catch (Exception ex) { errorMessage = ex.Message; }
-        finally { isLoading = false; }
+            catch (Exception ex) { errorMessage = ex.Message; }
+            finally { isLoading = false; }
     }
 
     // === Export (client-side) ===

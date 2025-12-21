@@ -5,6 +5,7 @@
 @inject ShopService Svc
 @inject PartnerService PartnerSvc
 @inject IdwImportService Idw
+@inject MiscService MiscSvc
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -46,6 +47,18 @@ else
                 </div>
 
                 <div class="col-md-6">
+                    <label class="form-label">Platform</label>
+                    <select class="form-select" @bind="model.Platform">
+                        <option value="">-- Select platform --</option>
+                        @foreach (var p in platformOptions)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                    <div class="form-text">แพลตฟอร์มของร้าน (ใช้กรอง/ยิงงาน Normalize/Export)</div>
+                </div>
+
+                <div class="col-md-6">
                     <label class="form-label">Country</label>
                     <input class="form-control" @bind="model.Country" placeholder="e.g. TH" />
                 </div>
@@ -79,6 +92,9 @@ else
     ShopUpsertDtos model = new();
     ShopDtos? loaded;
 
+    // Platform dropdown options (from Misc where Type='Platform')
+    List<string> platformOptions = new();
+
     string? shopIdStr;
 
     protected override async Task OnInitializedAsync()
@@ -92,6 +108,16 @@ else
 
             partners = await PartnerSvc.GetPartnersAsync(token!);
 
+            // Platform dropdown
+            var plats = await MiscSvc.GetMiscAsync(token!, type: "Platform");
+            platformOptions = (plats ?? new List<MiscDtos>())
+                .Where(x => x.IsActive)
+                .Select(x => CanonicalPlatform(!string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToList();
+
             if (Id.HasValue)
             {
                 title = "Edit";
@@ -102,7 +128,8 @@ else
                 {
                     PartnerId = loaded.PartnerId,
                     Name = loaded.Name,
-                    Country = loaded.Country
+                    Country = loaded.Country,
+                    Platform = CanonicalPlatform(loaded.Platform)
                 };
                 shopIdStr = loaded.ShopId.ToString();
             }
@@ -133,12 +160,24 @@ else
                 return;
             }
 
+            if (string.IsNullOrWhiteSpace(model.Platform))
+            {
+                await JS.InvokeVoidAsync("showToast", "Platform is required", "error");
+                return;
+            }
+
             saving = true;
 
+            var dto = model with
+            {
+                ShopId = shopId,
+                Platform = CanonicalPlatform(model.Platform)
+            };
+
             if (Id.HasValue)
-                _ = await Svc.UpdateShopAsync(token!, Id.Value, model with { ShopId = shopId });
+                _ = await Svc.UpdateShopAsync(token!, Id.Value, dto);
             else
-                _ = await Svc.CreateShopAsync(token!, model with { ShopId = shopId });
+                _ = await Svc.CreateShopAsync(token!, dto);
 
             await JS.InvokeVoidAsync("showToast", "Saved", "success");
             Nav.NavigateTo("/ShopList");
@@ -151,4 +190,14 @@ else
     }
 
     void Cancel() => Nav.NavigateTo("/ShopList");
+
+    private static string? CanonicalPlatform(string? p)
+    {
+        var x = (p ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(x)) return null;
+        if (x.Contains("tiktok")) return "TikTok";
+        if (x.Contains("shopee")) return "Shopee";
+        if (x.Contains("lazada")) return "Lazada";
+        return p?.Trim();
+    }
 }
