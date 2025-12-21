@@ -16,7 +16,7 @@
         await ensureLib();
         dotnetRef = ref;
 
-        // ✅ รองรับทั้ง ElementReference (.value) และ id/string
+        //  รองรับทั้ง ElementReference (.value) และ id/string
         videoEl = elOrId?.tagName ? elOrId :
             (elOrId?.value?.tagName ? elOrId.value :
                 document.getElementById(elOrId));
