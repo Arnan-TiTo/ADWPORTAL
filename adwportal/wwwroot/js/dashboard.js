@@ -16,7 +16,7 @@
     function fmtMoney(v) { try { return Number(v).toLocaleString(); } catch { return v; } }
 
     // height/size เป็นพิกเซล (ออปชัน)
-    function renderBar(id, labels, data, title, height) {
+    function renderBar(id, labels, data, title, height, horizontal = true) {
         ensureChartJs(() => {
             const el = document.getElementById(id);
             if (!el) return;
@@ -29,13 +29,14 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,                       // ใช้ความสูงที่เราตั้ง
-                    indexAxis: "y",
+                    indexAxis: horizontal ? "y" : "x",
                     plugins: {
                         legend: { display: false },
                         title: { display: !!title, text: title }
                     },
                     scales: {
-                        x: { beginAtZero: true, ticks: { callback: v => fmtMoney(v) } }
+                        x: { beginAtZero: true, ticks: { callback: v => fmtMoney(v) } },
+                        y: { beginAtZero: true, ticks: { callback: v => fmtMoney(v) } }
                     }
                 }
             });

@@ -1,0 +1,513 @@
+@page "/AdwOverallDashboard"
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.WebUtilities
+@using System.Globalization
+@using System.Linq
+@using Microsoft.AspNetCore.Components.Forms
+@using adwportal.Dtos
+@using adwportal.Services
+@using Microsoft.AspNetCore.Components.Authorization
+
+@inject IHttpClientFactory ClientFactory
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider Auth
+@inject AuthTokenProvider TokenProvider
+@inject adwportal.Services.MdwMarketplaceService MdwSvc
+@inject IdwImportService IdwSvc
+@inject ShopService ShopSvc
+@inject MiscService MiscSvc
+
+<style>
+    .dashboard-card {
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: none;
+        transition: transform 0.2s;
+        height: 100%;
+    }
+    .chart-container {
+        position: relative;
+        min-height: 300px;
+    }
+    .stat-val {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #0d6efd;
+    }
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+</style>
+
+<h3 class="mb-4">ADW Web Chart: Overall Dashboard</h3>
+
+<div class="card mb-4 dashboard-card">
+    <div class="card-body">
+        <EditForm Model="@filter" OnValidSubmit="@RefreshAsync">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Platform</label>
+                    <InputSelect class="form-select" @bind-Value="SelectedPlatform">
+                        <option value="">(All Platforms)</option>
+                        @foreach (var p in platformOptions)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Shop</label>
+                    <InputSelect class="form-select" @bind-Value="filter.ShopId">
+                        <option value="">(All Shops)</option>
+                        @foreach (var s in FilteredShopOptions)
+                        {
+                            <option value="@s.ShopId">@((s.Name ?? "(no name)") + " · " + s.ShopId)</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Created From</label>
+                    <InputDate class="form-control" @bind-Value="filter.CreatedFrom" />
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Created To</label>
+                    <InputDate class="form-control" @bind-Value="filter.CreatedTo" />
+                </div>
+
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        วิเคราะห์ข้อมูล
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+<div class="row g-4 mb-4">
+    <!-- Summary Stats -->
+    <div class="col-md-3">
+        <div class="card dashboard-card p-3 text-center">
+            <div class="stat-label">Total Orders</div>
+            <div class="stat-val">@statTotalOrders.ToString("N0")</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card dashboard-card p-3 text-center">
+            <div class="stat-label">Total Quantity</div>
+            <div class="stat-val">@statTotalQty.ToString("N0")</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card dashboard-card p-3 text-center">
+            <div class="stat-label">Total Sales</div>
+            <div class="stat-val">฿@statTotalSales.ToString("N2")</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card dashboard-card p-3 text-center">
+            <div class="stat-label">Avg. Order Value</div>
+            <div class="stat-val">฿@((statTotalOrders > 0 ? statTotalSales / statTotalOrders : 0).ToString("N2"))</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Chart: Best Days of Month -->
+    <div class="col-md-6">
+        <div class="card dashboard-card">
+            <div class="card-header bg-transparent fw-bold pt-3 border-0">วันที่ขายดีของเดือน (Daily Sales)</div>
+            <div class="card-body d-flex justify-content-center">
+                <div style="height: 350px; width: 100%; max-width: 400px; position: relative;">
+                    <canvas id="chart-daily"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart: Best Selling Region -->
+    <div class="col-md-6">
+        <div class="card dashboard-card">
+            <div class="card-header bg-transparent fw-bold pt-3 border-0">ภาค/จังหวัด ที่ขายดี (Top Regions)</div>
+            <div class="card-body d-flex justify-content-center">
+                <div style="height: 350px; width: 100%; max-width: 400px; position: relative;">
+                    <canvas id="chart-region"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart: Top 10 Customers -->
+    <div class="col-md-6">
+        <div class="card dashboard-card">
+            <div class="card-header bg-transparent fw-bold pt-3 border-0">User ที่สั่งซื้อ 10 อันดับแรก (Top 10 Customers)</div>
+            <div class="card-body d-flex justify-content-center">
+                <div style="height: 350px; width: 100%; max-width: 400px; position: relative;">
+                    <canvas id="chart-customers"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart: Platform Mix -->
+    <div class="col-md-6">
+        <div class="card dashboard-card">
+            <div class="card-header bg-transparent fw-bold pt-3 border-0">Platform Distribution</div>
+            <div class="card-body d-flex justify-content-center">
+                 <div style="height: 350px; width: 100%; max-width: 400px; position: relative;">
+                    <canvas id="chart-platforms"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Table: Top Products (Bottom) -->
+    <div class="col-md-12">
+        <div class="card dashboard-card">
+            <div class="card-header bg-transparent fw-bold pt-3 border-0 text-primary">Top Products (Best Sellers)</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>SKU</th>
+                                <th>Product Name</th>
+                                <th class="text-end">Qty Sold</th>
+                                <th class="text-end">Total Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (topProducts.Any())
+                            {
+                                foreach (var item in topProducts)
+                                {
+                                    <tr>
+                                        <td class="fw-bold">@item.Sku</td>
+                                        <td>@item.Name</td>
+                                        <td class="text-end fw-bold text-success">@item.TotalQty.ToString("N0")</td>
+                                        <td class="text-end">฿@item.TotalAmount.ToString("N2")</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">ไม่มีข้อมูลสินค้าขายดีในช่วงเวลาที่เลือก</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _mdwToken;
+    private HttpClient? _mdwClient;
+    private string? _idwToken;
+
+    private List<ShopDtos> allShops = new();
+    private List<string> platformOptions = new();
+
+    private string SelectedPlatform
+    {
+        get => filter.Channel ?? "";
+        set
+        {
+            var v = CanonicalPlatform(value);
+            if (string.Equals(filter.Channel, v, StringComparison.OrdinalIgnoreCase)) return;
+            filter.Channel = v;
+            filter.ShopId = "";
+        }
+    }
+
+    private IEnumerable<ShopDtos> FilteredShopOptions =>
+        allShops
+            .Where(s => string.IsNullOrWhiteSpace(SelectedPlatform) ||
+                        string.Equals(CanonicalPlatform(s.Platform), SelectedPlatform, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Name ?? s.ShopId.ToString());
+
+    private class FilterVm
+    {
+        public string Channel { get; set; } = "";
+        public string? ShopId { get; set; } = "";
+        public DateTime? CreatedFrom { get; set; }
+        public DateTime? CreatedTo { get; set; }
+        public int PageSize { get; set; } = 5000; // Load many for analysis
+    }
+
+    private FilterVm filter = new();
+    private bool isLoading;
+    private string? errorMessage;
+
+    // Stats
+    private int statTotalOrders;
+    private decimal statTotalQty;
+    private decimal statTotalSales;
+    private List<ProductStat> topProducts = new();
+
+    private class ProductStat
+    {
+        public string Sku { get; set; } = "";
+        public string Name { get; set; } = "";
+        public decimal TotalQty { get; set; }
+        public decimal TotalAmount { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Default: 1st of current month to today
+        var now = DateTime.Today;
+        filter.CreatedFrom = new DateTime(now.Year, now.Month, 1);
+        filter.CreatedTo = now;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            _mdwToken = NormalizeToken(TokenProvider.MdwToken);
+            _idwToken = NormalizeToken(TokenProvider.IdwToken);
+
+            if (string.IsNullOrWhiteSpace(_mdwToken))
+                throw new Exception("No MDW token. Please login again.");
+
+            _mdwClient = ClientFactory.CreateClient("MdwApiBaseUrl");
+            _mdwClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _mdwToken);
+
+            if (!string.IsNullOrWhiteSpace(_idwToken))
+            {
+                var plats = await MiscSvc.GetMiscAsync(_idwToken, type: "Platform");
+                platformOptions = (plats ?? new List<MiscDtos>())
+                    .Where(x => x.IsActive)
+                    .Select(x => CanonicalPlatform(!string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1))
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList();
+
+                var shops = await ShopSvc.GetShopsAsync(_idwToken);
+                allShops.Clear();
+                allShops.AddRange((shops ?? new List<ShopDtos>())
+                    .Select(s => s with { Platform = CanonicalPlatform(s.Platform) })
+                    .OrderBy(s => s.Name));
+            }
+
+            await RefreshAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_mdwClient is null) return;
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var url = BuildApiUrl("/api/adw/export/flowaccount/orders");
+            var resp = await _mdwClient.GetFromJsonAsync<ApiResp>(url);
+
+            if (resp != null && resp.items != null)
+            {
+                var data = resp.items.Select(RowToDict).ToList();
+                ProcessData(data);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Fetch failed: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ProcessData(List<Dictionary<string, object?>> data)
+    {
+        // Initialize/Reset locals
+        var regions = new List<dynamic>();
+        var customers = new List<dynamic>();
+        var daily = new List<dynamic>();
+        var platforms = new List<dynamic>();
+        topProducts = new();
+        statTotalOrders = 0; 
+        statTotalQty = 0; 
+        statTotalSales = 0;
+
+        if (data != null && data.Count > 0)
+        {
+            statTotalOrders = data.Select(x => x.GetValueOrDefault("order_no")?.ToString()).Where(x => !string.IsNullOrEmpty(x)).Distinct().Count();
+            statTotalQty = data.Sum(x => SafeDecimal(x.GetValueOrDefault("qty_sold")));
+            statTotalSales = data.Sum(x => SafeDecimal(x.GetValueOrDefault("sale_price")) * SafeDecimal(x.GetValueOrDefault("qty_sold")));
+
+            // 1. Regions
+            regions = data
+                .GroupBy(x => FmtState(x.GetValueOrDefault("shipto_state")))
+                .Select(g => new { Label = g.Key, Value = (int)g.Count() })
+                .OrderByDescending(x => x.Value)
+                .Take(12)
+                .Select(x => (dynamic)x).ToList();
+
+            // 2. Customers
+            customers = data
+                .GroupBy(x => x.GetValueOrDefault("shipto_name")?.ToString() ?? "Unknown")
+                .Select(g => new { Label = g.Key, Value = (int)g.Count() })
+                .OrderByDescending(x => x.Value)
+                .Take(10)
+                .Select(x => (dynamic)x).ToList();
+
+            // 3. Daily Sales
+            daily = data
+                .GroupBy(x => {
+                    var val = x.GetValueOrDefault("created_at_th");
+                    if (val is DateTime dt) return dt.Date;
+                    if (val is string s && DateTime.TryParse(s, out var dt2)) return dt2.Date;
+                    return DateTime.MinValue;
+                })
+                .Where(g => g.Key != DateTime.MinValue)
+                .Select(g => new { Label = g.Key.ToString("dd MMM"), Value = (decimal)g.Sum(i => SafeDecimal(i.GetValueOrDefault("qty_sold"))), Date = g.Key })
+                .OrderBy(x => x.Date)
+                .Select(x => (dynamic)x).ToList();
+
+            // 4. Platforms
+            platforms = data
+                .GroupBy(x => x.GetValueOrDefault("sale_channel")?.ToString() ?? "Unknown")
+                .Select(g => new { Label = g.Key, Value = (int)g.Count() })
+                .Select(x => (dynamic)x).ToList();
+
+            // 5. Top Products
+            topProducts = data
+                .GroupBy(x => x.GetValueOrDefault("sku")?.ToString() ?? "N/A")
+                .Select(g => new ProductStat
+                {
+                    Sku = g.Key,
+                    Name = g.FirstOrDefault()?.GetValueOrDefault("product_name")?.ToString() ?? "",
+                    TotalQty = g.Sum(i => SafeDecimal(i.GetValueOrDefault("qty_sold"))),
+                    TotalAmount = g.Sum(i => SafeDecimal(i.GetValueOrDefault("sale_price")) * SafeDecimal(i.GetValueOrDefault("qty_sold")))
+                })
+                .OrderByDescending(x => x.TotalQty)
+                .Take(10)
+                .ToList();
+        }
+
+        // Render Charts via JS - Always call these to reset/clear old data
+        _ = JS.InvokeVoidAsync("dashboard.renderPie", "chart-region", regions.Select(x => (string)x.Label), regions.Select(x => (object)x.Value), "Orders by Region", 350);
+        _ = JS.InvokeVoidAsync("dashboard.renderPie", "chart-customers", customers.Select(x => (string)x.Label), customers.Select(x => (object)x.Value), "Orders by Customer", 350);
+        _ = JS.InvokeVoidAsync("dashboard.renderPie", "chart-daily", daily.Select(x => (string)x.Label), daily.Select(x => (object)x.Value), "Daily Sales Volume", 350);
+        _ = JS.InvokeVoidAsync("dashboard.renderPie", "chart-platforms", platforms.Select(x => (string)x.Label), platforms.Select(x => (object)x.Value), "Platform Share", 300);
+    }
+
+    private decimal SafeDecimal(object? v)
+    {
+        if (v == null) return 0;
+        if (v is decimal d) return d;
+        if (v is int i) return i;
+        if (v is long l) return l;
+        if (v is double db) return (decimal)db;
+        if (decimal.TryParse(v.ToString(), out var res)) return res;
+        return 0;
+    }
+
+    private string FmtState(object? v)
+    {
+        var s = v?.ToString() ?? "N/A";
+        if (s.Contains("กรุงเทพ") || s.ToLower().Contains("bangkok")) return "Bangkok";
+        return s;
+    }
+
+    private string BuildApiUrl(string path)
+    {
+        var baseUri = _mdwClient!.BaseAddress!;
+        var root = new Uri(baseUri, path);
+
+        var qs = new Dictionary<string, string?>();
+        if (!string.IsNullOrEmpty(filter.Channel)) qs["channel"] = filter.Channel;
+        if (!string.IsNullOrEmpty(filter.ShopId)) qs["shopId"] = filter.ShopId;
+        if (filter.CreatedFrom.HasValue) qs["createdFrom"] = filter.CreatedFrom.Value.ToString("yyyy-MM-dd");
+        if (filter.CreatedTo.HasValue) qs["createdTo"] = filter.CreatedTo.Value.ToString("yyyy-MM-dd");
+        qs["pageSize"] = filter.PageSize.ToString();
+
+        return QueryHelpers.AddQueryString(root.ToString(), qs!);
+    }
+
+    private string? NormalizeToken(string? t)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return null;
+        t = t.Trim().Trim('"');
+        if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) t = t[7..].Trim();
+        return t;
+    }
+
+    private static string CanonicalPlatform(string? p)
+    {
+        var x = (p ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(x)) return "";
+        if (x.Contains("tiktok")) return "TikTok";
+        if (x.Contains("shopee")) return "Shopee";
+        if (x.Contains("lazada")) return "Lazada";
+        return p?.Trim() ?? "";
+    }
+
+    private class ApiResp
+    {
+        public int total { get; set; }
+        public List<object> items { get; set; } = new();
+    }
+
+    private static Dictionary<string, object?> RowToDict(object row)
+    {
+        if (row is System.Text.Json.JsonElement je) return JsonToDict(je);
+        return new Dictionary<string, object?>();
+    }
+
+    private static Dictionary<string, object?> JsonToDict(System.Text.Json.JsonElement je)
+    {
+        var d = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var prop in je.EnumerateObject()) d[prop.Name] = JsonToObj(prop.Value);
+        return d;
+    }
+
+    private static object? JsonToObj(System.Text.Json.JsonElement v)
+    {
+        switch (v.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Null: return null;
+            case System.Text.Json.JsonValueKind.String:
+                var s = v.GetString();
+                if (DateTime.TryParse(s, out var dt)) return dt;
+                return s;
+            case System.Text.Json.JsonValueKind.Number:
+                if (v.TryGetDecimal(out var dec)) return dec;
+                return v.ToString();
+            default: return v.ToString();
+        }
+    }
+}

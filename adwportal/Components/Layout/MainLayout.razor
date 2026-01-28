@@ -108,6 +108,14 @@
                                     FlowAccount Export
                                 </NavLink>
                             </li>
+                            @if (auth.User.IsInRole("Admin"))
+                            {
+                                <li class="nav-item">
+                                    <NavLink href="/AdwOverallDashboard" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                        ADW web chart
+                                    </NavLink>
+                                </li>
+                            }
                         }
                     </ul>
                 </nav>
