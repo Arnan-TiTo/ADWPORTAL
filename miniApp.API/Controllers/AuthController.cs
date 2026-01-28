@@ -6,6 +6,7 @@ using miniApp.API.Data;
 using miniApp.API.Dtos;
 using miniApp.API.Models;
 using System;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 
@@ -59,8 +60,16 @@ namespace miniApp.API.Controllers
             if (user.isActive != 1)
                 return Unauthorized("Account is not active.");
 
-            if (user.Role != login.Role)
+            var portalRoles = new[] { "Admin", "OfficeUser", "SuperUser" };
+            if (login.Role == "Admin")
+            {
+                if (!portalRoles.Contains(user.Role))
+                    return Unauthorized("Invalid account access app.");
+            }
+            else if (user.Role != login.Role)
+            {
                 return Unauthorized("Invalid account access app.");
+            }
 
             var token = _jwtService.GenerateToken(user);
 
@@ -68,7 +77,8 @@ namespace miniApp.API.Controllers
             {
                 token,
                 userId = user.Id,
-                fullname = user.Fullname
+                fullname = user.Fullname,
+                role = user.Role
             });
         }
 

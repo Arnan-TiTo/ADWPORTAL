@@ -48,6 +48,35 @@ namespace adwportal.Services
             }
         }
 
+        private async Task<string?> GetMdwApiTokenAsync(CancellationToken ct = default)
+        {
+            try
+            {
+                var client = _factory.CreateClient("MdwApiBaseUrl");
+                var response = await client.PostAsJsonAsync("/api/Auth/login",
+                    new { username = "admin", password = "123456yjm" }, ct);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("MDWAPI login failed: {Status}", response.StatusCode);
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync(ct);
+                using var doc = JsonDocument.Parse(json);
+
+                if (doc.RootElement.TryGetProperty("token", out var tokenProp))
+                    return tokenProp.GetString();
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get MDWAPI token");
+                return null;
+            }
+        }
+
         public async Task<bool> SyncCreateUserAsync(
             int userId,
             string username,
@@ -55,45 +84,9 @@ namespace adwportal.Services
             string role,
             bool isActive)
         {
-            try
-            {
-                var token = await GetIdwApiTokenAsync();
-                if (string.IsNullOrEmpty(token))
-                {
-                    _logger.LogWarning("Cannot sync user create - no IDWAPI token");
-                    return false;
-                }
-
-                var client = _factory.CreateClient("IdwApiBaseUrl");
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", token);
-
-                var payload = new
-                {
-                    username,
-                    password,
-                    role,
-                    isActive
-                };
-
-                var response = await client.PostAsJsonAsync("/api/users", payload);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    _logger.LogInformation("User synced to IDWAPI: {Username} (ID: {Id})", username, userId);
-                    return true;
-                }
-
-                var error = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("IDWAPI user create failed: {Status} - {Error}",
-                    response.StatusCode, error);
-                return false;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error syncing user create to IDWAPI: {Username}", username);
-                return false;
-            }
+            var idwOk = await SyncToTargetAsync("IdwApiBaseUrl", "POST", username, password, role, isActive);
+            var mdwOk = await SyncToTargetAsync("MdwApiBaseUrl", "POST", username, password, role, isActive);
+            return idwOk || mdwOk;
         }
 
         public async Task<bool> SyncUpdateUserAsync(
@@ -103,78 +96,109 @@ namespace adwportal.Services
             string role,
             bool isActive)
         {
+            var idwOk = await SyncToTargetAsync("IdwApiBaseUrl", "PUT", username, password, role, isActive);
+            var mdwOk = await SyncToTargetAsync("MdwApiBaseUrl", "PUT", username, password, role, isActive);
+            return idwOk || mdwOk;
+        }
+
+        private async Task<bool> SyncToTargetAsync(
+            string clientName,
+            string method,
+            string username,
+            string? password,
+            string role,
+            bool isActive)
+        {
             try
             {
-                _logger.LogInformation("[SYNC UPDATE] Starting sync for user {UserId}: username={Username}, hasPassword={HasPassword}, role={Role}, isActive={IsActive}", 
-                    userId, username, !string.IsNullOrEmpty(password), role, isActive);
+                string? token = clientName == "IdwApiBaseUrl" 
+                    ? await GetIdwApiTokenAsync() 
+                    : await GetMdwApiTokenAsync();
 
-                var token = await GetIdwApiTokenAsync();
                 if (string.IsNullOrEmpty(token))
                 {
-                    _logger.LogWarning("Cannot sync user update - no IDWAPI token");
+                    _logger.LogWarning("Cannot sync user {Method} to {Target} - no token", method, clientName);
                     return false;
                 }
 
-                var client = _factory.CreateClient("IdwApiBaseUrl");
+                var client = _factory.CreateClient(clientName);
                 client.DefaultRequestHeaders.Authorization =
                     new AuthenticationHeaderValue("Bearer", token);
 
-                // Build payload - only include password if it's provided
-                var payload = string.IsNullOrEmpty(password)
-                    ? new { username, role, isActive }
-                    : (object)new { username, password, role, isActive };
+                // Dictionary keys in lowerCamelCase to match standard JSON policies used in target APIs
+                var payload = new System.Collections.Generic.Dictionary<string, object?>
+                {
+                    { "username", username },
+                    { "role", role },
+                    { "isActive", isActive } // bool
+                };
 
-                _logger.LogInformation("[SYNC UPDATE] Sending PUT to /api/users/by-username/{Username} with payload (hasPassword={HasPassword})", 
-                    username, !string.IsNullOrEmpty(password));
+                if (!string.IsNullOrEmpty(password))
+                {
+                    payload.Add("password", password);
+                }
 
-                // Use username-based endpoint instead of ID
-                var response = await client.PutAsJsonAsync($"/api/users/by-username/{Uri.EscapeDataString(username)}", payload);
+                HttpResponseMessage response;
+                if (method == "POST")
+                {
+                    response = await client.PostAsJsonAsync("/api/users", payload);
+                }
+                else
+                {
+                    response = await client.PutAsJsonAsync($"/api/users/by-username/{Uri.EscapeDataString(username)}", payload);
+                    
+                    if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        if (!string.IsNullOrEmpty(password))
+                             response = await client.PostAsJsonAsync("/api/users", payload);
+                        else
+                        {
+                            _logger.LogWarning("Fallback POST failed for {Username} on {Target} - no password provided", username, clientName);
+                            return false;
+                        }
+                    }
+                }
 
                 if (response.IsSuccessStatusCode)
                 {
-                    _logger.LogInformation("User update synced to IDWAPI: {Username}", username);
+                    _logger.LogInformation("User {Method} synced to {Target}: {Username}", method, clientName, username);
                     return true;
                 }
 
-                // If user not found (404), try to create it instead
-                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                {
-                    _logger.LogWarning("User {Username} not found in IDWAPI, attempting to create instead", username);
-                    
-                    // Need password for create
-                    if (string.IsNullOrEmpty(password))
-                    {
-                        _logger.LogWarning("Cannot create user in IDWAPI - password is required but not provided");
-                        return false;
-                    }
-
-                    return await SyncCreateUserAsync(userId, username, password, role, isActive);
-                }
-
                 var error = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("IDWAPI user update failed: {Status} - {Error}",
-                    response.StatusCode, error);
+                _logger.LogWarning("{Target} user {Method} failed: {Status} - {Error}",
+                    clientName, method, response.StatusCode, error);
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error syncing user update to IDWAPI: {Username}", username);
+                _logger.LogError(ex, "Error syncing user {Method} to {Target}: {Username}", method, clientName, username);
                 return false;
             }
         }
 
         public async Task<bool> SyncDeleteUserAsync(int userId)
         {
+            var idwOk = await SyncDeleteFromTargetAsync("IdwApiBaseUrl", userId);
+            var mdwOk = await SyncDeleteFromTargetAsync("MdwApiBaseUrl", userId);
+            return idwOk || mdwOk;
+        }
+
+        private async Task<bool> SyncDeleteFromTargetAsync(string clientName, int userId)
+        {
             try
             {
-                var token = await GetIdwApiTokenAsync();
+                string? token = clientName == "IdwApiBaseUrl" 
+                    ? await GetIdwApiTokenAsync() 
+                    : await GetMdwApiTokenAsync();
+
                 if (string.IsNullOrEmpty(token))
                 {
-                    _logger.LogWarning("Cannot sync user delete - no IDWAPI token");
+                    _logger.LogWarning("Cannot sync user delete to {Target} - no token", clientName);
                     return false;
                 }
 
-                var client = _factory.CreateClient("IdwApiBaseUrl");
+                var client = _factory.CreateClient(clientName);
                 client.DefaultRequestHeaders.Authorization =
                     new AuthenticationHeaderValue("Bearer", token);
 
@@ -182,18 +206,18 @@ namespace adwportal.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    _logger.LogInformation("User delete synced to IDWAPI (ID: {Id})", userId);
+                    _logger.LogInformation("User delete synced to {Target} (ID: {Id})", clientName, userId);
                     return true;
                 }
 
                 var error = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("IDWAPI user delete failed: {Status} - {Error}",
-                    response.StatusCode, error);
+                _logger.LogWarning("{Target} user delete failed: {Status} - {Error}",
+                    clientName, response.StatusCode, error);
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error syncing user delete to IDWAPI (ID: {Id})", userId);
+                _logger.LogError(ex, "Error syncing user delete to {Target} (ID: {Id})", clientName, userId);
                 return false;
             }
         }

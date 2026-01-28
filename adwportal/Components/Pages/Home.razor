@@ -47,8 +47,8 @@
 
 <h3 class="mb-3 d-flex align-items-center justify-content-between">
     <span>Dashboard (@DashboardPlatform)</span>
-    <span class="text-muted">(@(mdwToken ?? "mdwToken is null"))</span>
-    <span class="text-muted">(@(idwToken ?? "idwToken is null"))</span> 
+    <!-- <span class="text-muted">(@(mdwToken ?? "mdwToken is null"))</span> -->
+    <!-- <span class="text-muted">(@(idwToken ?? "idwToken is null"))</span>  -->
     <div class="d-flex gap-2 align-items-center">
         <button class="btn btn-sm btn-outline-primary" @onclick="ManualRefresh" disabled="@isLoading">
             @if (isLoading)
@@ -70,13 +70,13 @@
     </div>
 </h3>
 
-<div class="alert alert-info" style="font-family:monospace; font-size:12px; max-height:200px; overflow:auto">
+<!-- <div class="alert alert-info" style="font-family:monospace; font-size:12px; max-height:200px; overflow:auto">
     <strong>Token Debug Logs:</strong>
     @foreach(var log in TokenCache.DebugLog)
     {
         <div>@log</div>
     }
-</div>
+</div> -->
 
 <!-- Token cards -->
 <div class="card mb-4">

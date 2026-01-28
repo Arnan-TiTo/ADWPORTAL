@@ -38,6 +38,8 @@
                     <label class="form-label">Role</label>
                     <InputSelect class="form-select" @bind-Value="model.Role">
                         <option value="Admin">Admin</option>
+                        <option value="OfficeUser">OfficeUser</option>
+                        <option value="SuperUser">SuperUser</option>
                         <option value="FrontLine">FrontLine</option>
                         <option value="SaleReport">SaleReport</option>
                     </InputSelect>
@@ -430,6 +432,8 @@ else
             "admin" => "Admin",
             "frontline" => "FrontLine",
             "salereport" => "SaleReport",
+            "officeuser" => "OfficeUser",
+            "superuser" => "SuperUser",
             _ => role
         };
     }

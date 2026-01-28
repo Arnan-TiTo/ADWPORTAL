@@ -132,7 +132,7 @@ namespace adwportal.Services
                     if (user?.Identity?.IsAuthenticated != true)
                     {
                         _logger.LogWarning("[TokenCache] User not authenticated (Hybrid check failed)");
-                        DebugLog.Add("[Mdw] User not authenticated");
+                        // DebugLog.Add("[Mdw] User not authenticated");
                         return null;
                     }
 
@@ -141,12 +141,12 @@ namespace adwportal.Services
                     password = user?.FindFirst("PASSWORD")?.Value ?? tokenProvider.Password;
                 }
 
-                DebugLog.Add($"[Mdw] User: {username}, HasPwd: {!string.IsNullOrEmpty(password)}");
+                // DebugLog.Add($"[Mdw] User: {username}, HasPwd: {!string.IsNullOrEmpty(password)}");
 
                 if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
                 {
                     _logger.LogWarning("[TokenCache] Missing username or password. Username: {Username}, HasPassword: {HasPassword}", username, !string.IsNullOrEmpty(password));
-                    DebugLog.Add("[Mdw] Missing username or password");
+                    // DebugLog.Add("[Mdw] Missing username or password");
                     return null;
                 }
 
@@ -162,12 +162,12 @@ namespace adwportal.Services
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
                     _logger.LogError("[TokenCache] MDW login failed: {Status}, Error: {Error}", response.StatusCode, errorContent);
-                    DebugLog.Add($"[Mdw] Failed {response.StatusCode}: {errorContent}");
+                    // DebugLog.Add($"[Mdw] Failed {response.StatusCode}: {errorContent}");
                     return null;
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
-                DebugLog.Add($"[Mdw] Success JSON: {json}");
+                // DebugLog.Add($"[Mdw] Success JSON: {json}");
 
                 // var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
                 // Manual deserialize for debugging
@@ -175,7 +175,7 @@ namespace adwportal.Services
                  var result = System.Text.Json.JsonSerializer.Deserialize<LoginResponse>(json, options);
 
                 _logger.LogInformation("[TokenCache] MDW login successful");
-                DebugLog.Add($"[Mdw] Token parsed: {result?.Token}");
+                // DebugLog.Add($"[Mdw] Token parsed: {result?.Token}");
                 return result?.Token;
             }
             catch (Exception ex)

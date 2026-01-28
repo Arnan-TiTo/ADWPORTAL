@@ -130,12 +130,14 @@ app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos dto, Tok
     ctx.Session.SetString("JWT", dto.Token);
     ctx.Session.SetInt32("USERID", dto.UserId);
     ctx.Session.SetString("FULLNAME", dto.Fullname ?? "");
+    ctx.Session.SetString("ROLE", dto.Role ?? "");
     if (!string.IsNullOrEmpty(dto.Password))
         ctx.Session.SetString("PWD", dto.Password);
 
     var claims = new List<System.Security.Claims.Claim>
     {
         new(System.Security.Claims.ClaimTypes.Name, dto.Username ?? ""),
+        new(System.Security.Claims.ClaimTypes.Role, dto.Role ?? ""),
         new("USERID", dto.UserId.ToString()),
         new("JWT", dto.Token),
         new("FULLNAME", dto.Fullname ?? ""),
@@ -202,4 +204,4 @@ app.Run();
 // ======================
 // Dtos set-session
 // ======================
-public record SetSessionDtos(string Token, int UserId, string? Fullname, string? Username, string? Password);
+public record SetSessionDtos(string Token, int UserId, string? Fullname, string? Username, string? Password, string? Role);

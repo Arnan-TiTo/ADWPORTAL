@@ -23,77 +23,92 @@
                             </NavLink>
                         </li>
 
-                        <!-- Config (parent) -->
-                        <li class="nav-item">
-                            <button type="button"
-                                    class="nav-link btn btn-toggle w-100 d-flex align-items-center justify-content-between"
-                                    @onclick="ToggleConfig">
-                                <span>Config</span>
-                                <span class="caret @(configOpen ? "rotate-90" : "")">▶</span>
-                            </button>
+                        @if (auth.User.IsInRole("Admin"))
+                        {
+                            <!-- Config (parent) -->
+                            <li class="nav-item">
+                                <button type="button"
+                                        class="nav-link btn btn-toggle w-100 d-flex align-items-center justify-content-between"
+                                        @onclick="ToggleConfig">
+                                    <span>Config</span>
+                                    <span class="caret @(configOpen ? "rotate-90" : "")">▶</span>
+                                </button>
 
-                            @if (configOpen)
-                            {
-                                <ul class="nav flex-column ms-3 submenu">
-                                    <li class="nav-item">
-                                        <NavLink href="/UserList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                            User
-                                        </NavLink>
-                                    </li>
-                                    <li class="nav-item">
-                                        <NavLink href="/CompanyList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                            Company
-                                        </NavLink>
-                                    </li>
-                                    <li class="nav-item">
-                                        <NavLink href="/PartnerList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                            Partner
-                                        </NavLink>
-                                    </li>
-                                    <li class="nav-item">
-                                        <NavLink href="/ShopList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                            Shop
-                                        </NavLink>
-                                    </li>
-                                    <li class="nav-item">
-                                        <NavLink href="/MiscList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                            Misc
-                                        </NavLink>
-                                    </li>
-                                </ul>
-                            }
-                        </li>
+                                @if (configOpen)
+                                {
+                                    <ul class="nav flex-column ms-3 submenu">
+                                        <li class="nav-item">
+                                            <NavLink href="/UserList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                                User
+                                            </NavLink>
+                                        </li>
+                                        <li class="nav-item">
+                                            <NavLink href="/CompanyList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                                Company
+                                            </NavLink>
+                                        </li>
+                                        <li class="nav-item">
+                                            <NavLink href="/PartnerList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                                Partner
+                                            </NavLink>
+                                        </li>
+                                        <li class="nav-item">
+                                            <NavLink href="/ShopList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                                Shop
+                                            </NavLink>
+                                        </li>
+                                        <li class="nav-item">
+                                            <NavLink href="/MiscList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                                Misc
+                                            </NavLink>
+                                        </li>
+                                    </ul>
+                                }
+                            </li>
+                        }
 
-                        <li class="nav-item">
-                            <NavLink href="/IdwImport" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                IDW Import
-                            </NavLink>
-                        </li>
-                        <li class="nav-item">
-                            <NavLink href="/IdwManageList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                IDW Manage
-                            </NavLink>
-                        </li> 
-                        <li class="nav-item">
-                            <NavLink href="/shopsOAuth" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                MDW Shops OAuth
-                            </NavLink>
-                        </li>
-                        <li class="nav-item">
-                            <NavLink href="/normalize" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                MDW Normalize
-                            </NavLink>
-                        </li>
-                        <li class="nav-item">
-                            <NavLink href="/ViewOrderData" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                MDW Raw Data Import
-                            </NavLink>
-                        </li>
-                        <li class="nav-item">
-                            <NavLink href="/AdwFlowAccountExport" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                FlowAccount Export
-                            </NavLink>
-                        </li>
+                        @if (auth.User.IsInRole("Admin") || auth.User.IsInRole("OfficeUser") || auth.User.IsInRole("SuperUser"))
+                        {
+                            <li class="nav-item">
+                                <NavLink href="/IdwImport" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                    IDW Import
+                                </NavLink>
+                            </li>
+                            <li class="nav-item">
+                                <NavLink href="/IdwManageList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                    IDW Manage
+                                </NavLink>
+                            </li>
+                        }
+                        @if (auth.User.IsInRole("Admin"))
+                        {
+                            <li class="nav-item">
+                                <NavLink href="/shopsOAuth" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                    MDW Shops OAuth
+                                </NavLink>
+                            </li>
+                        }
+                        @if (auth.User.IsInRole("Admin") || auth.User.IsInRole("SuperUser"))
+                        {
+                            <li class="nav-item">
+                                <NavLink href="/normalize" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                    MDW Normalize
+                                </NavLink>
+                            </li>
+                        }
+                        @if (auth.User.IsInRole("Admin") || auth.User.IsInRole("OfficeUser") || auth.User.IsInRole("SuperUser"))
+                        {
+                            <li class="nav-item">
+                                <NavLink href="/ViewOrderData" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                    MDW Raw Data Import
+                                </NavLink>
+                            </li>
+                            <li class="nav-item">
+                                <NavLink href="/AdwFlowAccountExport" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
+                                    FlowAccount Export
+                                </NavLink>
+                            </li>
+                        }
                     </ul>
                 </nav>
             </div>

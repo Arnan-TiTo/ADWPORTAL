@@ -52,8 +52,17 @@ namespace miniApp.API.Controllers
             if (user.isActive != 1)
                 return Unauthorized("Account is not active.");
 
-            if (user.Role != dto.Role)
-                return Unauthorized("Invalid account access app.");
+            var portalRoles = new[] { "Admin", "OfficeUser", "SuperUser" };
+            if (dto.Role == "Admin")
+            {
+                if (!portalRoles.Contains(user.Role))
+                    return Unauthorized("Invalid account access app.");
+            }
+            else if (user.Role != dto.Role)
+            {
+                if (!(string.IsNullOrEmpty(dto.Role) && portalRoles.Contains(user.Role))) // Fallback for empty role if user is in portalRoles
+                   return Unauthorized("Invalid account access app.");
+            }
 
             var jwt = _jwtService.GenerateToken(user);
             return Ok(new
@@ -61,7 +70,8 @@ namespace miniApp.API.Controllers
                 token = jwt,
                 userId = user.Id,
                 fullname = user.Fullname,
-                username = user.Username
+                username = user.Username,
+                role = user.Role
             });
         }
 

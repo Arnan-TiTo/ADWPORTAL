@@ -94,6 +94,7 @@
         public string token { get; set; } = "";
         public int userId { get; set; }
         public string fullname { get; set; } = "";
+        public string role { get; set; } = "";
     }
 
     private async Task HandleLogin()
@@ -123,7 +124,8 @@
                 userId = data.userId,
                 fullname = data.fullname,
                 username = _model.Username,
-                password = _model.Password
+                password = _model.Password,
+                role = data.role
             });
             if (!ok) { _error = "Failed to set session."; return; }
 
@@ -168,7 +170,7 @@
         {
             qrStatus = "QR detected. Logging in...";
             var api = HttpClientFactory.CreateClient("ApiClient");
-            var r = await api.PostAsJsonAsync("api/QrLogin/loginByQr", new { qr = value });
+            var r = await api.PostAsJsonAsync("api/QrLogin/loginByQr", new { qr = value, role = _model.Role });
             if (!r.IsSuccessStatusCode) { qrStatus = await r.Content.ReadAsStringAsync(); return; }
 
             var result = await r.Content.ReadFromJsonAsync<LoginResponse>();
@@ -180,7 +182,8 @@
                 userId = result.userId,
                 fullname = result.fullname,
                 username = _model.Username,
-                password = _model.Password
+                password = _model.Password,
+                role = result.role
             });
 
             if (ok) Nav.NavigateTo("/", forceLoad: true, replace: true);

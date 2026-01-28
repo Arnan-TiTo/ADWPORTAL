@@ -89,6 +89,28 @@ namespace miniApp.API.Controllers
             });
         }
 
+        // GET api/users/by-username/{username}
+        [HttpGet("by-username/{username}")]
+        public async Task<ActionResult<UserResponseDto>> GetByUsername(string username)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+
+            var u = await _context.Users.FirstOrDefaultAsync(x => x.Username == username && x.isDelete == 0);
+            if (u == null) return NotFound();
+            return Ok(new UserResponseDto
+            {
+                Id = u.Id,
+                Username = u.Username,
+                Fullname = u.Fullname,
+                Email = u.Email ?? "",
+                Phone = u.Phone ?? "",
+                Role = u.Role.ToString(),
+                QrLogin = u.QrLogin,
+                isApproveQr = u.isApproveQr,
+                isActive = u.isActive
+            });
+        }
+
         // POST api/users
         [HttpPost]
         public async Task<ActionResult<object>> Create([FromBody] UserDto dto)
@@ -128,6 +150,8 @@ namespace miniApp.API.Controllers
                 "admin" => "Admin",
                 "frontline" => "FrontLine",
                 "salereport" => "SaleReport",
+                "officeuser" => "OfficeUser",
+                "superuser" => "SuperUser",
                 _ => role?.Trim() ?? ""
             };
         }
@@ -175,6 +199,39 @@ namespace miniApp.API.Controllers
 
             if (dto.Role != null)
                 u.Role = CanonicalRole(dto.Role);
+
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        // PUT api/users/by-username/{username}
+        [HttpPut("by-username/{username}")]
+        public async Task<IActionResult> UpdateByUsername(string username, [FromBody] UserDto dto)
+        {
+            if (!IsAuthorized()) return Unauthorized();
+
+            var u = await _context.Users.FirstOrDefaultAsync(x => x.Username == username && x.isDelete == 0);
+            if (u == null) return NotFound();
+
+            // Update fields similar to ID-based Update
+            if (!string.IsNullOrWhiteSpace(dto.Password))
+                u.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+
+            if (dto.Fullname != null)
+                u.Fullname = dto.Fullname.Trim();
+
+            if (dto.Phone != null)
+                u.Phone = dto.Phone.Trim();
+
+            if (dto.Email != null)
+                u.Email = dto.Email.Trim();
+
+            if (dto.Role != null)
+                u.Role = CanonicalRole(dto.Role);
+
+            if (dto.isActive != u.isActive)
+                u.isActive = dto.isActive;
 
             await _context.SaveChangesAsync();
 
