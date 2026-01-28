@@ -289,37 +289,8 @@ else
     {
         try
         {
-            // 1) ลองอ่านจาก AuthTokenProvider ก่อน
+            // Get token from AuthTokenProvider (which delegates to TokenCacheService)
             token = TokenProvider.IdwToken;
-
-            // 2) ถ้ายังว่าง ให้ใช้ username/password จาก Claims ไป login ใหม่
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                var authState = await Auth.GetAuthenticationStateAsync();
-                var user = authState.User;
-
-                var username =
-                    user.Identity?.Name
-                    ?? user.FindFirst("USERNAME")?.Value;
-
-                var password = TokenProvider.Password;
-
-                if (!string.IsNullOrWhiteSpace(username) &&
-                    !string.IsNullOrWhiteSpace(password))
-                {
-                    var login = await Idw.LoginAsync(username, password);
-
-                    if (!string.IsNullOrWhiteSpace(login?.Token))
-                    {
-                        token = login!.Token;
-                        TokenProvider.IdwToken = token;
-                    }
-                    else
-                    {
-                        token = TokenProvider.IdwToken;
-                    }
-                }
-            }
 
             if (string.IsNullOrWhiteSpace(token))
             {

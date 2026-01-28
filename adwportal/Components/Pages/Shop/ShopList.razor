@@ -4,6 +4,7 @@
 @inject ShopService Svc
 @inject PartnerService PartnerSvc
 @inject IdwImportService Idw
+@inject AuthTokenProvider TokenProvider
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -135,9 +136,10 @@ else
         try
         {
             loading = true;
-            var login = await Idw.LoginAsync("admin", "123456yjm");
-            token = login?.Token;
-            if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
+            
+            // Get token from AuthTokenProvider (which delegates to TokenCacheService)
+            token = TokenProvider.IdwToken;
+            if (string.IsNullOrWhiteSpace(token)) { error = "Token is empty. Please login."; return; }
 
             // โหลดข้อมูลครั้งเดียว แล้วกรองฝั่ง FE
             partners = await PartnerSvc.GetPartnersAsync(token!);

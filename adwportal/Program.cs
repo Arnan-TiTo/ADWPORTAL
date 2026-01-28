@@ -93,6 +93,8 @@ builder.Services.AddScoped<CompanyService>();
 builder.Services.AddScoped<PartnerService>();
 builder.Services.AddScoped<ShopService>();
 builder.Services.AddScoped<AuthTokenProvider>();
+builder.Services.AddScoped<UserSyncService>();
+builder.Services.AddSingleton<TokenCacheService>();
 
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
@@ -119,7 +121,7 @@ app.UseAntiforgery();
 
 // ===== Session login (ถูกเรียกจาก miniapp.setSession) =====
 
-app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos dto) =>
+app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos dto, TokenCacheService tokenService) =>
 {
     if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
         return Results.BadRequest("Invalid token");
@@ -136,20 +138,32 @@ app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos dto) =>
         new(System.Security.Claims.ClaimTypes.Name, dto.Username ?? ""),
         new("USERID", dto.UserId.ToString()),
         new("JWT", dto.Token),
-        new("FULLNAME", dto.Fullname ?? "")
+        new("FULLNAME", dto.Fullname ?? ""),
+        new("PASSWORD", dto.Password ?? "") 
     };
 
     // ⭐ เก็บ password ลง Claim "PWD" (ระวังเรื่อง security แต่ตรงกับ requirement ที่ขอ)
     // if (!string.IsNullOrEmpty(dto.Password))
     //    claims.Add(new("PWD", dto.Password));
 
-    var id = new System.Security.Claims.ClaimsIdentity(
-        claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
-    var cp = new System.Security.Claims.ClaimsPrincipal(id);
-    await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, cp);
+    // Sign in cookie
+    await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+        new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
+        new AuthenticationProperties { IsPersistent = true });
 
     await ctx.Session.CommitAsync();
+
+    // Eagerly fetch tokens to pre-warm the cache (Background Task to avoid blocking UI)
+    // Pass args explicitly because Task.Run loses HttpContext
+    Task.Run(async () => 
+    {
+        try
+        {
+            await tokenService.GetMdwTokenAsync(dto.Username, dto.Password);
+            await tokenService.GetIdwTokenAsync(dto.Username, dto.Password);
+        }
+        catch { /* ignore */ }
+    });
 
     return Results.Ok(new { success = true });
 })

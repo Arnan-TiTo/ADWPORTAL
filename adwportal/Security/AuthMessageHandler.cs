@@ -14,7 +14,8 @@ namespace adwportal.Security
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
         {
             var jwt = _http.HttpContext?.Session.GetString("JWT");
-            if (!string.IsNullOrWhiteSpace(jwt))
+            // Only set Authorization if not already set (e.g. by UserList.razor using Legacy Token)
+            if (!string.IsNullOrWhiteSpace(jwt) && req.Headers.Authorization == null)
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
             if (!string.IsNullOrWhiteSpace(_fixed.Token))

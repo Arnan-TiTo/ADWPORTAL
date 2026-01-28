@@ -6,6 +6,8 @@
 @inject IOptions<ApiSettings> Options
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject adwportal.Services.UserSyncService UserSync
+@inject adwportal.Services.TokenCacheService TokenCache
 
 <h3>@(id == 0 ? "Create User" : $"Edit User #{id}")</h3>
 
@@ -358,13 +360,14 @@ else
     private bool isExisting => id != 0;
     private string? password;
 
+#pragma warning disable CS0414
     private bool loading;
+#pragma warning restore CS0414
     private string? error;
 
     // QR modal
     private bool showQrModal;
     private string? qrImageUrl;
-    private bool sendingMail;
 
     // Locations
     private List<LocationOption> locationOptions = new();
@@ -399,7 +402,8 @@ else
         c.BaseAddress = new Uri(BaseSafe, UriKind.Absolute);
         c.DefaultRequestHeaders.Accept.Clear();
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-        var t = StripBearer(FIXED_TOKEN);
+        // User Controller (Legacy) uses a fixed token from config
+        var t = StripBearer(Options.Value.LegacyUserToken);
         c.DefaultRequestHeaders.Authorization =
             string.IsNullOrWhiteSpace(t) ? null : new AuthenticationHeaderValue("Bearer", t);
         return c;
@@ -408,7 +412,8 @@ else
     // ---------- Data loaders ----------
     private async Task LoadUser()
     {
-        var res = await MakeClient().GetFromJsonAsync<UserEditModel>($"api/Users/{id}");
+        var client = MakeClient();
+        var res = await client.GetFromJsonAsync<UserEditModel>($"api/Users/{id}");
         if (res != null)
         {
             model = res;
@@ -455,10 +460,32 @@ else
             if (resp.IsSuccessStatusCode)
             {
                 await SafeToast("Saved.", "success");
-                if (id == 0)
+                
+                // Sync to IDWAPI after successful save
+                try
                 {
-                    var created = await resp.Content.ReadFromJsonAsync<UserIdResponse>();
-                    if (created != null) Nav.NavigateTo($"/UserEdit/{created.Id}");
+                    if (id == 0)
+                    {
+                        var created = await resp.Content.ReadFromJsonAsync<UserIdResponse>();
+                        if (created != null)
+                        {
+                            // Sync create
+                            _ = UserSync.SyncCreateUserAsync(created.Id, model.Username ?? "", password ?? "", CanonicalRole(model.Role), model.IsActive == 1);
+                            Nav.NavigateTo($"/UserEdit/{created.Id}");
+                        }
+                    }
+                    else
+                    {
+                        // Sync update
+                        Console.WriteLine($"[DEBUG] Syncing update: id={id}, username={model.Username}, hasPassword={!string.IsNullOrEmpty(password)}, role={CanonicalRole(model.Role)}, isActive={model.IsActive == 1}");
+                        var syncResult = await UserSync.SyncUpdateUserAsync(id, model.Username ?? "", password, CanonicalRole(model.Role), model.IsActive == 1);
+                        Console.WriteLine($"[DEBUG] Update sync result: {syncResult}");
+                    }
+                }
+                catch (Exception syncEx)
+                {
+                    // Log but don't fail the operation
+                    Console.WriteLine($"Sync to IDWAPI failed: {syncEx.Message}");
                 }
             }
             else
@@ -478,7 +505,8 @@ else
     // ---------- QR actions ----------
     private async Task Approve()
     {
-        var resp = await MakeClient().PutAsync($"api/Users/{id}/approve-qr", null);
+        var client = MakeClient();
+        var resp = await client.PutAsync($"api/Users/{id}/approve-qr", null);
         if (resp.IsSuccessStatusCode)
         {
             model.IsApproveQr = 1;
@@ -492,7 +520,8 @@ else
 
     private async Task Revoke()
     {
-        var resp = await MakeClient().PutAsync($"api/Users/{id}/revoke-qr", null);
+        var client = MakeClient();
+        var resp = await client.PutAsync($"api/Users/{id}/revoke-qr", null);
         if (resp.IsSuccessStatusCode)
         {
             model.IsApproveQr = 0;
@@ -583,7 +612,8 @@ else
     // ---------- Active / Inactive ----------
     private async Task Activate()
     {
-        var resp = await MakeClient().PutAsync($"api/Users/{id}/activate", null);
+        var client = MakeClient();
+        var resp = await client.PutAsync($"api/Users/{id}/activate", null);
         if (resp.IsSuccessStatusCode)
         {
             model.IsActive = 1;
@@ -597,7 +627,8 @@ else
 
     private async Task Deactivate()
     {
-        var resp = await MakeClient().PutAsync($"api/Users/{id}/deactivate", null);
+        var client = MakeClient();
+        var resp = await client.PutAsync($"api/Users/{id}/deactivate", null);
         if (resp.IsSuccessStatusCode)
         {
             model.IsActive = 0;
@@ -614,7 +645,8 @@ else
     {
         try
         {
-            var data = await MakeClient().GetFromJsonAsync<List<LocationOption>>("api/locations/dropdown");
+            var client = MakeClient();
+            var data = await client.GetFromJsonAsync<List<LocationOption>>("api/locations/dropdown");
             locationOptions = data ?? new List<LocationOption>();
         }
         catch (Exception ex)
@@ -628,7 +660,8 @@ else
         isBusy = true;
         try
         {
-            var data = await MakeClient().GetFromJsonAsync<List<UserLocationDtos>>($"api/userlocations/user/{id}");
+            var client = MakeClient();
+            var data = await client.GetFromJsonAsync<List<UserLocationDtos>>($"api/userlocations/user/{id}");
             var list = data ?? new List<UserLocationDtos>();
             rows = list
                 .Select(d => new UserLocationView
@@ -664,7 +697,8 @@ else
         isBusy = true;
         try
         {
-            var res = await MakeClient().PostAsJsonAsync("api/userlocations", new UserLocationDtos { UserId = id, LocationId = selectedLocationId });
+            var client = MakeClient();
+            var res = await client.PostAsJsonAsync("api/userlocations", new UserLocationDtos { UserId = id, LocationId = selectedLocationId });
             if (!res.IsSuccessStatusCode)
             {
                 var msg = await res.Content.ReadAsStringAsync();
@@ -726,14 +760,15 @@ else
         isBusy = true;
         try
         {
-            var del = await MakeClient().DeleteAsync($"api/userlocations/user/{r.UserId}/location/{r.LocationId}");
+            var client = MakeClient();
+            var del = await client.DeleteAsync($"api/userlocations/user/{r.UserId}/location/{r.LocationId}");
             if (!del.IsSuccessStatusCode)
             {
                 await SafeToast($"Update failed (delete): {await del.Content.ReadAsStringAsync()}", "error");
                 return;
             }
 
-            var add = await MakeClient().PostAsJsonAsync("api/userlocations", new UserLocationDtos { UserId = r.UserId, LocationId = r.EditLocationId });
+            var add = await client.PostAsJsonAsync("api/userlocations", new UserLocationDtos { UserId = r.UserId, LocationId = r.EditLocationId });
             if (!add.IsSuccessStatusCode)
             {
                 await SafeToast($"Update failed (add): {await add.Content.ReadAsStringAsync()}", "error");
@@ -758,7 +793,8 @@ else
         isBusy = true;
         try
         {
-            var res = await MakeClient().DeleteAsync($"api/userlocations/user/{r.UserId}/location/{r.LocationId}");
+            var client = MakeClient();
+            var res = await client.DeleteAsync($"api/userlocations/user/{r.UserId}/location/{r.LocationId}");
             if (!res.IsSuccessStatusCode)
             {
                 await SafeToast($"Delete failed: {await res.Content.ReadAsStringAsync()}", "error");
@@ -781,7 +817,8 @@ else
         try
         {
             var locIds = rows.Select(x => x.LocationId).Distinct().ToArray();
-            var res = await MakeClient().PutAsJsonAsync($"api/userlocations/user/{id}", new UpdateUserLocationsRequest { LocationIds = locIds });
+            var client = MakeClient();
+            var res = await client.PutAsJsonAsync($"api/userlocations/user/{id}", new UpdateUserLocationsRequest { LocationIds = locIds });
             if (!res.IsSuccessStatusCode)
             {
                 await SafeToast($"Save failed: {await res.Content.ReadAsStringAsync()}", "error");

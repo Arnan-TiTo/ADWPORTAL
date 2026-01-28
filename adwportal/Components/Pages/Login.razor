@@ -23,7 +23,7 @@
                       @onsubmit:preventDefault FormName="login">
                 <DataAnnotationsValidator />
                 <ValidationSummary />
-
+                <AntiforgeryToken />
                 <div class="mb-3">
                     <label class="form-label">Username</label>
                     <InputText class="form-control" @bind-Value="_model.Username" />

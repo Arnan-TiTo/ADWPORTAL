@@ -266,49 +266,16 @@ else
 
         try
         {
-            // --- MDW token ---
-            var mdwT = NormalizeToken(TokenProvider.MdwToken);
-            if (string.IsNullOrWhiteSpace(mdwT))
-            {
-                var authState = await Auth.GetAuthenticationStateAsync();
-                var user = authState.User;
-                var username = user.Identity?.Name ?? user.FindFirst("USERNAME")?.Value;
-                var password = TokenProvider.Password;
+            // Get tokens from AuthTokenProvider (which delegates to TokenCacheService)
+            _mdwToken = NormalizeToken(TokenProvider.MdwToken);
+            _idwToken = NormalizeToken(TokenProvider.IdwToken);
 
-                if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
-                {
-                    var login = await MdwSvc.LoginAsync(username, password);
-                    mdwT = NormalizeToken(login?.Token);
-                    if (!string.IsNullOrWhiteSpace(mdwT))
-                        TokenProvider.MdwToken = mdwT;
-                }
-            }
-
-            _mdwToken = mdwT;
             if (string.IsNullOrWhiteSpace(_mdwToken))
                 throw new Exception("No MDW token. Please login again.");
 
             _mdwClient = ClientFactory.CreateClient("MdwApiBaseUrl");
             _mdwClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _mdwToken);
-
-            // --- IDW token (for shops + misc/platform/status) ---
-            _idwToken = NormalizeToken(TokenProvider.IdwToken);
-            if (string.IsNullOrWhiteSpace(_idwToken))
-            {
-                var authState = await Auth.GetAuthenticationStateAsync();
-                var user = authState.User;
-                var username = user.Identity?.Name ?? user.FindFirst("USERNAME")?.Value;
-                var password = TokenProvider.Password;
-
-                if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
-                {
-                    var loginIdw = await IdwSvc.LoginAsync(username, password);
-                    _idwToken = NormalizeToken(loginIdw?.Token);
-                    if (!string.IsNullOrWhiteSpace(_idwToken))
-                        TokenProvider.IdwToken = _idwToken;
-                }
-            }
 
             if (!string.IsNullOrWhiteSpace(_idwToken))
             {

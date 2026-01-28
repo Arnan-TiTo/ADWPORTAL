@@ -4,10 +4,12 @@
     {
         private readonly IHttpContextAccessor _http;
         private readonly string? _fixedToken;
+        private readonly TokenCacheService? _tokenCache;
 
-        public AuthTokenProvider(IHttpContextAccessor http)
+        public AuthTokenProvider(IHttpContextAccessor http, TokenCacheService? tokenCache = null)
         {
             _http = http;
+            _tokenCache = tokenCache;
             // fixed token สำหรับ Portal API (ถ้าใช้)
             _fixedToken = Environment.GetEnvironmentVariable("AuthToken", EnvironmentVariableTarget.Machine);
         }
@@ -35,25 +37,24 @@
             }
         }
 
-        // ========== IDW TOKEN ==========
-        private string? _idwToken;
+        // ========== IDW TOKEN (Delegated to TokenCacheService) ==========
         public string? IdwToken
         {
             get
             {
-                if (!string.IsNullOrEmpty(_idwToken))
-                    return _idwToken;
+                // Use TokenCacheService if available
+                if (_tokenCache != null)
+                {
+                    return _tokenCache.GetIdwTokenAsync().GetAwaiter().GetResult();
+                }
 
+                // Fallback to session (for backward compatibility)
                 var s = Session?.GetString("IDW_TOKEN");
-                if (!string.IsNullOrEmpty(s))
-                    _idwToken = s;
-
-                return _idwToken;
+                return s;
             }
             set
             {
-                _idwToken = value;
-
+                // Still allow setting for backward compatibility
                 if (Session == null) return;
 
                 if (string.IsNullOrEmpty(value))
@@ -63,25 +64,24 @@
             }
         }
 
-        // ========== MDW TOKEN ==========
-        private string? _mdwToken;
+        // ========== MDW TOKEN (Delegated to TokenCacheService) ==========
         public string? MdwToken
         {
             get
             {
-                if (!string.IsNullOrEmpty(_mdwToken))
-                    return _mdwToken;
+                // Use TokenCacheService if available
+                if (_tokenCache != null)
+                {
+                    return _tokenCache.GetMdwTokenAsync().GetAwaiter().GetResult();
+                }
 
+                // Fallback to session (for backward compatibility)
                 var s = Session?.GetString("MDW_TOKEN");
-                if (!string.IsNullOrEmpty(s))
-                    _mdwToken = s;
-
-                return _mdwToken;
+                return s;
             }
             set
             {
-                _mdwToken = value;
-
+                // Still allow setting for backward compatibility
                 if (Session == null) return;
 
                 if (string.IsNullOrEmpty(value))

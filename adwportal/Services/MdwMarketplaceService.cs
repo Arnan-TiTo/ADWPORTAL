@@ -263,6 +263,7 @@ namespace adwportal.Services
             string? status = null,
             DateTime? fromUtc = null,
             DateTime? toUtc = null,
+            string? dateField = null,
             int page = 1,
             int pageSize = 50,
             string? sort = "createdDesc",
@@ -277,6 +278,7 @@ namespace adwportal.Services
             if (!string.IsNullOrWhiteSpace(status)) qb.Add("status", status);
             if (fromUtc.HasValue) qb.Add("fromUtc", fromUtc.Value.ToUniversalTime().ToString("o"));
             if (toUtc.HasValue) qb.Add("toUtc", toUtc.Value.ToUniversalTime().ToString("o"));
+            if (!string.IsNullOrWhiteSpace(dateField)) qb.Add("dateField", dateField);
             if (page <= 0) page = 1;
             if (pageSize <= 0 || pageSize > 200) pageSize = 50;
             qb.Add("page", page.ToString());

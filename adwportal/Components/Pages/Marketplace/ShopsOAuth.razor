@@ -176,43 +176,17 @@
 
         try
         {
+            // Get tokens from AuthTokenProvider (which delegates to TokenCacheService)
+            _idwToken = NormalizeToken(TokenProvider.IdwToken);
+            _mdwToken = NormalizeToken(TokenProvider.MdwToken);
+
             if (string.IsNullOrWhiteSpace(_idwToken) || string.IsNullOrWhiteSpace(_mdwToken))
             {
-                var authState = await Auth.GetAuthenticationStateAsync();
-                var user = authState.User;
-
-                var username =
-                    user.Identity?.Name
-                    ?? user.FindFirst("USERNAME")?.Value;
-
-                var password = TokenProvider.Password;
-
-                if (!string.IsNullOrWhiteSpace(username) &&
-                    !string.IsNullOrWhiteSpace(password))
-                {
-                    // 1) login IDW
-                    var loginIdw = await Idw.LoginAsync(username, password);
-                    _idwToken = NormalizeToken(loginIdw?.Token) ?? throw new Exception("Login IDW failed");
-
-                    // 2) login MDW
-                    var loginMdw = await MdwSvc.LoginAsync(username, password);
-                    _mdwToken = NormalizeToken(loginMdw?.Token) ?? throw new Exception("Login MDW failed");
-
-                    if (!string.IsNullOrWhiteSpace(_idwToken))
-                    {
-                        // cache ใส่ provider ให้หน้าอื่นใช้ต่อ
-                        TokenProvider.IdwToken = _idwToken;
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(_mdwToken))
-                    {
-                        // cache ใส่ provider ให้หน้าอื่นใช้ต่อ
-                        TokenProvider.MdwToken = _mdwToken;
-                    }
-                }
+                errorMsg = "Missing tokens. Please go to Home page (/) to initialize tokens.";
+                return;
             }
 
-            // 3) bind token ให้ client ทั้งสอง
+            // bind token ให้ client ทั้งสอง
             _idwClient = ClientFactory.CreateClient("IdwApiBaseUrl");
             _idwClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _idwToken);

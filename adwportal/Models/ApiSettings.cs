@@ -5,6 +5,7 @@
         public string ApiBaseUrl { get; set; } = string.Empty;
         public string IdwApiBaseUrl { get; set; } = string.Empty;
         public string MdwApiBaseUrl { get; set; } = string.Empty;
+        public string LegacyUserToken { get; set; } = string.Empty;
     }
 
 }

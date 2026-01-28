@@ -2,14 +2,15 @@
 @using System.Net.Http.Headers
 @using System.Net.Http.Json
 @using System.Text.Json
-@using Microsoft.Extensions.Options
 @using Microsoft.AspNetCore.Components
 @using adwportal.Shared      @* PaginationState + PagingExtensions *@
 @using adwportal.Components  @* Pager.razor *@
 @inject IHttpClientFactory ClientFactory
-@inject IOptions<ApiSettings> Options
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject IOptions<ApiSettings> ApiOptions
+@inject adwportal.Services.UserSyncService UserSync
+@inject adwportal.Services.TokenCacheService TokenCache
 
 <h3 class="d-flex align-items-center justify-content-between">
     <span>Users</span>
@@ -185,7 +186,7 @@ else
         try
         {
             loading = true;
-            token = FIXED_TOKEN;       // ใช้ fixed token ตรง ๆ
+            // token = FIXED_TOKEN; // Removed fixed token
             await Load();
         }
         catch (Exception ex)
@@ -210,7 +211,7 @@ else
 
     private bool loading = false;
     private string? error;
-    private string? token;
+    // Removed unused token field causing warning CS0169
 
     private List<UserListItem> all = new();
     private List<UserListItem> filtered = new();
@@ -228,19 +229,14 @@ else
         return Task.CompletedTask;
     }
 
-    // ---------- Base URL (พอร์ต 5254) ----------
-    private string BaseSafe => RequireAbsoluteUrl(Options?.Value?.ApiBaseUrl);
-
-    private static string RequireAbsoluteUrl(string? url)
+    // ---------- HTTP Client ----------
+    private HttpClient MakeClient()
     {
-        var s = (url ?? string.Empty).Trim();
-        if (string.IsNullOrEmpty(s))
-            throw new InvalidOperationException("ApiBaseUrl is empty. Set ApiSettings:ApiBaseUrl in appsettings.");
-        if (!Uri.TryCreate(s, UriKind.Absolute, out var u))
-            throw new InvalidOperationException($"ApiBaseUrl is not an absolute URL: '{s}'");
-        var abs = u.ToString();
-        if (!abs.EndsWith("/")) abs += "/";
-        return abs;
+        var c = ClientFactory.CreateClient("ApiClient");
+        // User Controller (Legacy) uses a fixed token from config
+        var tok = ApiOptions.Value.LegacyUserToken; 
+        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", StripBearer(tok));
+        return c;
     }
 
     private static string StripBearer(string? tok)
@@ -249,21 +245,6 @@ else
         var t = tok.Trim();
         if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) t = t["Bearer ".Length..].Trim();
         return t;
-    }
-
-    // ---------- Http client ----------
-    private HttpClient MakeClient()
-    {
-        var c = ClientFactory.CreateClient();
-        c.BaseAddress = new Uri(BaseSafe, UriKind.Absolute);
-        c.DefaultRequestHeaders.Accept.Clear();
-        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-
-        var t = StripBearer(token);
-        c.DefaultRequestHeaders.Authorization =
-            string.IsNullOrWhiteSpace(t) ? null : new AuthenticationHeaderValue("Bearer", t);
-
-        return c;
     }
 
     private async Task<T?> SendJson<T>(Func<HttpClient, Task<HttpResponseMessage>> sender)
@@ -497,6 +478,16 @@ else
             all.RemoveAll(x => x.Id == u.Id);
             await SafeToast("Deleted.", "success");
             ApplyFilterSortAndPage(resetPage: false);
+            
+            // Sync delete to IDWAPI
+            try
+            {
+                _ = UserSync.SyncDeleteUserAsync(u.Id);
+            }
+            catch (Exception syncEx)
+            {
+                Console.WriteLine($"Sync delete to IDWAPI failed: {syncEx.Message}");
+            }
         }
     }
 

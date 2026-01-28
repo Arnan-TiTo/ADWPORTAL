@@ -116,6 +116,7 @@ namespace miniApp.API.Controllers
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+
             return Ok(new { Id = user.Id });
         }
 
@@ -176,6 +177,7 @@ namespace miniApp.API.Controllers
                 u.Role = CanonicalRole(dto.Role);
 
             await _context.SaveChangesAsync();
+
             return NoContent();
         }
 
@@ -191,6 +193,7 @@ namespace miniApp.API.Controllers
             u.isDelete = 1;
             u.isActive = 0;
             await _context.SaveChangesAsync();
+
             return NoContent();
         }
 

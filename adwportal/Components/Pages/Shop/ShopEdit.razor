@@ -113,6 +113,7 @@ else
             platformOptions = (plats ?? new List<MiscDtos>())
                 .Where(x => x.IsActive)
                 .Select(x => CanonicalPlatform(!string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1))
+                .OfType<string>()
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(x => x)

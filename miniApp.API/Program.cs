@@ -51,6 +51,14 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<EmailService>();
 builder.Services.AddSingleton<QrService>();
 
+// ========== HTTP CLIENTS ========== //
+builder.Services.AddHttpClient("IDWAPI", client =>
+{
+    var baseUrl = builder.Configuration["IDWAPI:BaseUrl"] ?? "https://idwapi.vibeandchic.com";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
 // ========== SWAGGER CONFIG ========== //
 if (builder.Configuration.GetValue<bool>("SwaggerEnabled"))
 {
