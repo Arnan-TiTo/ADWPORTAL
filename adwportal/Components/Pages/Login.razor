@@ -105,7 +105,7 @@
         {
             var api = HttpClientFactory.CreateClient("ApiClient");
             var resp = await api.PostAsJsonAsync("api/Auth/login",
-                           new { username = _model.Username, password = _model.Password ,_model.Role});
+                           new { username = _model.Username, password = _model.Password, role = _model.Role });
 
             if (!resp.IsSuccessStatusCode)
             {

@@ -138,19 +138,21 @@ app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos dto, Tok
     {
         new(System.Security.Claims.ClaimTypes.Name, dto.Username ?? ""),
         new(System.Security.Claims.ClaimTypes.Role, dto.Role ?? ""),
+        new("ROLE", dto.Role ?? ""), // For UI display
         new("USERID", dto.UserId.ToString()),
         new("JWT", dto.Token),
         new("FULLNAME", dto.Fullname ?? ""),
         new("PASSWORD", dto.Password ?? "") 
     };
 
-    // ⭐ เก็บ password ลง Claim "PWD" (ระวังเรื่อง security แต่ตรงกับ requirement ที่ขอ)
-    // if (!string.IsNullOrEmpty(dto.Password))
-    //    claims.Add(new("PWD", dto.Password));
-
     // Sign in cookie
+    var identity = new System.Security.Claims.ClaimsIdentity(claims, 
+        CookieAuthenticationDefaults.AuthenticationScheme,
+        System.Security.Claims.ClaimTypes.Name,
+        System.Security.Claims.ClaimTypes.Role);
+
     await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
-        new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
+        new System.Security.Claims.ClaimsPrincipal(identity),
         new AuthenticationProperties { IsPersistent = true });
 
     await ctx.Session.CommitAsync();

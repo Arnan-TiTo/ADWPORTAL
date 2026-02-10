@@ -1,7 +1,10 @@
-﻿@rendermode InteractiveServer
+﻿
 @inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.JSInterop
+@using adwportal.Components.Common
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -23,7 +26,7 @@
                             </NavLink>
                         </li>
 
-                        @if (auth.User.IsInRole("Admin"))
+                        @if (IsUserInRole(auth.User, "Admin"))
                         {
                             <!-- Config (parent) -->
                             <li class="nav-item">
@@ -33,7 +36,6 @@
                                     <span>Config</span>
                                     <span class="caret @(configOpen ? "rotate-90" : "")">▶</span>
                                 </button>
-
                                 @if (configOpen)
                                 {
                                     <ul class="nav flex-column ms-3 submenu">
@@ -67,7 +69,7 @@
                             </li>
                         }
 
-                        @if (auth.User.IsInRole("Admin") || auth.User.IsInRole("OfficeUser") || auth.User.IsInRole("SuperUser"))
+                        @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
                         {
                             <li class="nav-item">
                                 <NavLink href="/IdwImport" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
@@ -80,7 +82,7 @@
                                 </NavLink>
                             </li>
                         }
-                        @if (auth.User.IsInRole("Admin"))
+                        @if (IsUserInRole(auth.User, "Admin"))
                         {
                             <li class="nav-item">
                                 <NavLink href="/shopsOAuth" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
@@ -88,7 +90,7 @@
                                 </NavLink>
                             </li>
                         }
-                        @if (auth.User.IsInRole("Admin") || auth.User.IsInRole("SuperUser"))
+                        @if (IsUserInRole(auth.User, "Admin", "SuperUser"))
                         {
                             <li class="nav-item">
                                 <NavLink href="/normalize" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
@@ -96,7 +98,7 @@
                                 </NavLink>
                             </li>
                         }
-                        @if (auth.User.IsInRole("Admin") || auth.User.IsInRole("OfficeUser") || auth.User.IsInRole("SuperUser"))
+                        @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
                         {
                             <li class="nav-item">
                                 <NavLink href="/ViewOrderData" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
@@ -108,7 +110,7 @@
                                     FlowAccount Export
                                 </NavLink>
                             </li>
-                            @if (auth.User.IsInRole("Admin"))
+                            @if (IsUserInRole(auth.User, "Admin"))
                             {
                                 <li class="nav-item">
                                     <NavLink href="/AdwOverallDashboard" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
@@ -156,12 +158,30 @@
     private void ToggleSidebar() => isSidebarOpen = !isSidebarOpen;
     private void ToggleConfig() => configOpen = !configOpen;
 
+    private bool IsUserInRole(ClaimsPrincipal? user, params string[] roles)
+    {
+        if (user == null) return false;
+        // Check both standard Role claim and literal "ROLE" claim
+        var userRoles = user.FindAll(ClaimTypes.Role)
+                            .Concat(user.FindAll("ROLE"))
+                            .Select(c => c.Value.Trim().ToLowerInvariant())
+                            .ToList();
+                            
+        return roles.Any(r => userRoles.Contains(r.Trim().ToLowerInvariant()));
+    }
+
     private static string GetDisplayName(ClaimsPrincipal? user)
     {
         if (user is null) return "";
-        var full = user.FindFirst("FULLNAME")?.Value;
-        if (!string.IsNullOrWhiteSpace(full)) return full!;
-        return user.Identity?.Name ?? "";
+        var name = user.FindFirst("FULLNAME")?.Value ?? user.Identity?.Name ?? "Unknown";
+        var role = user.FindFirst("ROLE")?.Value ?? user.FindFirst(ClaimTypes.Role)?.Value ?? "No Role";
+        
+        // Debug: Show all claims
+        var allClaims = user.Claims.Select(c => $"{c.Type}={c.Value}").ToList();
+        var claimsDebug = string.Join(", ", allClaims);
+        System.Diagnostics.Debug.WriteLine($"All Claims: {claimsDebug}");
+        
+        return $"{name} (Role: {role})";
     }
 
     private async Task Logout()
