@@ -212,6 +212,7 @@ public class IdwImportService
         int? shopId = null,
         int? miscIdPlatform = null,
         int? miscIdLogistic = null,
+        string? ocrEngine = null,
         CancellationToken ct = default)
     {
         using var http = CreateClient(token);
@@ -225,6 +226,8 @@ public class IdwImportService
 
         if (miscIdPlatform.HasValue) form.Add(new StringContent(miscIdPlatform.Value.ToString()), "miscIdPlatform");
         if (miscIdLogistic.HasValue) form.Add(new StringContent(miscIdLogistic.Value.ToString()), "miscIdLogistic");
+
+        if (!string.IsNullOrWhiteSpace(ocrEngine)) form.Add(new StringContent(ocrEngine), "ocrEngine");
 
         // ตรงกับ [ApiController]/IdwController -> [HttpPost("import")]
         var resp = await http.PostAsync("api/idw/import", form, ct);

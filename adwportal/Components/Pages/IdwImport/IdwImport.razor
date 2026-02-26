@@ -92,7 +92,18 @@
                 </InputSelect>
             </div>
         </div>
-        <!-- ===== /Dropdowns ===== -->
+
+        <!-- ===== OCR Engine ===== -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <label class="form-label">OCR Engine</label>
+                <InputSelect class="form-select" @bind-Value="selectedOcrEngine" TValue="string">
+                    <option value="typhoon">Typhoon OCR (Default)</option>
+                    <option value="pdfpig">PdfPig OCR</option>
+                </InputSelect>
+            </div>
+        </div>
+        <!-- ===== /OCR Engine ===== -->
 
         <InputFile OnChange="OnFileSelected" />
 
@@ -285,6 +296,7 @@
 
     private int? selectedPlatformId;
     private int? selectedLogisticId;
+    private string selectedOcrEngine = "typhoon";
 
     private bool DisableSave => isSaving == true
                                 || selectedFile == null
@@ -448,6 +460,7 @@
             shopId: selectedShopDbId,
             miscIdPlatform: selectedPlatformId,
             miscIdLogistic: selectedLogisticId,
+            ocrEngine: string.IsNullOrWhiteSpace(selectedOcrEngine) ? null : selectedOcrEngine,
             CancellationToken.None
         );
     }
