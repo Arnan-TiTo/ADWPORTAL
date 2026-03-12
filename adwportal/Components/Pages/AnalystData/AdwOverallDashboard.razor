@@ -3,15 +3,19 @@
 @using Microsoft.AspNetCore.WebUtilities
 @using System.Globalization
 @using System.Linq
+@using System.Threading
 @using Microsoft.AspNetCore.Components.Forms
 @using adwportal.Dtos
 @using adwportal.Services
 @using Microsoft.AspNetCore.Components.Authorization
 
+@implements IDisposable
+
 @inject IHttpClientFactory ClientFactory
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider Auth
 @inject AuthTokenProvider TokenProvider
+@inject TokenCacheService TokenCache
 @inject adwportal.Services.MdwMarketplaceService MdwSvc
 @inject IdwImportService IdwSvc
 @inject ShopService ShopSvc
@@ -226,6 +230,9 @@
     private List<ShopDtos> allShops = new();
     private List<string> platformOptions = new();
 
+    // Pool lock to prevent concurrent refreshes (avoids deadlock)
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+
     private string SelectedPlatform
     {
         get => filter.Channel ?? "";
@@ -283,10 +290,18 @@
     {
         if (!firstRender) return;
 
+        // Use pool lock to prevent concurrent initialization
+        if (!await _refreshLock.WaitAsync(0)) return;
+
         try
         {
-            _mdwToken = NormalizeToken(TokenProvider.MdwToken);
-            _idwToken = NormalizeToken(TokenProvider.IdwToken);
+            isLoading = true;
+            StateHasChanged();
+
+            // Get tokens asynchronously from TokenCacheService directly!
+            // (Avoids TokenProvider.MdwToken which uses .GetAwaiter().GetResult() and causes Deadlock)
+            _mdwToken = NormalizeToken(await TokenCache.GetMdwTokenAsync());
+            _idwToken = NormalizeToken(await TokenCache.GetIdwTokenAsync());
 
             if (string.IsNullOrWhiteSpace(_mdwToken))
                 throw new Exception("No MDW token. Please login again.");
@@ -321,6 +336,16 @@
             errorMessage = ex.Message;
             StateHasChanged();
         }
+        finally
+        {
+            isLoading = false;
+            _refreshLock.Release();
+        }
+    }
+
+    public void Dispose()
+    {
+        _refreshLock?.Dispose();
     }
 
     private async Task RefreshAsync()

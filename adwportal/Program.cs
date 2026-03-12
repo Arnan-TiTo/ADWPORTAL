@@ -59,6 +59,7 @@ builder.Services.AddHttpClient("IdwApiBaseUrl", (sp, http) =>
 {
     var cfg = sp.GetRequiredService<IOptions<ApiSettings>>().Value;
     http.BaseAddress = new Uri(cfg.IdwApiBaseUrl);
+    http.Timeout = TimeSpan.FromMinutes(30);
 })
 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
 {

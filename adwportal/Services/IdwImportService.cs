@@ -204,7 +204,7 @@ public class IdwImportService
         return res.IsSuccessStatusCode;
     }
 
-    // ===== Import (UPDATED: รองรับ shopId/miscIdPlatform/miscIdLogistic) =====
+    // ===== Import (UPDATED: รองรับ shopId/miscIdPlatform/miscIdLogistic + OCR params) =====
     public async Task<UploadResponseDtos> UploadImportAsync(
         string token,
         Stream fileStream,
@@ -213,6 +213,11 @@ public class IdwImportService
         int? miscIdPlatform = null,
         int? miscIdLogistic = null,
         string? ocrEngine = null,
+        string? taskType = null,
+        string? figureLanguage = null,
+        int? imageDim = null,
+        int? maxTokens = null,
+        double? repetitionPenalty = null,
         CancellationToken ct = default)
     {
         using var http = CreateClient(token);
@@ -229,6 +234,13 @@ public class IdwImportService
 
         if (!string.IsNullOrWhiteSpace(ocrEngine)) form.Add(new StringContent(ocrEngine), "ocrEngine");
 
+        // OCR parameters for Typhoon OCR Docker
+        if (!string.IsNullOrWhiteSpace(taskType)) form.Add(new StringContent(taskType), "taskType");
+        if (!string.IsNullOrWhiteSpace(figureLanguage)) form.Add(new StringContent(figureLanguage), "figureLanguage");
+        if (imageDim.HasValue) form.Add(new StringContent(imageDim.Value.ToString()), "imageDim");
+        if (maxTokens.HasValue) form.Add(new StringContent(maxTokens.Value.ToString()), "maxTokens");
+        if (repetitionPenalty.HasValue) form.Add(new StringContent(repetitionPenalty.Value.ToString(CultureInfo.InvariantCulture)), "repetitionPenalty");
+
         // ตรงกับ [ApiController]/IdwController -> [HttpPost("import")]
         var resp = await http.PostAsync("api/idw/import", form, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
@@ -241,6 +253,22 @@ public class IdwImportService
         return Dtos;
     }
 
+    // ===== Fallback: ดึง import ล่าสุดตามชื่อไฟล์ (กรณี POST timeout แต่ backend บันทึกแล้ว) =====
+    public async Task<IdwImportDtos?> GetLatestImportByFileNameAsync(string token, string fileName, CancellationToken ct = default)
+    {
+        using var http = CreateClient(token);
+        var url = $"api/idw/latest-import?fileName={Uri.EscapeDataString(fileName)}";
+        Console.WriteLine($"DEBUG GetLatestImportByFileName GET {url}");
+
+        var res = await http.GetAsync(url, ct);
+        var json = await res.Content.ReadAsStringAsync(ct);
+
+        Console.WriteLine($"  -> {(int)res.StatusCode}: {json}");
+
+        if (!res.IsSuccessStatusCode) return null;
+        return JsonSerializer.Deserialize<IdwImportDtos>(json, JsonOpts);
+    }
+
     // ===== Read imported detail =====
     public async Task<IdwImportDtos?> GetImportAsync(string token, long id)
     {
@@ -248,10 +276,14 @@ public class IdwImportService
         var res = await http.GetAsync($"api/TblImport/{id}");
         var json = await res.Content.ReadAsStringAsync();
 
-        Console.WriteLine("DEBUG GetImportAsync response:");
+        Console.WriteLine($"DEBUG GetImportAsync GET api/TblImport/{id} -> {(int)res.StatusCode}");
         Console.WriteLine(json);
 
-        if (!res.IsSuccessStatusCode) return null;
+        if (!res.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"GetImportAsync failed: {(int)res.StatusCode} {res.ReasonPhrase}");
+            return null;
+        }
         return JsonSerializer.Deserialize<IdwImportDtos>(json, JsonOpts);
     }
 
