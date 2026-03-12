@@ -95,6 +95,20 @@ namespace adwportal.Services
             }
         }
 
+        /// <summary>
+        /// ล้าง cached tokens ทั้งหมด — เรียกตอน logout
+        /// เพราะ Singleton cache เก็บ token ข้าม user session
+        /// ถ้าไม่ล้าง user ใหม่จะใช้ token ของ user เก่า
+        /// </summary>
+        public void ClearAll()
+        {
+            _mdwToken = null;
+            _mdwTokenExpiry = null;
+            _idwToken = null;
+            _idwTokenExpiry = null;
+            _logger.LogInformation("[TokenCache] All cached tokens cleared (logout)");
+        }
+
         private async Task<string?> FetchMdwTokenAsync(string? argUsername = null, string? argPassword = null)
         {
             try

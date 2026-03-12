@@ -19,6 +19,7 @@
 @inject adwportal.Services.MdwMarketplaceService MdwSvc
 @inject IdwImportService IdwSvc
 @inject ShopService ShopSvc
+@inject ShopGroupService ShopGroupSvc
 @inject MiscService MiscSvc
 
 <style>
@@ -321,11 +322,43 @@
                     .OrderBy(x => x)
                     .ToList();
 
-                var shops = await ShopSvc.GetShopsAsync(_idwToken);
+                // Shops — Admin เห็นทุก shop, non-admin กรองตาม ShopGroup
                 allShops.Clear();
-                allShops.AddRange((shops ?? new List<ShopDtos>())
-                    .Select(s => s with { Platform = CanonicalPlatform(s.Platform) })
-                    .OrderBy(s => s.Name));
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var userClaims = authState.User;
+                var userRole = userClaims.FindFirst("ROLE")?.Value ?? userClaims.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "";
+                var username = userClaims.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "";
+
+                if (userRole.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    var shops = await ShopSvc.GetShopsAsync(_idwToken);
+                    allShops.AddRange((shops ?? new List<ShopDtos>())
+                        .GroupBy(s => s.ShopId).Select(g => g.First())
+                        .Select(s => s with { Platform = CanonicalPlatform(s.Platform) })
+                        .OrderBy(s => s.Name));
+                }
+                else if (!string.IsNullOrWhiteSpace(username))
+                {
+                    var effectiveShops = await ShopGroupSvc.GetUserEffectiveShopsByUsernameAsync(_idwToken, username);
+                    allShops.AddRange(effectiveShops
+                        .GroupBy(es => es.ShopId).Select(g => g.First())
+                        .Select(es => new ShopDtos(
+                            Id: 0,
+                            ShopId: es.ShopId,
+                            PartnerId: es.PartnerId,
+                            Name: es.ShopName,
+                            Country: null,
+                            CreatedAt: DateTime.MinValue,
+                            Platform: CanonicalPlatform(es.Platform)
+                        )).OrderBy(s => s.Name));
+                }
+
+                // Platform — non-admin: filter ให้เหลือแค่ platform ที่มี shop ที่มีสิทธิ์
+                if (allShops.Any())
+                {
+                    var shopPlatforms = allShops.Select(s => s.Platform).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    platformOptions = platformOptions.Where(p => shopPlatforms.Contains(p!)).ToList();
+                }
             }
 
             await RefreshAsync();

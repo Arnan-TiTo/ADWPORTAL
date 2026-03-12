@@ -1,4 +1,4 @@
-﻿@page "/IdwImport"
+@page "/IdwImport"
 @using System.Net.Http.Headers
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components
@@ -17,6 +17,7 @@
 @inject IdwImportService IdwImportService
 @inject MiscService MiscSvc
 @inject ShopService ShopSvc
+@inject ShopGroupService ShopGroupSvc
 @inject NavigationManager Navigation
 
 <h3>Import Data</h3>
@@ -315,6 +316,10 @@
     private List<MiscDtos>? platforms;
     private List<MiscItemDtos>? logistics;
 
+    // Shop group permission cache
+    private bool _isAdmin = true;
+    private List<UserEffectiveShopDtos>? _effectiveShops;
+
     private readonly List<ShopDtos> shops = new();
     private int? selectedShopDbId;
 
@@ -395,11 +400,28 @@
         {
             var ct = CancellationToken.None;
 
+            // Get role/username from claims
+            var authState = await Auth.GetAuthenticationStateAsync();
+            var userClaims = authState.User;
+            var userRole = userClaims.FindFirst("ROLE")?.Value ?? userClaims.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "";
+            var username = userClaims.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "";
+            _isAdmin = userRole.Equals("Admin", StringComparison.OrdinalIgnoreCase);
+
+            // Load all partners first
             partners = await IdwImportService.GetPartnersAsync(token!, partnerExternalId: null, ct);
             platforms = await MiscSvc.GetMiscAsync(token!, type: "Platform", ct: ct);
             logistics = await IdwImportService.GetLogisticsAsync(token!, ct);
 
-            SelectedPartnerDbId ??= partners?.FirstOrDefault()?.Id;
+            // Non-admin: cache effective shops + filter partners
+            if (!_isAdmin && !string.IsNullOrWhiteSpace(username))
+            {
+                _effectiveShops = await ShopGroupSvc.GetUserEffectiveShopsByUsernameAsync(token!, username);
+                var allowedPartnerIds = _effectiveShops.Select(es => es.PartnerId).ToHashSet();
+                partners = partners?.Where(p => allowedPartnerIds.Contains(p.Id)).ToList();
+            }
+
+            // ใช้ backing field ตรง ๆ เพื่อไม่ trigger OnPartnerChanged (ซึ่งจะเรียก Load ซ้ำซ้อน)
+            _selectedPartnerDbId ??= partners?.FirstOrDefault()?.Id;
             selectedPlatformId ??= platforms?.FirstOrDefault()?.Id;
             selectedLogisticId ??= logistics?.FirstOrDefault()?.Id;
 
@@ -433,7 +455,22 @@
         try
         {
             var list = await ShopSvc.GetShopsAsync(token!, SelectedPartnerDbId.Value);
-            shops.AddRange((list ?? new()).OrderBy(s => s.Name));
+
+            if (_isAdmin)
+            {
+                shops.AddRange((list ?? new())
+                    .GroupBy(s => s.ShopId).Select(g => g.First())
+                    .OrderBy(s => s.Name));
+            }
+            else
+            {
+                // Non-admin: intersect with cached effective shops
+                var allowedShopIds = (_effectiveShops ?? new()).Select(es => es.ShopId).ToHashSet();
+                shops.AddRange((list ?? new())
+                    .Where(s => allowedShopIds.Contains(s.ShopId))
+                    .GroupBy(s => s.ShopId).Select(g => g.First())
+                    .OrderBy(s => s.Name));
+            }
         }
         catch (Exception ex)
         {

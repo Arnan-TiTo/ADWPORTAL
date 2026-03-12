@@ -1,4 +1,4 @@
-﻿using adwportal.Components;
+using adwportal.Components;
 using adwportal.Models;
 using adwportal.Security;
 using adwportal.Services;
@@ -93,6 +93,7 @@ builder.Services.AddScoped<MiscService>();
 builder.Services.AddScoped<CompanyService>();
 builder.Services.AddScoped<PartnerService>();
 builder.Services.AddScoped<ShopService>();
+builder.Services.AddScoped<ShopGroupService>();
 builder.Services.AddScoped<AuthTokenProvider>();
 builder.Services.AddScoped<UserSyncService>();
 builder.Services.AddSingleton<TokenCacheService>();
@@ -176,8 +177,11 @@ app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos dto, Tok
 .DisableAntiforgery();
 
 // ===== Logout =====
-app.MapPost("/auth/logout", async (HttpContext ctx) =>
+app.MapPost("/auth/logout", async (HttpContext ctx, TokenCacheService tokenCache) =>
 {
+    // ล้าง cached tokens เพื่อให้ user ใหม่ได้ token ใหม่
+    tokenCache.ClearAll();
+
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
     ctx.Session.Clear();

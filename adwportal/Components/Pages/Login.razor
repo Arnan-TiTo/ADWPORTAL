@@ -1,4 +1,4 @@
-﻿@page "/login"
+@page "/login"
 @attribute [AllowAnonymous]
 @rendermode InteractiveServer
 @layout EmptyLayout
@@ -104,8 +104,10 @@
         try
         {
             var api = HttpClientFactory.CreateClient("ApiClient");
+            // role = appCode — API ดึงจากตาราง AppAccess ว่า role ไหนเข้าแอพ "portal" ได้
             var resp = await api.PostAsJsonAsync("api/Auth/login",
-                           new { username = _model.Username, password = _model.Password, role = _model.Role });
+                           new { username = _model.Username, password = _model.Password,
+                                 role = "portal" });
 
             if (!resp.IsSuccessStatusCode)
             {
@@ -170,7 +172,7 @@
         {
             qrStatus = "QR detected. Logging in...";
             var api = HttpClientFactory.CreateClient("ApiClient");
-            var r = await api.PostAsJsonAsync("api/QrLogin/loginByQr", new { qr = value, role = _model.Role });
+            var r = await api.PostAsJsonAsync("api/QrLogin/loginByQr", new { qr = value, role = "portal" });
             if (!r.IsSuccessStatusCode) { qrStatus = await r.Content.ReadAsStringAsync(); return; }
 
             var result = await r.Content.ReadFromJsonAsync<LoginResponse>();

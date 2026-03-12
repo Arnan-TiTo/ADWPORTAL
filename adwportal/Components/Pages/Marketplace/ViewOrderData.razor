@@ -1,4 +1,4 @@
-﻿@page "/ViewOrderData"
+@page "/ViewOrderData"
 @using System.Text.Json
 @using System.Globalization
 @using adwportal.Dtos
@@ -11,6 +11,7 @@
 @inject MdwMarketplaceService MdwSvc
 @inject IdwImportService IdwSvc
 @inject ShopService ShopSvc
+@inject ShopGroupService ShopGroupSvc
 @inject MiscService MiscSvc
 @inject IJSRuntime JS
 @inject ILogger<ViewOrderData> _log
@@ -433,21 +434,56 @@
             try
             {
                 // Shops
-                var shops = await ShopSvc.GetShopsAsync(idwToken);
+                // Shops — Admin เห็นทุก shop, non-admin กรองตาม ShopGroup
                 allShops.Clear();
-                allShops.AddRange((shops ?? new List<ShopDtos>())
-                    .Select(s => s with { Platform = CanonicalPlatform(s.Platform) })
-                    .OrderBy(s => s.Name));
+                var authState = await Auth.GetAuthenticationStateAsync();
+                var userClaims = authState.User;
+                var userRole = userClaims.FindFirst("ROLE")?.Value ?? userClaims.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "";
+                var username = userClaims.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "";
 
-                // Platform (Misc Type='Platform')
+                if (userRole.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    var shops = await ShopSvc.GetShopsAsync(idwToken);
+                    allShops.AddRange((shops ?? new List<ShopDtos>())
+                        .GroupBy(s => s.ShopId).Select(g => g.First())
+                        .Select(s => s with { Platform = CanonicalPlatform(s.Platform) })
+                        .OrderBy(s => s.Name));
+                }
+                else if (!string.IsNullOrWhiteSpace(username))
+                {
+                    var effectiveShops = await ShopGroupSvc.GetUserEffectiveShopsByUsernameAsync(idwToken, username);
+                    allShops.AddRange(effectiveShops
+                        .GroupBy(es => es.ShopId).Select(g => g.First())
+                        .Select(es => new ShopDtos(
+                            Id: 0,
+                            ShopId: es.ShopId,
+                            PartnerId: es.PartnerId,
+                            Name: es.ShopName,
+                            Country: null,
+                            CreatedAt: DateTime.MinValue,
+                            Platform: CanonicalPlatform(es.Platform)
+                        )).OrderBy(s => s.Name));
+                }
+
+                // Platform — non-admin: filter ให้เหลือแค่ platform ที่มี shop ที่มีสิทธิ์
                 var plats = await MiscSvc.GetMiscAsync(idwToken, type: "Platform");
-                platformOptions = (plats ?? new List<MiscDtos>())
+                var allPlatOptions = (plats ?? new List<MiscDtos>())
                     .Where(x => x.IsActive)
                     .Select(x => CanonicalPlatform(!string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1))
                     .Where(x => !string.IsNullOrWhiteSpace(x))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .OrderBy(x => x)
                     .ToList();
+
+                if (allShops.Any())
+                {
+                    var shopPlatforms = allShops.Select(s => s.Platform).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    platformOptions = allPlatOptions.Where(p => shopPlatforms.Contains(p!)).ToList();
+                }
+                else
+                {
+                    platformOptions = allPlatOptions;
+                }
 
                 //Status options from Misc
                 paymentStatusOptions = await LoadMiscOptionsAsync(idwToken, "StatusPayment");

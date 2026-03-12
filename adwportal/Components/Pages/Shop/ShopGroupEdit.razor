@@ -1,0 +1,415 @@
+@page "/ShopGroupEdit/{id:int}"
+@using adwportal.Dtos
+@using adwportal.Services
+@inject ShopGroupService GroupSvc
+@inject ShopService ShopSvc
+@inject TokenCacheService TokenCache
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<h3>@(id == 0 ? "Create Shop Group" : $"Edit Shop Group #{id}")</h3>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<!-- ===== Group Info Card ===== -->
+<div class="card">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Group Code</label>
+                <input class="form-control" @bind="model.GroupCode" placeholder="e.g. g001" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Name</label>
+                <input class="form-control" @bind="model.Name" placeholder="e.g. ทีมขาย Online" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Permission</label>
+                <select class="form-select" @bind="model.Permission">
+                    <option value="read">read</option>
+                    <option value="write">write</option>
+                    <option value="admin">admin</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Active</label>
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input" type="checkbox" @bind="model.IsActive" />
+                    <label class="form-check-label">@(model.IsActive ? "Active" : "Inactive")</label>
+                </div>
+            </div>
+            <div class="col-md-12">
+                <label class="form-label">Description</label>
+                <input class="form-control" @bind="model.Description" />
+            </div>
+            <div class="col-12">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="SaveGroup" disabled="@isBusy">Save Group</button>
+                    <button class="btn btn-outline-secondary" @onclick="Back">Back</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!isExisting)
+{
+    <div class="alert alert-info mt-3">
+        Save the group first, then you can manage users and shops.
+    </div>
+}
+else
+{
+    <!-- ===== Users Section ===== -->
+    <div class="card mt-3">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h5 class="card-title mb-0">Users in Group</h5>
+                <span class="badge bg-secondary">@groupUsers.Count users</span>
+            </div>
+
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Add User</label>
+                    <select class="form-select" @bind="selectedUserId" disabled="@isBusy">
+                        <option value="0">-- Select User --</option>
+                        @foreach (var u in AvailableUsersFiltered)
+                        {
+                            <option value="@u.Id">@u.Username (@u.Role)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100" disabled="@isBusy" @onclick="AddUser">+ Add User</button>
+                </div>
+                <div class="col-md-3 text-end">
+                    <button class="btn btn-outline-secondary" disabled="@isBusy" @onclick="LoadGroupDetail">Refresh</button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width:80px;">User ID</th>
+                            <th>Username</th>
+                            <th style="width:160px;">Added</th>
+                            <th style="width:100px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!groupUsers.Any())
+                        {
+                            <tr><td colspan="4" class="text-muted">No users in this group.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var u in groupUsers.OrderBy(x => x.Username))
+                            {
+                                <tr>
+                                    <td>@u.UserId</td>
+                                    <td>@u.Username</td>
+                                    <td>@u.CreatedAt.ToString("dd-MM-yyyy HH:mm")</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" disabled="@isBusy"
+                                                @onclick="EventCallback.Factory.Create<MouseEventArgs>(this, () => RemoveUser(u))">
+                                            Remove
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Shops Section ===== -->
+    <div class="card mt-3">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h5 class="card-title mb-0">Shops in Group</h5>
+                <span class="badge bg-secondary">@groupShops.Count shops</span>
+            </div>
+
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Add Shop</label>
+                    <select class="form-select" @bind="selectedShopId" disabled="@isBusy">
+                        <option value="0">-- Select Shop --</option>
+                        @foreach (var s in availableShops)
+                        {
+                            <option value="@s.ShopId">@((s.Name ?? "(no name)") + " · " + s.Platform + " · " + s.ShopId)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100" disabled="@isBusy" @onclick="AddShop">+ Add Shop</button>
+                </div>
+                <div class="col-md-3 text-end">
+                    <button class="btn btn-outline-secondary" disabled="@isBusy" @onclick="LoadGroupDetail">Refresh</button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width:140px;">ShopId</th>
+                            <th>Name</th>
+                            <th style="width:120px;">Platform</th>
+                            <th style="width:160px;">Added</th>
+                            <th style="width:100px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!groupShops.Any())
+                        {
+                            <tr><td colspan="5" class="text-muted">No shops in this group.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var s in groupShops.OrderBy(x => x.ShopName))
+                            {
+                                <tr>
+                                    <td>@s.ShopId</td>
+                                    <td>@(s.ShopName ?? "-")</td>
+                                    <td>@(s.Platform ?? "-")</td>
+                                    <td>@s.CreatedAt.ToString("dd-MM-yyyy HH:mm")</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" disabled="@isBusy"
+                                                @onclick="EventCallback.Factory.Create<MouseEventArgs>(this, () => RemoveShop(s))">
+                                            Remove
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (isBusy)
+            {
+                <div class="text-center text-muted small mt-2">Processing...</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int id { get; set; }
+
+    private bool isExisting => id != 0;
+    private bool isBusy;
+    private string? error;
+    private string? idwToken;
+
+    // Group info
+    private ShopGroupUpsertDtos model = new() { Permission = "read", IsActive = true };
+
+    // Users in group
+    private List<ShopGroupUserDtos> groupUsers = new();
+    private int selectedUserId;
+
+    // Shops in group
+    private List<ShopGroupShopDtos> groupShops = new();
+    private long selectedShopId;
+
+    // Available options for dropdowns
+    private List<ShopGroupService.IdwUserDto> availableUsers = new();
+    private List<ShopDtos> allShops = new();
+
+    // Filtered: ซ่อน users/shops ที่ add แล้ว
+    private IEnumerable<ShopGroupService.IdwUserDto> AvailableUsersFiltered =>
+        availableUsers.Where(u => !groupUsers.Any(gu => gu.UserId == u.Id));
+    private IEnumerable<ShopDtos> availableShops =>
+        allShops.Where(s => !groupShops.Any(gs => gs.ShopId == s.ShopId));
+
+    // JS safety
+    private bool _isClientReady;
+    private readonly Queue<(string msg, string type)> _toastQueue = new();
+    private async Task SafeToast(string message, string type = "info")
+    {
+        if (_isClientReady) await JS.InvokeVoidAsync("showToast", message, type);
+        else _toastQueue.Enqueue((message, type));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _isClientReady = true;
+        while (_toastQueue.Count > 0)
+        {
+            var (m, t) = _toastQueue.Dequeue();
+            await JS.InvokeVoidAsync("showToast", m, t);
+        }
+
+        try
+        {
+            isBusy = true;
+            idwToken = await TokenCache.GetIdwTokenAsync();
+            if (string.IsNullOrWhiteSpace(idwToken))
+            {
+                error = "IDW token is empty.";
+                return;
+            }
+
+            // Load all shops for dropdown
+            allShops = await ShopSvc.GetShopsAsync(idwToken);
+
+            // Load all IDW users for dropdown
+            availableUsers = await GroupSvc.GetIdwUsersAsync(idwToken);
+
+            if (isExisting)
+            {
+                await LoadGroupDetail();
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            await SafeToast(ex.Message, "error");
+        }
+        finally
+        {
+            isBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadGroupDetail()
+    {
+        var detail = await GroupSvc.GetGroupDetailAsync(idwToken!, id);
+        if (detail == null)
+        {
+            error = "Group not found.";
+            return;
+        }
+
+        model = new ShopGroupUpsertDtos
+        {
+            GroupCode = detail.GroupCode,
+            Name = detail.Name,
+            Description = detail.Description,
+            Permission = detail.Permission,
+            IsActive = detail.IsActive
+        };
+
+        groupUsers = detail.Users;
+        groupShops = detail.Shops;
+    }
+
+    // ===== Save Group (Create or Update) =====
+    private async Task SaveGroup()
+    {
+        if (string.IsNullOrWhiteSpace(model.GroupCode))
+        {
+            await SafeToast("Group Code is required.", "warning");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(model.Name))
+        {
+            await SafeToast("Name is required.", "warning");
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            if (id == 0)
+            {
+                var created = await GroupSvc.CreateGroupAsync(idwToken!, model);
+                if (created != null)
+                {
+                    await SafeToast("Group created.", "success");
+                    Nav.NavigateTo($"/ShopGroupEdit/{created.Id}");
+                }
+            }
+            else
+            {
+                await GroupSvc.UpdateGroupAsync(idwToken!, id, model);
+                await SafeToast("Group updated.", "success");
+            }
+        }
+        catch (Exception ex)
+        {
+            await SafeToast($"Save failed: {ex.Message}", "error");
+        }
+        finally { isBusy = false; }
+    }
+
+    // ===== User Management =====
+    private async Task AddUser()
+    {
+        if (selectedUserId <= 0)
+        {
+            await SafeToast("Please select a user.", "warning");
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            await GroupSvc.AddUserToGroupAsync(idwToken!, id, selectedUserId);
+            await SafeToast("User added.", "success");
+            selectedUserId = 0;
+            await LoadGroupDetail();
+        }
+        catch (Exception ex) { await SafeToast($"Add failed: {ex.Message}", "error"); }
+        finally { isBusy = false; StateHasChanged(); }
+    }
+
+    private async Task RemoveUser(ShopGroupUserDtos u)
+    {
+        isBusy = true;
+        try
+        {
+            await GroupSvc.RemoveUserFromGroupAsync(idwToken!, id, u.UserId);
+            groupUsers.RemoveAll(x => x.UserId == u.UserId);
+            await SafeToast("User removed.", "success");
+        }
+        catch (Exception ex) { await SafeToast($"Remove failed: {ex.Message}", "error"); }
+        finally { isBusy = false; StateHasChanged(); }
+    }
+
+    // ===== Shop Management =====
+    private async Task AddShop()
+    {
+        if (selectedShopId <= 0)
+        {
+            await SafeToast("Please select a shop.", "warning");
+            return;
+        }
+
+        isBusy = true;
+        try
+        {
+            await GroupSvc.AddShopToGroupAsync(idwToken!, id, selectedShopId);
+            await SafeToast("Shop added.", "success");
+            selectedShopId = 0;
+            await LoadGroupDetail();
+        }
+        catch (Exception ex) { await SafeToast($"Add failed: {ex.Message}", "error"); }
+        finally { isBusy = false; StateHasChanged(); }
+    }
+
+    private async Task RemoveShop(ShopGroupShopDtos s)
+    {
+        isBusy = true;
+        try
+        {
+            await GroupSvc.RemoveShopFromGroupAsync(idwToken!, id, s.ShopId);
+            groupShops.RemoveAll(x => x.ShopId == s.ShopId);
+            await SafeToast("Shop removed.", "success");
+        }
+        catch (Exception ex) { await SafeToast($"Remove failed: {ex.Message}", "error"); }
+        finally { isBusy = false; StateHasChanged(); }
+    }
+
+    private void Back() => Nav.NavigateTo("/ShopGroupList");
+}
