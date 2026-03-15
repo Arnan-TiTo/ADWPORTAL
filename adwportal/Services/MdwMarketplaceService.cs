@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Headers;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Extensions;
@@ -322,6 +322,63 @@ namespace adwportal.Services
             using var res = await http.GetAsync(url, ct);
             if (!res.IsSuccessStatusCode) return null;
             return await res.Content.ReadFromJsonAsync<FeUnifiedOrderDtos>(JsonOpts, ct);
+        }
+        // ===== Shipping Labels =====
+        public async Task<LabelListResponse> ListLabelsAsync(
+            string? token,
+            long? shopId = null,
+            string? channel = null,
+            DateTime? fromDate = null,
+            DateTime? toDate = null,
+            int page = 1,
+            int pageSize = 50,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+
+            var qb = new QueryBuilder();
+            if (shopId is > 0) qb.Add("shopId", shopId.Value.ToString());
+            if (!string.IsNullOrWhiteSpace(channel)) qb.Add("channel", channel);
+            if (fromDate.HasValue) qb.Add("fromDate", fromDate.Value.ToString("yyyy-MM-dd"));
+            if (toDate.HasValue) qb.Add("toDate", toDate.Value.AddDays(1).ToString("yyyy-MM-dd"));
+            qb.Add("page", page.ToString());
+            qb.Add("pageSize", pageSize.ToString());
+
+            var url = "/api/market/orders/actions/list-labels" + qb.ToQueryString();
+
+            using var res = await http.GetAsync(url, ct);
+            if (!res.IsSuccessStatusCode)
+            {
+                var err = await res.Content.ReadAsStringAsync(ct);
+                throw new Exception($"ListLabels failed {(int)res.StatusCode}: {err}");
+            }
+
+            return await res.Content.ReadFromJsonAsync<LabelListResponse>(JsonOpts, ct)
+                   ?? new LabelListResponse();
+        }
+
+        public async Task<(bool ok, byte[]? data, string? contentType, string? fileName, string? error)> DownloadLabelAsync(
+            string? token,
+            string orderRef,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+
+            var url = $"/api/market/orders/actions/download-label?orderRef={Uri.EscapeDataString(orderRef)}";
+
+            using var res = await http.GetAsync(url, ct);
+            if (!res.IsSuccessStatusCode)
+            {
+                var err = await res.Content.ReadAsStringAsync(ct);
+                return (false, null, null, null, $"{(int)res.StatusCode}: {err}");
+            }
+
+            var data = await res.Content.ReadAsByteArrayAsync(ct);
+            var ct2 = res.Content.Headers.ContentType?.MediaType ?? "application/pdf";
+            var fn = res.Content.Headers.ContentDisposition?.FileName?.Trim('"')
+                     ?? $"label_{orderRef}.pdf";
+
+            return (true, data, ct2, fn, null);
         }
     }
 }

@@ -15,58 +15,76 @@
 
 <AuthorizeView>
     <Authorized Context="auth">
-        <div class="page">
-            <!-- Sidebar -->
-            <div class="sidebar @(isSidebarOpen ? "open" : "closed")">
-                <nav>
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <NavLink href="/" Match="NavLinkMatch.All" class="nav-link" ActiveClass="is-active">
-                                Home
+        <div class="app-shell">
+            @* ===== SIDEBAR ===== *@
+            <aside class="sidebar @(isSidebarOpen ? "expanded" : "collapsed")">
+                @* Logo area at top of sidebar *@
+                <div class="sidebar-brand">
+                    <img src="/images/logo.png" class="sidebar-logo" alt="logo" />
+                    @if (isSidebarOpen)
+                    {
+                        <span class="brand-text">VAC Portal</span>
+                    }
+                </div>
+
+                <nav class="sidebar-nav">
+                    <ul>
+                        <li>
+                            <NavLink href="/" Match="NavLinkMatch.All" class="nav-item-link" ActiveClass="active" title="Home">
+                                <i class="bi bi-house-door"></i>
+                                <span class="nav-label">Home</span>
                             </NavLink>
                         </li>
 
                         @if (IsUserInRole(auth.User, "Admin"))
                         {
-                            <!-- Config (parent) -->
-                            <li class="nav-item">
-                                <button type="button"
-                                        class="nav-link btn btn-toggle w-100 d-flex align-items-center justify-content-between"
-                                        @onclick="ToggleConfig">
-                                    <span>Config</span>
-                                    <span class="caret @(configOpen ? "rotate-90" : "")">▶</span>
+                            @* Config group *@
+                            <li class="nav-group">
+                                <button type="button" class="nav-item-link group-toggle" @onclick="ToggleConfig" title="Config">
+                                    <i class="bi bi-gear"></i>
+                                    <span class="nav-label">Config</span>
+                                    @if (isSidebarOpen)
+                                    {
+                                        <i class="bi bi-chevron-right chevron @(configOpen ? "rotated" : "")"></i>
+                                    }
                                 </button>
                                 @if (configOpen)
                                 {
-                                    <ul class="nav flex-column ms-3 submenu">
-                                        <li class="nav-item">
-                                            <NavLink href="/UserList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                                User
+                                    <ul class="sub-menu">
+                                        <li>
+                                            <NavLink href="/UserList" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="User">
+                                                <i class="bi bi-people"></i>
+                                                <span class="nav-label">User</span>
                                             </NavLink>
                                         </li>
-                                        <li class="nav-item">
-                                            <NavLink href="/CompanyList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                                Company
+                                        <li>
+                                            <NavLink href="/CompanyList" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Company">
+                                                <i class="bi bi-building"></i>
+                                                <span class="nav-label">Company</span>
                                             </NavLink>
                                         </li>
-                                        <li class="nav-item">
-                                            <NavLink href="/PartnerList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                                Partner
+                                        <li>
+                                            <NavLink href="/PartnerList" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Partner">
+                                                <i class="bi bi-briefcase"></i>
+                                                <span class="nav-label">Partner</span>
                                             </NavLink>
                                         </li>
-                                        <li class="nav-item">
-                                            <NavLink href="/ShopList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                                Shop
+                                        <li>
+                                            <NavLink href="/ShopList" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Shop">
+                                                <i class="bi bi-shop"></i>
+                                                <span class="nav-label">Shop</span>
                                             </NavLink>
                                         </li>
-                                        <li class="nav-item">
-                                            <NavLink href="/ShopGroupList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                                Shop Groups
+                                        <li>
+                                            <NavLink href="/ShopGroupList" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Shop Groups">
+                                                <i class="bi bi-diagram-3"></i>
+                                                <span class="nav-label">Shop Groups</span>
                                             </NavLink>
                                         </li>
-                                        <li class="nav-item">
-                                            <NavLink href="/MiscList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                                Misc
+                                        <li>
+                                            <NavLink href="/MiscList" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Misc">
+                                                <i class="bi bi-sliders"></i>
+                                                <span class="nav-label">Misc</span>
                                             </NavLink>
                                         </li>
                                     </ul>
@@ -74,79 +92,105 @@
                             </li>
                         }
 
+                        @if (isSidebarOpen) { <li class="nav-divider"></li> }
+
                         @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
                         {
-                            <li class="nav-item">
-                                <NavLink href="/IdwImport" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                    IDW Import
+                            <li>
+                                <NavLink href="/IdwImport" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="IDW Import">
+                                    <i class="bi bi-cloud-upload"></i>
+                                    <span class="nav-label">IDW Import</span>
                                 </NavLink>
                             </li>
-                            <li class="nav-item">
-                                <NavLink href="/IdwManageList" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                    IDW Manage
+                            <li>
+                                <NavLink href="/IdwManageList" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="IDW Manage">
+                                    <i class="bi bi-clipboard-data"></i>
+                                    <span class="nav-label">IDW Manage</span>
                                 </NavLink>
                             </li>
                         }
                         @if (IsUserInRole(auth.User, "Admin"))
                         {
-                            <li class="nav-item">
-                                <NavLink href="/shopsOAuth" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                    MDW Shops OAuth
+                            <li>
+                                <NavLink href="/shopsOAuth" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="MDW Shops OAuth">
+                                    <i class="bi bi-shield-lock"></i>
+                                    <span class="nav-label">Shops OAuth</span>
                                 </NavLink>
                             </li>
                         }
                         @if (IsUserInRole(auth.User, "Admin", "SuperUser"))
                         {
-                            <li class="nav-item">
-                                <NavLink href="/normalize" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                    MDW Normalize
+                            <li>
+                                <NavLink href="/normalize" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="MDW Normalize">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                    <span class="nav-label">Normalize</span>
                                 </NavLink>
                             </li>
                         }
                         @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
                         {
-                            <li class="nav-item">
-                                <NavLink href="/ViewOrderData" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                    MDW Raw Data Import
+                            <li>
+                                <NavLink href="/ShippingLabels" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="Shipping Labels">
+                                    <i class="bi bi-tag"></i>
+                                    <span class="nav-label">Labels</span>
                                 </NavLink>
                             </li>
-                            <li class="nav-item">
-                                <NavLink href="/AdwFlowAccountExport" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                    FlowAccount Export
+                        }
+                        @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
+                        {
+                            <li>
+                                <NavLink href="/ViewOrderData" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="Raw Data Import">
+                                    <i class="bi bi-database-add"></i>
+                                    <span class="nav-label">Raw Data</span>
+                                </NavLink>
+                            </li>
+                            <li>
+                                <NavLink href="/AdwFlowAccountExport" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="FlowAccount Export">
+                                    <i class="bi bi-file-earmark-spreadsheet"></i>
+                                    <span class="nav-label">FlowAccount</span>
                                 </NavLink>
                             </li>
                             @if (IsUserInRole(auth.User, "Admin"))
                             {
-                                <li class="nav-item">
-                                    <NavLink href="/AdwOverallDashboard" Match="NavLinkMatch.Prefix" class="nav-link" ActiveClass="is-active">
-                                        ADW web chart
+                                <li>
+                                    <NavLink href="/AdwOverallDashboard" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="ADW Dashboard">
+                                        <i class="bi bi-graph-up-arrow"></i>
+                                        <span class="nav-label">Dashboard</span>
                                     </NavLink>
                                 </li>
                             }
                         }
                     </ul>
                 </nav>
-            </div>
 
-            <!-- Main -->
-            <div class="main-content @(isSidebarOpen ? "shrink" : "")">
-                <div class="top-row d-flex align-items-center">
-                    <div class="logo-area d-flex align-items-center gap-2">
-                        <img src="/images/logo.png" class="logo" alt="logo" />
-                        <strong>VAC Admin Portal</strong>
-                        <button class="menu-toggle btn btn-outline-secondary btn-sm ms-2" type="button" @onclick="ToggleSidebar">☰</button>
+                @* Toggle button at bottom *@
+                <button class="sidebar-toggle" @onclick="ToggleSidebar" title="@(isSidebarOpen ? "Collapse" : "Expand")">
+                    <i class="bi @(isSidebarOpen ? "bi-chevron-double-left" : "bi-chevron-double-right")"></i>
+                </button>
+            </aside>
+
+            @* ===== MAIN AREA ===== *@
+            <div class="main-wrapper @(isSidebarOpen ? "sidebar-open" : "sidebar-closed")">
+                @* Top bar *@
+                <header class="topbar">
+                    <div class="topbar-left">
+                        <div class="user-badge">
+                            <i class="bi bi-person-circle"></i>
+                            <span>@GetDisplayName(auth.User)</span>
+                        </div>
                     </div>
+                    <div class="topbar-right">
+                        <button class="btn-logout" type="button" @onclick="Logout">
+                            <i class="bi bi-box-arrow-right"></i>
+                            <span>Logout</span>
+                        </button>
+                    </div>
+                </header>
 
-                    <span class="ms-auto"></span>
-
-                    <span class="topbar-name me-2">
-                        Welcome @GetDisplayName(auth.User)
-                    </span>
-
-                    <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="Logout">Logout</button>
-                </div>
-
-                <main>@Body</main>
+                @* Page content *@
+                <main class="page-content">
+                    @Body
+                </main>
             </div>
         </div>
     </Authorized>
@@ -166,12 +210,10 @@
     private bool IsUserInRole(ClaimsPrincipal? user, params string[] roles)
     {
         if (user == null) return false;
-        // Check both standard Role claim and literal "ROLE" claim
         var userRoles = user.FindAll(ClaimTypes.Role)
                             .Concat(user.FindAll("ROLE"))
                             .Select(c => c.Value.Trim().ToLowerInvariant())
                             .ToList();
-                            
         return roles.Any(r => userRoles.Contains(r.Trim().ToLowerInvariant()));
     }
 
@@ -180,12 +222,6 @@
         if (user is null) return "";
         var name = user.FindFirst("FULLNAME")?.Value ?? user.Identity?.Name ?? "Unknown";
         var role = user.FindFirst("ROLE")?.Value ?? user.FindFirst(ClaimTypes.Role)?.Value ?? "No Role";
-        
-        // Debug: Show all claims
-        var allClaims = user.Claims.Select(c => $"{c.Type}={c.Value}").ToList();
-        var claimsDebug = string.Join(", ", allClaims);
-        System.Diagnostics.Debug.WriteLine($"All Claims: {claimsDebug}");
-        
         return $"{name} (Role: {role})";
     }
 

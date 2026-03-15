@@ -1,0 +1,405 @@
+@page "/ShippingLabels"
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Authorization
+@using adwportal.Dtos
+@using adwportal.Services
+
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider Auth
+@inject TokenCacheService TokenCache
+@inject MdwMarketplaceService MdwSvc
+@inject ShopService ShopSvc
+@inject ShopGroupService ShopGroupSvc
+
+<style>
+    .label-filter .form-label { font-size: .78rem; margin-bottom: 2px; }
+    .label-filter .form-select,
+    .label-filter .form-control { font-size: .82rem; padding: .3rem .5rem; }
+    .label-table th { font-size: .78rem; text-transform: uppercase; letter-spacing: .3px; }
+    .label-table td { font-size: .85rem; vertical-align: middle; }
+    .btn-icon { padding: .25rem .5rem; font-size: .82rem; }
+</style>
+
+<h3 class="mb-3">
+    <i class="bi bi-tag me-2"></i>Shipping Labels
+</h3>
+
+@* ===== Filter Card ===== *@
+<div class="card mb-3 label-filter">
+    <div class="card-body py-3 px-4">
+        <div class="d-flex flex-wrap align-items-end gap-3">
+            <div style="min-width:130px;">
+                <label class="form-label fw-bold">Platform</label>
+                <select class="form-select" @bind="selectedPlatform">
+                    <option value="">(All)</option>
+                    @foreach (var p in platformOptions)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </div>
+
+            <div style="min-width:220px; max-width:400px; flex:1;">
+                <label class="form-label fw-bold">Shop</label>
+                <select class="form-select" @bind="selectedShopId">
+                    <option value="">(All Shops)</option>
+                    @foreach (var s in filteredShops)
+                    {
+                        <option value="@s.ShopId">@((s.Name ?? "(no name)") + " [" + s.ShopId + "]")</option>
+                    }
+                </select>
+            </div>
+
+            <div style="min-width:150px;">
+                <label class="form-label fw-bold">From</label>
+                <input type="date" class="form-control" @bind="fromDate" />
+            </div>
+
+            <div style="min-width:150px;">
+                <label class="form-label fw-bold">To</label>
+                <input type="date" class="form-control" @bind="toDate" />
+            </div>
+
+            <div>
+                <button class="btn btn-primary" @onclick="SearchByListAsync" disabled="@isLoading">
+                    @if (isLoading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    <i class="bi bi-list-ul me-1"></i>By List
+                </button>
+            </div>
+        </div>
+
+        @* Search by Ref *@
+        <div class="d-flex flex-wrap align-items-end gap-3 mt-3 pt-3 border-top">
+            <div style="min-width:300px; flex:1; max-width:500px;">
+                <label class="form-label fw-bold">Order Ref</label>
+                <input type="text" class="form-control" placeholder="e.g. 250312ABCDEF01" @bind="searchRef" />
+            </div>
+            <div>
+                <button class="btn btn-outline-primary" @onclick="SearchByRefAsync" disabled="@isLoading">
+                    @if (isLoading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    <i class="bi bi-search me-1"></i>By Ref
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ===== Error / Info ===== *@
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger py-2">
+        <i class="bi bi-exclamation-triangle me-1"></i>@errorMessage
+    </div>
+}
+
+@if (hasSearched && labels.Count == 0 && string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-info py-2">
+        <i class="bi bi-info-circle me-1"></i>ไม่พบ label ตามเงื่อนไขที่ค้นหา
+    </div>
+}
+
+@* ===== Results Table ===== *@
+@if (labels.Count > 0)
+{
+    <div class="card">
+        <div class="card-header bg-white d-flex align-items-center justify-content-between py-2 px-3">
+            <span class="fw-bold" style="font-size:.9rem;">
+                <i class="bi bi-tag me-1"></i>พบ @totalLabels label (หน้า @currentPage)
+            </span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" disabled="@(currentPage <= 1)" @onclick="PreviousPageAsync">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" disabled="@(labels.Count < pageSize)" @onclick="NextPageAsync">
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 label-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Order Ref</th>
+                            <th>Channel</th>
+                            <th>Shop ID</th>
+                            <th>Document Type</th>
+                            <th>File Name</th>
+                            <th>Size</th>
+                            <th>Created</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int idx = (currentPage - 1) * pageSize; }
+                        @foreach (var lbl in labels)
+                        {
+                            idx++;
+                            <tr>
+                                <td class="text-muted">@idx</td>
+                                <td><code>@lbl.OrderExternalNo</code></td>
+                                <td>
+                                    <span class="badge @GetChannelBadge(lbl.Channel)">@(lbl.Channel ?? "—")</span>
+                                </td>
+                                <td>@lbl.ShopId</td>
+                                <td>@(lbl.DocumentType ?? "—")</td>
+                                <td style="max-width:200px;" class="text-truncate" title="@lbl.FileName">@(lbl.FileName ?? "—")</td>
+                                <td>@FormatSize(lbl.FileSizeBytes)</td>
+                                <td>@(lbl.CreatedDate?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-info btn-icon"
+                                                title="View"
+                                                @onclick="() => ViewLabelAsync(lbl.OrderExternalNo!)">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success btn-icon"
+                                                title="Download"
+                                                @onclick="() => DownloadLabelAsync(lbl.OrderExternalNo!)">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ===== State =====
+    private bool isLoading;
+    private bool hasSearched;
+    private string? errorMessage;
+    private string? mdwToken;
+    private int currentPage = 1;
+    private int pageSize = 50;
+    private int totalLabels;
+
+    // Filter
+    private string selectedPlatform = "";
+    private string selectedShopId = "";
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private string searchRef = "";
+
+    // Data
+    private List<ShopDtos> allShops = new();
+    private List<string> platformOptions = new();
+    private List<LabelItemDtos> labels = new();
+
+    // ===== Computed =====
+    private IEnumerable<ShopDtos> filteredShops =>
+        string.IsNullOrWhiteSpace(selectedPlatform)
+            ? allShops
+            : allShops.Where(s => string.Equals(s.Platform, selectedPlatform, StringComparison.OrdinalIgnoreCase));
+
+    // ===== Init =====
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            mdwToken = await TokenCache.GetMdwTokenAsync();
+            var idwToken = await TokenCache.GetIdwTokenAsync();
+
+            var authState = await Auth.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var userRole = user.FindFirst("ROLE")?.Value
+                        ?? user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                        ?? "";
+            var username = user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "";
+
+            if (userRole.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                var shops = await ShopSvc.GetShopsAsync(idwToken!);
+                allShops.AddRange((shops ?? new())
+                    .GroupBy(s => s.ShopId).Select(g => g.First())
+                    .OrderBy(s => s.Name));
+            }
+            else if (!string.IsNullOrWhiteSpace(username))
+            {
+                var effectiveShops = await ShopGroupSvc.GetUserEffectiveShopsByUsernameAsync(idwToken!, username);
+                allShops.AddRange(effectiveShops
+                    .GroupBy(es => es.ShopId).Select(g => g.First())
+                    .Select(es => new ShopDtos(
+                        Id: 0,
+                        ShopId: es.ShopId,
+                        PartnerId: es.PartnerId,
+                        Name: es.ShopName,
+                        Country: null,
+                        CreatedAt: DateTime.MinValue,
+                        Platform: es.Platform
+                    )).OrderBy(s => s.Name));
+            }
+
+            platformOptions = allShops
+                .Select(s => s.Platform ?? "")
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p)
+                .ToList();
+
+            toDate = DateTime.Today;
+            fromDate = DateTime.Today.AddDays(-7);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Init failed: {ex.Message}";
+        }
+    }
+
+    // ===== Search: By List =====
+    private async Task SearchByListAsync()
+    {
+        currentPage = 1;
+        await LoadLabelsAsync();
+    }
+
+    private async Task LoadLabelsAsync()
+    {
+        errorMessage = null;
+        labels.Clear();
+        hasSearched = true;
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            long? shopId = null;
+            if (!string.IsNullOrWhiteSpace(selectedShopId) && long.TryParse(selectedShopId, out var sid))
+                shopId = sid;
+
+            var channel = string.IsNullOrWhiteSpace(selectedPlatform) ? null : selectedPlatform;
+
+            var result = await MdwSvc.ListLabelsAsync(mdwToken, shopId, channel, fromDate, toDate, currentPage, pageSize);
+            labels = result.Items;
+            totalLabels = result.Total;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (currentPage > 1) { currentPage--; await LoadLabelsAsync(); }
+    }
+
+    private async Task NextPageAsync()
+    {
+        currentPage++;
+        await LoadLabelsAsync();
+    }
+
+    // ===== Search: By Ref =====
+    private async Task SearchByRefAsync()
+    {
+        if (string.IsNullOrWhiteSpace(searchRef))
+        {
+            errorMessage = "กรุณาระบุ Order Ref";
+            return;
+        }
+
+        errorMessage = null;
+        labels.Clear();
+        hasSearched = true;
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Fetch all then client-side filter by orderRef
+            var result = await MdwSvc.ListLabelsAsync(mdwToken, pageSize: 200);
+            labels = result.Items
+                .Where(l => (l.OrderExternalNo ?? "").Contains(searchRef.Trim(), StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            totalLabels = labels.Count;
+            currentPage = 1;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ===== View Label (open in new tab) =====
+    private async Task ViewLabelAsync(string orderRef)
+    {
+        try
+        {
+            var (ok, data, contentType, fileName, error) = await MdwSvc.DownloadLabelAsync(mdwToken, orderRef);
+            if (!ok)
+            {
+                errorMessage = $"View failed: {error}";
+                StateHasChanged();
+                return;
+            }
+
+            var base64 = Convert.ToBase64String(data!);
+            await JS.InvokeVoidAsync("eval",
+                $"var w=window.open('','_blank');w.document.write('<html><head><title>{fileName}</title></head><body style=\"margin:0\"><embed src=\"data:{contentType};base64,{base64}\" type=\"{contentType}\" width=\"100%\" height=\"100%\" /></body></html>');");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"View failed: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    // ===== Download Label =====
+    private async Task DownloadLabelAsync(string orderRef)
+    {
+        try
+        {
+            var (ok, data, contentType, fileName, error) = await MdwSvc.DownloadLabelAsync(mdwToken, orderRef);
+            if (!ok)
+            {
+                errorMessage = $"Download failed: {error}";
+                StateHasChanged();
+                return;
+            }
+
+            var base64 = Convert.ToBase64String(data!);
+            await JS.InvokeVoidAsync("eval",
+                $"var a=document.createElement('a');a.href='data:{contentType};base64,{base64}';a.download='{fileName}';document.body.appendChild(a);a.click();a.remove();");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Download failed: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    // ===== Helpers =====
+    private static string GetChannelBadge(string? channel) => (channel ?? "").ToLower() switch
+    {
+        "shopee" => "bg-warning text-dark",
+        "tiktok" => "bg-dark",
+        "lazada" => "bg-primary",
+        _ => "bg-secondary"
+    };
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+}

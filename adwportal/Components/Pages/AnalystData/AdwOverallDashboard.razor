@@ -24,39 +24,40 @@
 
 <style>
     .dashboard-card {
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         border: none;
         transition: transform 0.2s;
-        height: 100%;
     }
     .chart-container {
         position: relative;
         min-height: 300px;
     }
     .stat-val {
-        font-size: 2rem;
+        font-size: 1.5rem;
         font-weight: 700;
         color: #0d6efd;
     }
     .stat-label {
-        font-size: 0.9rem;
+        font-size: 0.78rem;
         color: #6c757d;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: .5px;
     }
+    .filter-card .form-label { font-size: .78rem; margin-bottom: 2px; }
+    .filter-card .form-select, .filter-card .form-control { font-size: .82rem; padding: .3rem .5rem; }
 </style>
 
-<h3 class="mb-4">ADW Web Chart: Overall Dashboard</h3>
+<h3 class="mb-3">ADW Web Chart: Overall Dashboard</h3>
 
-<div class="card mb-4 dashboard-card">
-    <div class="card-body">
+<div class="card mb-3 dashboard-card filter-card">
+    <div class="card-body py-3 px-4">
         <EditForm Model="@filter" OnValidSubmit="@RefreshAsync">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-3">
+            <div class="d-flex flex-wrap align-items-end gap-3">
+                <div style="min-width:130px;">
                     <label class="form-label fw-bold">Platform</label>
                     <InputSelect class="form-select" @bind-Value="SelectedPlatform">
-                        <option value="">(All Platforms)</option>
+                        <option value="">(All)</option>
                         @foreach (var p in platformOptions)
                         {
                             <option value="@p">@p</option>
@@ -64,9 +65,9 @@
                     </InputSelect>
                 </div>
 
-                <div class="col-md-3">
+                <div style="min-width:250px; max-width:420px; flex:1;">
                     <label class="form-label fw-bold">Shop</label>
-                    <InputSelect class="form-select" @bind-Value="filter.ShopId">
+                    <InputSelect class="form-select" style="max-width:100%;" @bind-Value="filter.ShopId">
                         <option value="">(All Shops)</option>
                         @foreach (var s in FilteredShopOptions)
                         {
@@ -75,23 +76,23 @@
                     </InputSelect>
                 </div>
 
-                <div class="col-md-2">
-                    <label class="form-label fw-bold">Created From</label>
+                <div style="min-width:150px;">
+                    <label class="form-label fw-bold">From</label>
                     <InputDate class="form-control" @bind-Value="filter.CreatedFrom" />
                 </div>
 
-                <div class="col-md-2">
-                    <label class="form-label fw-bold">Created To</label>
+                <div style="min-width:150px;">
+                    <label class="form-label fw-bold">To</label>
                     <InputDate class="form-control" @bind-Value="filter.CreatedTo" />
                 </div>
 
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100" disabled="@isLoading">
+                <div>
+                    <button type="submit" class="btn btn-primary" disabled="@isLoading">
                         @if (isLoading)
                         {
                             <span class="spinner-border spinner-border-sm me-1"></span>
                         }
-                        วิเคราะห์ข้อมูล
+                        <i class="bi bi-search me-1"></i>วิเคราะห์
                     </button>
                 </div>
             </div>
@@ -101,31 +102,31 @@
 
 @if (!string.IsNullOrWhiteSpace(errorMessage))
 {
-    <div class="alert alert-danger">@errorMessage</div>
+    <div class="alert alert-danger py-2">@errorMessage</div>
 }
 
-<div class="row g-4 mb-4">
+<div class="row g-3 mb-3">
     <!-- Summary Stats -->
-    <div class="col-md-3">
-        <div class="card dashboard-card p-3 text-center">
+    <div class="col-6 col-md-3">
+        <div class="card dashboard-card p-2 text-center">
             <div class="stat-label">Total Orders</div>
             <div class="stat-val">@statTotalOrders.ToString("N0")</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card dashboard-card p-3 text-center">
+    <div class="col-6 col-md-3">
+        <div class="card dashboard-card p-2 text-center">
             <div class="stat-label">Total Quantity</div>
             <div class="stat-val">@statTotalQty.ToString("N0")</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card dashboard-card p-3 text-center">
+    <div class="col-6 col-md-3">
+        <div class="card dashboard-card p-2 text-center">
             <div class="stat-label">Total Sales</div>
             <div class="stat-val">฿@statTotalSales.ToString("N2")</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card dashboard-card p-3 text-center">
+    <div class="col-6 col-md-3">
+        <div class="card dashboard-card p-2 text-center">
             <div class="stat-label">Avg. Order Value</div>
             <div class="stat-val">฿@((statTotalOrders > 0 ? statTotalSales / statTotalOrders : 0).ToString("N2"))</div>
         </div>
