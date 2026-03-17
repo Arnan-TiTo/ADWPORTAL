@@ -1,0 +1,300 @@
+@page "/EarnFormulas"
+@using adwportal.Services
+@inject MemberAdminService MemberSvc
+@inject AuthTokenProvider TokenProvider
+
+<h3 class="page-title mb-3"><i class="bi bi-code-slash"></i> สูตรคำนวณแต้ม (Earn Formulas)</h3>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary"></div>
+    </div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert @(msgOk ? "alert-success" : "alert-danger") alert-dismissible py-2 small">
+            @message
+            <button type="button" class="btn-close btn-close-sm" @onclick="() => message = null"></button>
+        </div>
+    }
+
+    @* ──── Create / Edit Form ──── *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>
+                <i class="bi bi-@(isEditing ? "pencil" : "plus-circle")"></i>
+                @(isEditing ? "แก้ไขสูตร" : "เพิ่มสูตรใหม่")
+            </span>
+            @if (isEditing)
+            {
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">
+                    <i class="bi bi-x-lg"></i> ยกเลิก
+                </button>
+            }
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">รหัสสูตร (Code)</label>
+                    <input type="text" class="form-control form-control-sm" @bind="form.FormulaCode"
+                           placeholder="เช่น AMOUNT_DIV_100" disabled="@(isEditing && form.IsSystem)" />
+                    <div class="form-text" style="font-size:10px;">ใช้ภาษาอังกฤษ ไม่มีเว้นวรรค</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">ชื่อแสดง</label>
+                    <input type="text" class="form-control form-control-sm" @bind="form.FormulaName"
+                           placeholder="เช่น ยอดสั่งซื้อ ÷ 100 × Rate" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">นิพจน์ (Expression)</label>
+                    <input type="text" class="form-control form-control-sm font-monospace" @bind="form.Expression"
+                           placeholder="เช่น Amount / 100 * Rate" />
+                    <div class="form-text" style="font-size:10px;">ใช้ตัวแปร: Amount, Quantity, Rate</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">ตัวแปร (Variables)</label>
+                    <input type="text" class="form-control form-control-sm" @bind="form.Variables"
+                           placeholder="Amount,Rate" />
+                    <div class="form-text" style="font-size:10px;">คั่นด้วย comma</div>
+                </div>
+            </div>
+            <div class="row g-2 mt-1">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">คำอธิบาย</label>
+                    <input type="text" class="form-control form-control-sm" @bind="form.Description"
+                           placeholder="คำอธิบายสูตร (ไม่บังคับ)" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">ตัวอย่างการทำงาน</label>
+                    <div class="bg-light border rounded px-3 py-2 small font-monospace">
+                        @if (!string.IsNullOrWhiteSpace(form.Expression))
+                        {
+                            <text>@form.Expression → ผลลัพธ์ = จำนวนแต้ม</text>
+                        }
+                        else
+                        {
+                            <span class="text-muted">ใส่นิพจน์เพื่อดูตัวอย่าง</span>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3 text-end">
+                <button class="btn btn-primary" @onclick="SaveFormula" disabled="@saving">
+                    @if (saving) { <span class="spinner-border spinner-border-sm"></span> }
+                    else if (isEditing) { <text><i class="bi bi-check-lg"></i> บันทึก</text> }
+                    else { <text><i class="bi bi-plus-lg"></i> สร้างสูตร</text> }
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* ──── Formula List ──── *@
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-ul"></i> รายการสูตร (@formulas.Count)</span>
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadFormulas">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+        @if (formulas.Count == 0)
+        {
+            <div class="card-body text-center text-muted small py-4">
+                <i class="bi bi-inbox" style="font-size:40px;"></i>
+                <p class="mt-2">ยังไม่มีสูตร<br>สร้างใหม่ได้ที่ฟอร์มด้านบน</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 align-middle small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>รหัส</th>
+                            <th>ชื่อแสดง</th>
+                            <th>นิพจน์</th>
+                            <th>ตัวแปร</th>
+                            <th>คำอธิบาย</th>
+                            <th>ประเภท</th>
+                            <th class="text-center" style="width:120px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var f in formulas)
+                        {
+                            <tr>
+                                <td>
+                                    <code class="text-primary">@f.FormulaCode</code>
+                                </td>
+                                <td class="fw-semibold">@f.FormulaName</td>
+                                <td>
+                                    <span class="font-monospace bg-light px-2 py-1 rounded small">@f.Expression</span>
+                                </td>
+                                <td class="text-muted">@(f.Variables ?? "-")</td>
+                                <td class="text-muted">@(f.Description ?? "-")</td>
+                                <td>
+                                    @if (f.IsSystem)
+                                    {
+                                        <span class="badge bg-info text-dark"><i class="bi bi-lock"></i> ระบบ</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">กำหนดเอง</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary py-0" title="แก้ไข" @onclick="() => EditFormula(f)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        @if (!f.IsSystem)
+                                        {
+                                            <button class="btn btn-outline-danger py-0" title="ลบ"
+                                                    @onclick="() => DeleteFormula(f.FormulaId, f.FormulaCode)"
+                                                    disabled="@deleting">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @* ──── Help ──── *@
+    <div class="card shadow-sm mt-3 border-info">
+        <div class="card-header bg-info bg-opacity-10">
+            <i class="bi bi-info-circle"></i> วิธีเขียนสูตร
+        </div>
+        <div class="card-body small">
+            <p class="mb-2">ตัวแปรที่ใช้ได้ในนิพจน์:</p>
+            <table class="table table-sm table-bordered small mb-2">
+                <thead class="table-light">
+                    <tr><th>ตัวแปร</th><th>ความหมาย</th><th>ตัวอย่าง</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>Amount</code></td><td>ยอดสั่งซื้อ (บาท)</td><td>500.00</td></tr>
+                    <tr><td><code>Quantity</code></td><td>จำนวนชิ้น</td><td>3</td></tr>
+                    <tr><td><code>Rate</code></td><td>อัตราที่ตั้งใน Policy</td><td>1.5</td></tr>
+                </tbody>
+            </table>
+            <div class="p-2 bg-light rounded">
+                <strong>ตัวอย่างสูตร:</strong><br>
+                <code>Amount / 100 * Rate</code> → ฿500 ÷ 100 × 1.5 = <strong>7 แต้ม</strong><br>
+                <code>Quantity * Rate</code> → 3 ชิ้น × 2 = <strong>6 แต้ม</strong><br>
+                <code>Rate</code> → Fixed = <strong>Rate แต้ม</strong> ทุกออเดอร์<br>
+                <code>Amount / 50 * Rate</code> → ทุกๆ ฿50 ได้ Rate แต้ม
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<EarnFormulaVm> formulas = new();
+    private EarnFormulaVm form = new();
+    private bool isLoading = true;
+    private bool saving;
+    private bool deleting;
+    private bool isEditing;
+    private int editingId;
+    private string? message;
+    private bool msgOk;
+
+    protected override async Task OnInitializedAsync() => await LoadFormulas();
+
+    private async Task LoadFormulas()
+    {
+        isLoading = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            formulas = await MemberSvc.GetFormulasAsync(token);
+        }
+        catch (Exception ex) { message = $"❌ {ex.Message}"; msgOk = false; }
+        isLoading = false;
+    }
+
+    private void EditFormula(EarnFormulaVm f)
+    {
+        isEditing = true;
+        editingId = f.FormulaId;
+        form = new EarnFormulaVm
+        {
+            FormulaCode = f.FormulaCode,
+            FormulaName = f.FormulaName,
+            Expression = f.Expression,
+            Description = f.Description,
+            Variables = f.Variables,
+            IsSystem = f.IsSystem
+        };
+    }
+
+    private void ResetForm()
+    {
+        isEditing = false;
+        editingId = 0;
+        form = new EarnFormulaVm();
+        message = null;
+    }
+
+    private async Task SaveFormula()
+    {
+        if (string.IsNullOrWhiteSpace(form.FormulaCode))
+        { message = "⚠️ กรุณากรอกรหัสสูตร"; msgOk = false; return; }
+        if (string.IsNullOrWhiteSpace(form.FormulaName))
+        { message = "⚠️ กรุณากรอกชื่อแสดง"; msgOk = false; return; }
+        if (string.IsNullOrWhiteSpace(form.Expression))
+        { message = "⚠️ กรุณากรอกนิพจน์"; msgOk = false; return; }
+
+        saving = true;
+        message = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            if (isEditing)
+            {
+                await MemberSvc.UpdateFormulaAsync(token, editingId, form);
+                message = $"✅ แก้ไขสูตร \"{form.FormulaCode}\" สำเร็จ!";
+            }
+            else
+            {
+                await MemberSvc.CreateFormulaAsync(token, form);
+                message = $"✅ สร้างสูตร \"{form.FormulaCode}\" สำเร็จ!";
+            }
+            msgOk = true;
+            ResetForm();
+            await LoadFormulas();
+        }
+        catch (Exception ex)
+        {
+            message = $"❌ {ex.Message}";
+            msgOk = false;
+        }
+        saving = false;
+    }
+
+    private async Task DeleteFormula(int formulaId, string code)
+    {
+        deleting = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.DeleteFormulaAsync(token, formulaId);
+            message = $"✅ ลบสูตร \"{code}\" แล้ว";
+            msgOk = true;
+            await LoadFormulas();
+        }
+        catch (Exception ex)
+        {
+            message = $"❌ {ex.Message}";
+            msgOk = false;
+        }
+        deleting = false;
+    }
+}

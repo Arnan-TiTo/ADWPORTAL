@@ -92,6 +92,68 @@
                             </li>
                         }
 
+                        @* Member group *@
+                        @if (IsUserInRole(auth.User, "Admin"))
+                        {
+                            <li class="nav-group">
+                                <button type="button" class="nav-item-link group-toggle" @onclick="ToggleMember" title="Member">
+                                    <i class="bi bi-person-badge"></i>
+                                    <span class="nav-label">Member</span>
+                                    @if (isSidebarOpen)
+                                    {
+                                        <i class="bi bi-chevron-right chevron @(memberOpen ? "rotated" : "")"></i>
+                                    }
+                                </button>
+                                @if (memberOpen)
+                                {
+                                    <ul class="sub-menu">
+                                        <li>
+                                            <NavLink href="/LineOaConfigs" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="LINE OA Configs">
+                                                <i class="bi bi-chat-square-dots"></i>
+                                                <span class="nav-label">LINE OA</span>
+                                            </NavLink>
+                                        </li>
+                                        <li>
+                                            <NavLink href="/MemberList" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Member List">
+                                                <i class="bi bi-people"></i>
+                                                <span class="nav-label">Member List</span>
+                                            </NavLink>
+                                        </li>
+                                        <li>
+                                            <NavLink href="/MemberMappingRequests" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Mapping Requests">
+                                                <i class="bi bi-link-45deg"></i>
+                                                <span class="nav-label">Mapping Requests</span>
+                                            </NavLink>
+                                        </li>
+                                        <li>
+                                            <NavLink href="/MemberRewards" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Rewards">
+                                                <i class="bi bi-gift"></i>
+                                                <span class="nav-label">Rewards</span>
+                                            </NavLink>
+                                        </li>
+                                        <li>
+                                            <NavLink href="/PointPolicies" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Point Policies">
+                                                <i class="bi bi-calculator"></i>
+                                                <span class="nav-label">Point Policies</span>
+                                            </NavLink>
+                                        </li>
+                                        <li>
+                                            <NavLink href="/EarnFormulas" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Earn Formulas">
+                                                <i class="bi bi-code-slash"></i>
+                                                <span class="nav-label">Formulas</span>
+                                            </NavLink>
+                                        </li>
+                                        <li>
+                                            <NavLink href="/MemberSummary" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Member Summary">
+                                                <i class="bi bi-graph-up"></i>
+                                                <span class="nav-label">Summary</span>
+                                            </NavLink>
+                                        </li>
+                                    </ul>
+                                }
+                            </li>
+                        }
+
                         @if (isSidebarOpen) { <li class="nav-divider"></li> }
 
                         @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
@@ -203,9 +265,11 @@
 @code {
     private bool isSidebarOpen = true;
     private bool configOpen = false;
+    private bool memberOpen = false;
 
     private void ToggleSidebar() => isSidebarOpen = !isSidebarOpen;
     private void ToggleConfig() => configOpen = !configOpen;
+    private void ToggleMember() => memberOpen = !memberOpen;
 
     private bool IsUserInRole(ClaimsPrincipal? user, params string[] roles)
     {

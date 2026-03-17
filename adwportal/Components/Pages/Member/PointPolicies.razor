@@ -1,0 +1,352 @@
+@page "/PointPolicies"
+@using adwportal.Services
+@inject MemberAdminService MemberSvc
+@inject AuthTokenProvider TokenProvider
+
+<h3 class="page-title mb-3"><i class="bi bi-calculator"></i> การคำนวณแต้ม (Point Policies)</h3>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary"></div>
+    </div>
+}
+else
+{
+    @* Status message *@
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert @(messageSuccess ? "alert-success" : "alert-danger") alert-dismissible py-2 small">
+            @message
+            <button type="button" class="btn-close btn-close-sm" @onclick="() => message = null"></button>
+        </div>
+    }
+
+    @* Add / Edit Form *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-@(isEditing ? "pencil" : "plus-circle")"></i> @(isEditing ? "แก้ไข Policy" : "เพิ่ม Policy ใหม่")</span>
+            @if (isEditing)
+            {
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ResetForm">
+                    <i class="bi bi-x-lg"></i> ยกเลิก
+                </button>
+            }
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold">ชื่อ Policy</label>
+                    <input type="text" class="form-control form-control-sm" @bind="form.PolicyName" placeholder="เช่น Shopee x2 Campaign" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold">แพลตฟอร์ม</label>
+                    <select class="form-select form-select-sm" @bind="form.PlatformType">
+                        <option value="ALL">🌐 ทุกแพลตฟอร์ม</option>
+                        <option value="SHOPEE">🟠 Shopee</option>
+                        <option value="LAZADA">🔵 Lazada</option>
+                        <option value="TIKTOK">⚫ TikTok</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">สูตรคำนวณ</label>
+                    <div class="input-group input-group-sm">
+                        <select class="form-select form-select-sm" @bind="form.EarnFormula">
+                            @if (earnFormulas.Count == 0)
+                            {
+                                <option value="AMOUNT_DIV_100">ยอดสั่งซื้อ ÷ 100 × Rate</option>
+                                <option value="FIXED">แต้มคงที่ (Fixed)</option>
+                            }
+                            else
+                            {
+                                @foreach (var f in earnFormulas)
+                                {
+                                    <option value="@f.FormulaCode">@f.FormulaName</option>
+                                }
+                            }
+                        </select>
+                        <a href="/EarnFormulas" class="btn btn-outline-secondary" title="จัดการสูตร">
+                            <i class="bi bi-gear"></i>
+                        </a>
+                    </div>
+                    @{ var sel = earnFormulas.FirstOrDefault(f => f.FormulaCode == form.EarnFormula); }
+                    @if (sel != null)
+                    {
+                        <div class="form-text" style="font-size:10px;">
+                            <code>@sel.Expression</code>
+                        </div>
+                    }
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">อัตราแต้ม (Rate)</label>
+                    <input type="number" class="form-control form-control-sm" @bind="form.EarnRate" step="0.1" min="0" />
+                    @{ var selRate = earnFormulas.FirstOrDefault(f => f.FormulaCode == form.EarnFormula); }
+                    <div class="form-text" style="font-size:10px;">
+                        @if (selRate != null && selRate.Expression.Contains("100"))
+                        {
+                            <text>ทุกๆ ฿100 ได้ @form.EarnRate.ToString("N1") แต้ม → ฿1,000 = @((int)Math.Floor(1000m / 100m * form.EarnRate)) แต้ม</text>
+                        }
+                        else
+                        {
+                            <text>Rate = @form.EarnRate.ToString("N1")</text>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="row g-2 mt-1">
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">ยอดขั้นต่ำ (บาท)</label>
+                    <input type="number" class="form-control form-control-sm" @bind="form.MinOrderAmount" step="1" placeholder="ไม่บังคับ" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">เริ่มมีผล</label>
+                    <input type="date" class="form-control form-control-sm" @bind="form.EffectiveFrom" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">สิ้นสุด (ไม่บังคับ)</label>
+                    <input type="date" class="form-control form-control-sm" @bind="form.EffectiveTo" />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="SavePolicy" disabled="@saving">
+                        @if (saving) { <span class="spinner-border spinner-border-sm"></span> }
+                        else if (isEditing) { <text><i class="bi bi-check-lg"></i> บันทึก</text> }
+                        else { <text><i class="bi bi-plus-lg"></i> สร้าง</text> }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Policy List *@
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-ul"></i> รายการ Policy (@policies.Count)</span>
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadPolicies">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+        @if (policies.Count == 0)
+        {
+            <div class="card-body text-center text-muted small py-4">
+                <i class="bi bi-inbox" style="font-size:40px;"></i>
+                <p class="mt-2">ยังไม่มี Policy<br>สร้างใหม่ได้ที่ฟอร์มด้านบน</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 align-middle small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>สถานะ</th>
+                            <th>ชื่อ Policy</th>
+                            <th>แพลตฟอร์ม</th>
+                            <th>สูตร</th>
+                            <th class="text-end">Rate</th>
+                            <th class="text-end">ขั้นต่ำ</th>
+                            <th>ช่วงเวลา</th>
+                            <th>สร้างโดย</th>
+                            <th class="text-center" style="width:120px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in policies)
+                        {
+                            var rowClass = p.IsActive ? "" : "table-secondary text-muted";
+                            <tr class="@rowClass">
+                                <td>
+                                    <span class="badge @(p.IsActive ? "bg-success" : "bg-secondary")">
+                                        @(p.IsActive ? "✅ Active" : "⏸️ Inactive")
+                                    </span>
+                                </td>
+                                <td class="fw-semibold">@p.PolicyName</td>
+                                <td>
+                                    <span class="badge @GetPlatformBadge(p.PlatformType)">@p.PlatformType</span>
+                                </td>
+                                <td>
+                                    @{
+                                        var fInfo = earnFormulas.FirstOrDefault(f => f.FormulaCode == p.EarnFormula);
+                                    }
+                                    @if (fInfo != null)
+                                    {
+                                        <span title="@fInfo.Expression">📊 @fInfo.FormulaName</span>
+                                    }
+                                    else
+                                    {
+                                        <code>@p.EarnFormula</code>
+                                    }
+                                </td>
+                                <td class="text-end fw-bold">@p.EarnRate.ToString("N1")</td>
+                                <td class="text-end">@(p.MinOrderAmount.HasValue ? $"฿{p.MinOrderAmount:N0}" : "-")</td>
+                                <td>
+                                    <span class="text-nowrap">@p.EffectiveFrom.ToString("dd/MM/yy")</span>
+                                    <span class="text-muted">→</span>
+                                    <span class="text-nowrap">@(p.EffectiveTo?.ToString("dd/MM/yy") ?? "ไม่สิ้นสุด")</span>
+                                </td>
+                                <td class="text-muted">@(p.CreatedBy ?? "-")</td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary py-0" title="แก้ไข" @onclick="() => EditPolicy(p)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn @(p.IsActive ? "btn-outline-warning" : "btn-outline-success") py-0"
+                                                title="@(p.IsActive ? "ปิด" : "เปิด")"
+                                                @onclick="() => TogglePolicy(p.PolicyId)">
+                                            <i class="bi bi-@(p.IsActive ? "pause" : "play")"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @* How it works info *@
+    <div class="card shadow-sm mt-3 border-info">
+        <div class="card-header bg-info bg-opacity-10">
+            <i class="bi bi-info-circle"></i> วิธีการทำงาน
+        </div>
+        <div class="card-body small">
+            <p class="mb-2">เมื่อสมาชิกสั่งซื้อสินค้า ระบบจะเลือก Policy ที่:</p>
+            <ul class="mb-2">
+                <li><strong>Active</strong> อยู่</li>
+                <li>ตรงกับ <strong>แพลตฟอร์ม</strong> ที่สั่ง (หรือ ALL)</li>
+                <li>วันที่สั่งอยู่ใน <strong>ช่วงเวลา</strong> ที่กำหนด</li>
+            </ul>
+            <p class="mb-1">หาก Platform ตรง → ใช้ policy นั้นก่อน Platform = ALL</p>
+            <div class="mt-2 p-2 bg-light rounded">
+                <strong>ตัวอย่าง:</strong><br>
+                <code>AMOUNT_DIV_100</code> + Rate = <code>1.5</code> + ยอดสั่ง ฿500<br>
+                → 500 ÷ 100 × 1.5 = <strong>7 แต้ม</strong> (ปัดลง)
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PointPolicyVm> policies = new();
+    private List<EarnFormulaVm> earnFormulas = new();
+    private PointPolicyVm form = new();
+    private bool isLoading = true;
+    private bool saving;
+    private bool isEditing;
+    private int editingPolicyId;
+    private string? message;
+    private bool messageSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFormulas();
+        await LoadPolicies();
+    }
+
+    private async Task LoadFormulas()
+    {
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            earnFormulas = await MemberSvc.GetFormulasAsync(token);
+        }
+        catch { /* fallback: dropdown จะ show hardcoded options */ }
+    }
+
+    private async Task LoadPolicies()
+    {
+        isLoading = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            policies = await MemberSvc.GetPoliciesAsync(token);
+        }
+        catch (Exception ex) { message = $"❌ {ex.Message}"; messageSuccess = false; }
+        isLoading = false;
+    }
+
+    private void EditPolicy(PointPolicyVm p)
+    {
+        isEditing = true;
+        editingPolicyId = p.PolicyId;
+        form = new PointPolicyVm
+        {
+            PolicyName = p.PolicyName,
+            PlatformType = p.PlatformType,
+            EarnFormula = p.EarnFormula,
+            EarnRate = p.EarnRate,
+            MinOrderAmount = p.MinOrderAmount,
+            EligibleStatuses = p.EligibleStatuses,
+            EffectiveFrom = p.EffectiveFrom,
+            EffectiveTo = p.EffectiveTo
+        };
+    }
+
+    private void ResetForm()
+    {
+        isEditing = false;
+        editingPolicyId = 0;
+        form = new PointPolicyVm();
+        message = null;
+    }
+
+    private async Task SavePolicy()
+    {
+        if (string.IsNullOrWhiteSpace(form.PolicyName))
+        { message = "⚠️ กรุณากรอกชื่อ Policy"; messageSuccess = false; return; }
+        if (form.EarnRate <= 0)
+        { message = "⚠️ Rate ต้องมากกว่า 0"; messageSuccess = false; return; }
+
+        saving = true;
+        message = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            if (isEditing)
+            {
+                await MemberSvc.UpdatePolicyAsync(token, editingPolicyId, form);
+                message = $"✅ แก้ไข \"{form.PolicyName}\" สำเร็จ!";
+            }
+            else
+            {
+                await MemberSvc.CreatePolicyAsync(token, form);
+                message = $"✅ สร้าง \"{form.PolicyName}\" สำเร็จ!";
+            }
+            messageSuccess = true;
+            ResetForm();
+            await LoadPolicies();
+        }
+        catch (Exception ex)
+        {
+            message = $"❌ {ex.Message}";
+            messageSuccess = false;
+        }
+        saving = false;
+    }
+
+    private async Task TogglePolicy(int policyId)
+    {
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.TogglePolicyAsync(token, policyId);
+            await LoadPolicies();
+            message = "✅ เปลี่ยนสถานะแล้ว";
+            messageSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            message = $"❌ {ex.Message}";
+            messageSuccess = false;
+        }
+    }
+
+    private static string GetPlatformBadge(string type) => type.ToUpper() switch
+    {
+        "SHOPEE" => "bg-warning text-dark",
+        "LAZADA" => "bg-primary",
+        "TIKTOK" => "bg-dark",
+        "ALL" => "bg-info",
+        _ => "bg-secondary"
+    };
+}

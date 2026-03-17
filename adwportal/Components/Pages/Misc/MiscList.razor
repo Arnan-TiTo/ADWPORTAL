@@ -1,8 +1,8 @@
-﻿@page "/MiscList"
+@page "/MiscList"
 @using adwportal.Dtos
 @using adwportal.Services
 @inject MiscService Svc
-@inject IdwImportService IdwSvc
+@inject AuthTokenProvider TokenProvider
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -163,8 +163,7 @@ else
         try
         {
             loading = true;
-            var login = await IdwSvc.LoginAsync("admin", "123456yjm");
-            token = login?.Token;
+            token = await TokenProvider.GetIdwTokenAsync();
             if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
 
             // โหลด types

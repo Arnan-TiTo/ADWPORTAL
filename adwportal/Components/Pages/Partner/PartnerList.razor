@@ -1,8 +1,8 @@
-﻿@page "/PartnerList"
+@page "/PartnerList"
 @using adwportal.Dtos
 @using adwportal.Services
 @inject PartnerService Svc
-@inject IdwImportService Idw
+@inject AuthTokenProvider TokenProvider
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -122,8 +122,7 @@ else
         {
             loading = true;
 
-            var login = await Idw.LoginAsync("admin", "123456yjm");
-            token = login?.Token;
+            token = await TokenProvider.GetIdwTokenAsync();
             if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
 
             all = await Svc.GetPartnersAsync(token!);

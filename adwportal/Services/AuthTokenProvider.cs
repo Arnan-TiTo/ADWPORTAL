@@ -1,4 +1,4 @@
-﻿namespace adwportal.Services
+namespace adwportal.Services
 {
     public class AuthTokenProvider
     {
@@ -37,26 +37,31 @@
             }
         }
 
-        // ========== IDW TOKEN (Delegated to TokenCacheService) ==========
+        // ========== IDW TOKEN ==========
+        // ⚡ Async version — ใช้ใน Blazor pages เพื่อหลีกเลี่ยง deadlock
+        public async Task<string?> GetIdwTokenAsync()
+        {
+            if (_tokenCache != null)
+                return await _tokenCache.GetIdwTokenAsync();
+
+            return Session?.GetString("IDW_TOKEN");
+        }
+
+        // Sync version — ⚠️ ไม่ควรใช้ใน Blazor (deadlock ได้)
         public string? IdwToken
         {
             get
             {
-                // Use TokenCacheService if available
                 if (_tokenCache != null)
                 {
                     return _tokenCache.GetIdwTokenAsync().GetAwaiter().GetResult();
                 }
-
-                // Fallback to session (for backward compatibility)
                 var s = Session?.GetString("IDW_TOKEN");
                 return s;
             }
             set
             {
-                // Still allow setting for backward compatibility
                 if (Session == null) return;
-
                 if (string.IsNullOrEmpty(value))
                     Session.Remove("IDW_TOKEN");
                 else
@@ -64,26 +69,31 @@
             }
         }
 
-        // ========== MDW TOKEN (Delegated to TokenCacheService) ==========
+        // ========== MDW TOKEN ==========
+        // ⚡ Async version — ใช้ใน Blazor pages
+        public async Task<string?> GetMdwTokenAsync()
+        {
+            if (_tokenCache != null)
+                return await _tokenCache.GetMdwTokenAsync();
+
+            return Session?.GetString("MDW_TOKEN");
+        }
+
+        // Sync version — ⚠️ ไม่ควรใช้ใน Blazor
         public string? MdwToken
         {
             get
             {
-                // Use TokenCacheService if available
                 if (_tokenCache != null)
                 {
                     return _tokenCache.GetMdwTokenAsync().GetAwaiter().GetResult();
                 }
-
-                // Fallback to session (for backward compatibility)
                 var s = Session?.GetString("MDW_TOKEN");
                 return s;
             }
             set
             {
-                // Still allow setting for backward compatibility
                 if (Session == null) return;
-
                 if (string.IsNullOrEmpty(value))
                     Session.Remove("MDW_TOKEN");
                 else

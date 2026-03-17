@@ -268,8 +268,8 @@ else
         try
         {
             // Get tokens from AuthTokenProvider (which delegates to TokenCacheService)
-            _mdwToken = NormalizeToken(TokenProvider.MdwToken);
-            _idwToken = NormalizeToken(TokenProvider.IdwToken);
+            _mdwToken = NormalizeToken(await TokenProvider.GetMdwTokenAsync());
+            _idwToken = NormalizeToken(await TokenProvider.GetIdwTokenAsync());
 
             if (string.IsNullOrWhiteSpace(_mdwToken))
                 throw new Exception("No MDW token. Please login again.");

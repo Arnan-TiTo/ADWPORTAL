@@ -1,9 +1,9 @@
-﻿@page "/CompanyList"
+@page "/CompanyList"
 @using adwportal.Dtos
 @using adwportal.Services
 
 @inject CompanyService Svc
-@inject IdwImportService Idw
+@inject AuthTokenProvider TokenProvider
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -132,9 +132,8 @@ else
         {
             loading = true;
 
-            // login เอา token จาก Idw
-            var login = await Idw.LoginAsync("admin", "123456yjm");
-            token = login?.Token;
+            // ดึง token แบบ async
+            token = await TokenProvider.GetIdwTokenAsync();
             if (string.IsNullOrWhiteSpace(token))
             {
                 error = "Login failed";

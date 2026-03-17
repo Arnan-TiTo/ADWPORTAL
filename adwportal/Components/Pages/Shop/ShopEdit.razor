@@ -1,10 +1,10 @@
-﻿@page "/ShopEdit"
+@page "/ShopEdit"
 @page "/ShopEdit/{Id:int}"
 @using adwportal.Dtos
 @using adwportal.Services
 @inject ShopService Svc
 @inject PartnerService PartnerSvc
-@inject IdwImportService Idw
+@inject AuthTokenProvider TokenProvider
 @inject MiscService MiscSvc
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -102,8 +102,7 @@ else
         try
         {
             loading = true;
-            var login = await Idw.LoginAsync("admin", "123456yjm");
-            token = login?.Token;
+            token = await TokenProvider.GetIdwTokenAsync();
             if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
 
             partners = await PartnerSvc.GetPartnersAsync(token!);

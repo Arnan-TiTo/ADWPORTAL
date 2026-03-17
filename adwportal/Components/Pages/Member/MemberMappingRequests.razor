@@ -1,0 +1,282 @@
+@page "/MemberMappingRequests"
+@using adwportal.Services
+@inject MemberAdminService MemberSvc
+@inject AuthTokenProvider TokenProvider
+
+<h3 class="page-title"><i class="bi bi-link-45deg"></i> Mapping Requests</h3>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">แสดงเฉพาะ: Pending (@requests.Count รายการ)</span>
+            <button class="btn btn-sm btn-outline-primary ms-auto" @onclick="LoadData" disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise"></i> รีเฟรช
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary"></div>
+    </div>
+}
+else if (requests.Count == 0)
+{
+    <div class="text-center py-5 text-muted">
+        <i class="bi bi-check-circle display-4"></i>
+        <p class="mt-2">ไม่มีคำขอรออนุมัติ</p>
+    </div>
+}
+else
+{
+    @* Bulk Actions *@
+    @if (selectedIds.Count > 0)
+    {
+        <div class="card shadow-sm mb-3 border-primary">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fw-bold">เลือก @selectedIds.Count รายการ</span>
+                    <div class="ms-auto d-flex gap-2">
+                        <input type="text" class="form-control form-control-sm" @bind="bulkNote"
+                               placeholder="หมายเหตุ (ถ้ามี)" style="max-width:250px;" />
+                        <button class="btn btn-sm btn-success" @onclick="BulkApprove" disabled="@bulkProcessing">
+                            @if (bulkProcessing) { <span class="spinner-border spinner-border-sm"></span> }
+                            else { <text><i class="bi bi-check-all"></i> อนุมัติทั้งหมด</text> }
+                        </button>
+                        <button class="btn btn-sm btn-danger" @onclick="BulkReject" disabled="@bulkProcessing">
+                            <i class="bi bi-x-circle"></i> ปฏิเสธทั้งหมด
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="alert @(statusSuccess ? "alert-success" : "alert-danger") py-2 small">@statusMessage</div>
+    }
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:30px;">
+                            <input type="checkbox" class="form-check-input" @onchange="ToggleSelectAll"
+                                   checked="@(selectedIds.Count == requests.Count && requests.Count > 0)" />
+                        </th>
+                        <th>สมาชิก</th>
+                        <th>แพลตฟอร์ม</th>
+                        <th>บัญชี</th>
+                        <th>ชื่อ</th>
+                        <th>แหล่งที่มา</th>
+                        <th>วันขอ</th>
+                        <th class="text-center">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in requests)
+                    {
+                        <tr class="@(selectedIds.Contains(r.RequestId) ? "table-active" : "")">
+                            <td>
+                                <input type="checkbox" class="form-check-input"
+                                       checked="@selectedIds.Contains(r.RequestId)"
+                                       @onchange="() => ToggleSelect(r.RequestId)" />
+                            </td>
+                            <td>
+                                <div>@(r.MemberDisplayName ?? "-")</div>
+                                <small class="text-muted">ID: @r.MemberId</small>
+                            </td>
+                            <td>
+                                <span class="badge @GetPlatformBadge(r.PlatformType)">@r.PlatformType</span>
+                            </td>
+                            <td><code>@r.PlatformAccountKey</code></td>
+                            <td>@(r.PlatformAccountName ?? "-")</td>
+                            <td>
+                                <span class="badge bg-secondary">@r.SourceType</span>
+                            </td>
+                            <td>@r.CreatedAt.ToString("dd/MM HH:mm")</td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-success" @onclick="() => Approve(r.RequestId)" disabled="@r.Processing"
+                                            title="อนุมัติ">
+                                        <i class="bi bi-check-lg"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" @onclick="() => Reject(r.RequestId)" disabled="@r.Processing"
+                                            title="ปฏิเสธ">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MappingRequestRow> requests = new();
+    private HashSet<long> selectedIds = new();
+    private bool isLoading = true;
+    private string? bulkNote;
+    private bool bulkProcessing;
+    private string? statusMessage;
+    private bool statusSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        statusMessage = null;
+        selectedIds.Clear();
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            var raw = await MemberSvc.GetPendingRequestsAsync(token);
+            requests = raw.Select(r => new MappingRequestRow(r)).ToList();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ {ex.Message}";
+            statusSuccess = false;
+        }
+        isLoading = false;
+    }
+
+    private void ToggleSelect(long id)
+    {
+        if (!selectedIds.Remove(id))
+            selectedIds.Add(id);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        if ((bool)(e.Value ?? false))
+            selectedIds = requests.Select(r => r.RequestId).ToHashSet();
+        else
+            selectedIds.Clear();
+    }
+
+    private async Task Approve(long id)
+    {
+        var row = requests.FirstOrDefault(r => r.RequestId == id);
+        if (row == null) return;
+        row.Processing = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.ApproveMappingAsync(token, id);
+            statusMessage = $"✅ อนุมัติ #{id} สำเร็จ";
+            statusSuccess = true;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ {ex.Message}";
+            statusSuccess = false;
+            row.Processing = false;
+        }
+    }
+
+    private async Task Reject(long id)
+    {
+        var row = requests.FirstOrDefault(r => r.RequestId == id);
+        if (row == null) return;
+        row.Processing = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.RejectMappingAsync(token, id);
+            statusMessage = $"✅ ปฏิเสธ #{id} สำเร็จ";
+            statusSuccess = true;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ {ex.Message}";
+            statusSuccess = false;
+            row.Processing = false;
+        }
+    }
+
+    private async Task BulkApprove()
+    {
+        if (selectedIds.Count == 0) return;
+        bulkProcessing = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            var results = await MemberSvc.BulkApproveMappingAsync(token, selectedIds.ToList(), bulkNote);
+            var ok = results.Count(r => r.Success);
+            var fail = results.Count(r => !r.Success);
+            statusMessage = $"✅ อนุมัติ {ok} สำเร็จ" + (fail > 0 ? $", ❌ ล้มเหลว {fail}" : "");
+            statusSuccess = fail == 0;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ {ex.Message}";
+            statusSuccess = false;
+        }
+        bulkProcessing = false;
+        bulkNote = null;
+    }
+
+    private async Task BulkReject()
+    {
+        if (selectedIds.Count == 0) return;
+        bulkProcessing = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            var results = await MemberSvc.BulkRejectMappingAsync(token, selectedIds.ToList(), bulkNote);
+            var ok = results.Count(r => r.Success);
+            var fail = results.Count(r => !r.Success);
+            statusMessage = $"✅ ปฏิเสธ {ok} สำเร็จ" + (fail > 0 ? $", ❌ ล้มเหลว {fail}" : "");
+            statusSuccess = fail == 0;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ {ex.Message}";
+            statusSuccess = false;
+        }
+        bulkProcessing = false;
+        bulkNote = null;
+    }
+
+    private static string GetPlatformBadge(string type) => type.ToUpper() switch
+    {
+        "SHOPEE" => "bg-warning text-dark",
+        "LAZADA" => "bg-primary",
+        "TIKTOK" => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    private class MappingRequestRow : MappingRequestVm
+    {
+        public bool Processing { get; set; }
+        public MappingRequestRow(MappingRequestVm vm)
+        {
+            RequestId = vm.RequestId;
+            MemberId = vm.MemberId;
+            MemberDisplayName = vm.MemberDisplayName;
+            PlatformType = vm.PlatformType;
+            PlatformAccountKey = vm.PlatformAccountKey;
+            PlatformAccountName = vm.PlatformAccountName;
+            SourceType = vm.SourceType;
+            RequestStatus = vm.RequestStatus;
+            ReviewNote = vm.ReviewNote;
+            CreatedAt = vm.CreatedAt;
+        }
+    }
+}

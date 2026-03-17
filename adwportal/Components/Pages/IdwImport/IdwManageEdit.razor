@@ -1,4 +1,4 @@
-﻿@page "/IdwMangeEdit/edit/{Id:long}"
+@page "/IdwMangeEdit/edit/{Id:long}"
 @using adwportal.Dtos
 @using adwportal.Models
 @using adwportal.Services
@@ -130,8 +130,8 @@ else
     {
         try
         {
-            // 1) ลองอ่านจาก AuthTokenProvider ก่อน (กรณีมาจาก Dashboard ใน circuit เดียวกัน)
-            token = TokenProvider.IdwToken;
+            // 1) ลองอ่านจาก AuthTokenProvider ก่อน (async เพื่อไม่ให้ค้าง)
+            token = await TokenProvider.GetIdwTokenAsync();
 
             // 2) ถ้ายังว่าง ให้ใช้ username/password จาก Claims ไป login ใหม่
             if (string.IsNullOrWhiteSpace(token))
@@ -148,7 +148,8 @@ else
                 if (!string.IsNullOrWhiteSpace(username) &&
                     !string.IsNullOrWhiteSpace(password))
                 {
-                    await Idw.LoginAsync(username, password);
+                    var resp = await Idw.LoginAsync(username, password);
+                    token = resp?.Token;
                 }
             }
 

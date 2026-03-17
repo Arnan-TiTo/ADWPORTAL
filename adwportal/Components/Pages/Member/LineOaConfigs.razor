@@ -1,0 +1,359 @@
+@page "/LineOaConfigs"
+@using adwportal.Services
+@using adwportal.Dtos
+@inject MemberAdminService MemberSvc
+@inject CompanyService CompanySvc
+@inject AuthTokenProvider TokenProvider
+
+<h3 class="page-title mb-3"><i class="bi bi-line"></i> LINE OA Configs</h3>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-success"></div>
+    </div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert @(msgOk ? "alert-success" : "alert-danger") alert-dismissible py-2 small">
+            @message
+            <button type="button" class="btn-close btn-close-sm" @onclick="() => message = null"></button>
+        </div>
+    }
+
+    @* ──── Create / Edit Form ──── *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #06c755 0%, #00b900 100%); color: white;">
+            <span>
+                <i class="bi bi-@(isEditing ? "pencil" : "plus-circle")"></i>
+                @(isEditing ? "แก้ไข LINE OA" : "เพิ่ม LINE OA ใหม่")
+            </span>
+            @if (isEditing)
+            {
+                <button class="btn btn-sm btn-outline-light" @onclick="ResetForm">
+                    <i class="bi bi-x-lg"></i> ยกเลิก
+                </button>
+            }
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">Company</label>
+                    <select class="form-select form-select-sm" @bind="form.CompanysId">
+                        <option value="0">-- เลือก Company --</option>
+                        @foreach (var c in companies)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold">ชื่อ LINE OA</label>
+                    <input type="text" class="form-control form-control-sm" @bind="form.LineOaName"
+                           placeholder="เช่น Vibe & Chic Official" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">LIFF ID</label>
+                    <input type="text" class="form-control form-control-sm" @bind="form.LiffId"
+                           placeholder="2009472836-xxxxxxxx" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">สถานะ</label>
+                    <div class="form-check form-switch mt-1">
+                        <input class="form-check-input" type="checkbox" @bind="form.IsActive" />
+                        <label class="form-check-label small">@(form.IsActive ? "เปิดใช้งาน" : "ปิดใช้งาน")</label>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="my-2" />
+            <div class="small fw-semibold text-muted mb-2"><i class="bi bi-key"></i> LINE Login</div>
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small">Login Channel ID</label>
+                    <input type="text" class="form-control form-control-sm" @bind="form.LoginChannelId"
+                           placeholder="2009472836" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Login Channel Secret</label>
+                    <input type="password" class="form-control form-control-sm" @bind="form.LoginChannelSecret"
+                           placeholder="@(isEditing ? "ว่างไว้ = ไม่เปลี่ยน" : "")" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small">Login Callback URL</label>
+                    <input type="text" class="form-control form-control-sm" @bind="form.LoginCallbackUrl"
+                           placeholder="https://yoursite.com/api/line/callback" />
+                </div>
+            </div>
+
+            <hr class="my-2" />
+            <div class="small fw-semibold text-muted mb-2"><i class="bi bi-chat-dots"></i> LINE Messaging API</div>
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label small">Messaging Channel Secret</label>
+                    <input type="password" class="form-control form-control-sm" @bind="form.MsgChannelSecret"
+                           placeholder="@(isEditing ? "ว่างไว้ = ไม่เปลี่ยน" : "")" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label small">Messaging Channel Access Token <span class="text-danger">*</span></label>
+                    <input type="password" class="form-control form-control-sm" @bind="form.MsgChannelToken"
+                           placeholder="@(isEditing ? "ว่างไว้ = ไม่เปลี่ยน" : "Channel Access Token (Long-lived)")" />
+                </div>
+            </div>
+
+            <div class="mt-3 text-end">
+                <button class="btn btn-success" @onclick="SaveConfig" disabled="@saving">
+                    @if (saving) { <span class="spinner-border spinner-border-sm"></span> }
+                    else if (isEditing) { <text><i class="bi bi-check-lg"></i> บันทึก</text> }
+                    else { <text><i class="bi bi-plus-lg"></i> เพิ่ม LINE OA</text> }
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* ──── Config List ──── *@
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-ul"></i> รายการ LINE OA (@configs.Count)</span>
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadConfigs">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+        @if (configs.Count == 0)
+        {
+            <div class="card-body text-center text-muted small py-4">
+                <i class="bi bi-inbox" style="font-size:40px;"></i>
+                <p class="mt-2">ยังไม่มี LINE OA Config<br>เพิ่มใหม่ได้ที่ฟอร์มด้านบน</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 align-middle small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Company</th>
+                            <th>ชื่อ LINE OA</th>
+                            <th>Login Channel</th>
+                            <th>Msg Token</th>
+                            <th>LIFF ID</th>
+                            <th class="text-center">สถานะ</th>
+                            <th class="text-center" style="width:140px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in configs)
+                        {
+                            <tr class="@(!c.IsActive ? "table-secondary" : "")">
+                                <td>@c.LineOaConfigId</td>
+                                <td><span class="badge bg-primary">@GetCompanyName(c.CompanysId)</span></td>
+                                <td class="fw-semibold">
+                                    <i class="bi bi-line text-success"></i> @c.LineOaName
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(c.LoginChannelId))
+                                    {
+                                        <code class="text-primary small">@c.LoginChannelId</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="font-monospace small text-muted">@(c.MsgChannelToken ?? "-")</span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(c.LiffId))
+                                    {
+                                        <code class="small">@c.LiffId</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    @if (c.IsActive)
+                                    {
+                                        <span class="badge bg-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary py-0" title="แก้ไข" @onclick="() => EditConfig(c)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning py-0" title="@(c.IsActive ? "ปิด" : "เปิด")"
+                                                @onclick="() => ToggleConfig(c)">
+                                            <i class="bi bi-@(c.IsActive ? "toggle-on" : "toggle-off")"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger py-0" title="ลบ"
+                                                @onclick="() => DeleteConfig(c.LineOaConfigId, c.LineOaName)"
+                                                disabled="@deleting">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<LineOaConfigVm> configs = new();
+    private List<CompanyDtos> companies = new();
+    private LineOaConfigVm form = new();
+    private bool isLoading = true;
+    private bool saving;
+    private bool deleting;
+    private bool isEditing;
+    private int editingId;
+    private string? message;
+    private bool msgOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompanies();
+        await LoadConfigs();
+    }
+
+    private async Task LoadCompanies()
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var token = await TokenProvider.GetIdwTokenAsync() ?? "";
+            companies = await CompanySvc.GetCompaniesDropdownAsync(token, cts.Token) ?? new();
+        }
+        catch { companies = new(); }
+    }
+
+    private string GetCompanyName(int companyId)
+    {
+        var c = companies.FirstOrDefault(x => x.Id == companyId);
+        return c != null ? c.Name : $"#{companyId}";
+    }
+
+    private async Task LoadConfigs()
+    {
+        isLoading = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            configs = await MemberSvc.GetLineOaConfigsAsync(token);
+        }
+        catch (Exception ex) { message = $"❌ {ex.Message}"; msgOk = false; }
+        isLoading = false;
+    }
+
+    private async Task EditConfig(LineOaConfigVm c)
+    {
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            var detail = await MemberSvc.GetLineOaConfigAsync(token, c.LineOaConfigId);
+            if (detail != null)
+            {
+                isEditing = true;
+                editingId = detail.LineOaConfigId;
+                form = new LineOaConfigVm
+                {
+                    CompanysId = detail.CompanysId,
+                    LineOaName = detail.LineOaName,
+                    LoginChannelId = detail.LoginChannelId,
+                    LoginChannelSecret = "",
+                    LoginCallbackUrl = detail.LoginCallbackUrl,
+                    MsgChannelSecret = "",
+                    MsgChannelToken = "",
+                    LiffId = detail.LiffId,
+                    IsActive = detail.IsActive
+                };
+            }
+        }
+        catch (Exception ex) { message = $"❌ {ex.Message}"; msgOk = false; }
+    }
+
+    private void ResetForm()
+    {
+        isEditing = false;
+        editingId = 0;
+        form = new LineOaConfigVm();
+        message = null;
+    }
+
+    private async Task SaveConfig()
+    {
+        if (form.CompanysId <= 0)
+        { message = "⚠️ กรุณาเลือก Company"; msgOk = false; return; }
+        if (string.IsNullOrWhiteSpace(form.LineOaName))
+        { message = "⚠️ กรุณากรอกชื่อ LINE OA"; msgOk = false; return; }
+        if (!isEditing && string.IsNullOrWhiteSpace(form.MsgChannelToken))
+        { message = "⚠️ กรุณากรอก Messaging Channel Access Token"; msgOk = false; return; }
+
+        saving = true;
+        message = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            if (isEditing)
+            {
+                await MemberSvc.UpdateLineOaConfigAsync(token, editingId, form);
+                message = $"✅ แก้ไข \"{form.LineOaName}\" สำเร็จ!";
+            }
+            else
+            {
+                await MemberSvc.CreateLineOaConfigAsync(token, form);
+                message = $"✅ สร้าง \"{form.LineOaName}\" สำเร็จ!";
+            }
+            msgOk = true;
+            ResetForm();
+            await LoadConfigs();
+        }
+        catch (Exception ex)
+        {
+            message = $"❌ {ex.Message}";
+            msgOk = false;
+        }
+        saving = false;
+    }
+
+    private async Task ToggleConfig(LineOaConfigVm c)
+    {
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.ToggleLineOaConfigAsync(token, c.LineOaConfigId);
+            message = $"✅ {(c.IsActive ? "ปิด" : "เปิด")} \"{c.LineOaName}\" แล้ว";
+            msgOk = true;
+            await LoadConfigs();
+        }
+        catch (Exception ex) { message = $"❌ {ex.Message}"; msgOk = false; }
+    }
+
+    private async Task DeleteConfig(int id, string name)
+    {
+        deleting = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.DeleteLineOaConfigAsync(token, id);
+            message = $"✅ ลบ \"{name}\" แล้ว";
+            msgOk = true;
+            await LoadConfigs();
+        }
+        catch (Exception ex) { message = $"❌ {ex.Message}"; msgOk = false; }
+        deleting = false;
+    }
+}

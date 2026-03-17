@@ -96,6 +96,7 @@ builder.Services.AddScoped<ShopService>();
 builder.Services.AddScoped<ShopGroupService>();
 builder.Services.AddScoped<AuthTokenProvider>();
 builder.Services.AddScoped<UserSyncService>();
+builder.Services.AddScoped<MemberAdminService>();
 builder.Services.AddSingleton<TokenCacheService>();
 
 

@@ -414,8 +414,8 @@
         try
         {
             // Get tokens from AuthTokenProvider (which delegates to TokenCacheService)
-            mdwToken = NormalizeToken(TokenProvider.MdwToken);
-            idwToken = NormalizeToken(TokenProvider.IdwToken);
+            mdwToken = NormalizeToken(await TokenProvider.GetMdwTokenAsync());
+            idwToken = NormalizeToken(await TokenProvider.GetIdwTokenAsync());
 
             if (string.IsNullOrWhiteSpace(mdwToken))
             {

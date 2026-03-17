@@ -1,4 +1,4 @@
-﻿@page "/IdwManageList"
+@page "/IdwManageList"
 @using System
 @using System.Linq
 @using System.Threading.Tasks
@@ -290,7 +290,7 @@ else
         try
         {
             // Get token from AuthTokenProvider (which delegates to TokenCacheService)
-            token = TokenProvider.IdwToken;
+            token = await TokenProvider.GetIdwTokenAsync();
 
             if (string.IsNullOrWhiteSpace(token))
             {

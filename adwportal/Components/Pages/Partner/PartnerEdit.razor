@@ -1,10 +1,10 @@
-﻿@page "/PartnerEdit"
+@page "/PartnerEdit"
 @page "/PartnerEdit/{Id:int}"
 @using adwportal.Dtos
 @using adwportal.Services
 @inject PartnerService Svc
 @inject CompanyService Comp
-@inject IdwImportService Idw
+@inject AuthTokenProvider TokenProvider
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -119,8 +119,7 @@ else
         try
         {
             // login
-            var login = await Idw.LoginAsync("admin", "123456yjm");
-            token = login?.Token?.Trim('"');
+            token = (await TokenProvider.GetIdwTokenAsync())?.Trim('"');
             if (string.IsNullOrWhiteSpace(token)) { error = "Login failed"; return; }
 
             // โหลด companies + (ถ้ามี) partner พร้อมกัน

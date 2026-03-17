@@ -1,4 +1,4 @@
-﻿@page "/shopsOAuth"
+@page "/shopsOAuth"
 @using System.Text
 @using System.Text.Json
 @using Microsoft.JSInterop
@@ -177,8 +177,8 @@
         try
         {
             // Get tokens from AuthTokenProvider (which delegates to TokenCacheService)
-            _idwToken = NormalizeToken(TokenProvider.IdwToken);
-            _mdwToken = NormalizeToken(TokenProvider.MdwToken);
+            _idwToken = NormalizeToken(await TokenProvider.GetIdwTokenAsync());
+            _mdwToken = NormalizeToken(await TokenProvider.GetMdwTokenAsync());
 
             if (string.IsNullOrWhiteSpace(_idwToken) || string.IsNullOrWhiteSpace(_mdwToken))
             {

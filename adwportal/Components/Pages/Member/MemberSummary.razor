@@ -1,0 +1,279 @@
+@page "/MemberSummary"
+@using adwportal.Services
+@inject MemberAdminService MemberSvc
+@inject AuthTokenProvider TokenProvider
+@inject NavigationManager Nav
+
+<h3 class="page-title mb-3"><i class="bi bi-people-fill"></i> สรุปข้อมูลสมาชิก</h3>
+
+@* Top Bar: Search + Earn Trigger *@
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+    <div class="input-group" style="max-width:400px;">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control" placeholder="ค้นหา ชื่อ, รหัส, เบอร์, username..." 
+               @bind="searchKeyword" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
+        @if (!string.IsNullOrEmpty(searchKeyword))
+        {
+            <button class="btn btn-outline-secondary" @onclick="ClearSearch" title="ล้าง">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        }
+    </div>
+    <button class="btn btn-primary" @onclick="LoadData" disabled="@isLoading">
+        <i class="bi bi-search"></i> ค้นหา
+    </button>
+    <div class="ms-auto">
+        <button class="btn btn-warning" @onclick="TriggerEarn" disabled="@isProcessing">
+            @if (isProcessing) { <span class="spinner-border spinner-border-sm"></span> <text> กำลังคำนวณ...</text> }
+            else { <text><i class="bi bi-calculator"></i> คำนวณแต้มจากออเดอร์</text> }
+        </button>
+    </div>
+</div>
+
+@* Earn Result Message *@
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert @(messageSuccess ? "alert-success" : "alert-danger") alert-dismissible py-2 small">
+        @message
+        <button type="button" class="btn-close btn-close-sm" @onclick="() => message = null"></button>
+    </div>
+}
+
+@* Summary Stats Cards *@
+@if (!isLoading && members.Any())
+{
+    <div class="row g-2 mb-3">
+        <div class="col-md-3">
+            <div class="card bg-primary bg-opacity-10 border-0 shadow-sm">
+                <div class="card-body py-2 text-center">
+                    <div class="fw-bold text-primary" style="font-size:24px;">@members.Count</div>
+                    <div class="text-muted small">สมาชิก (หน้านี้)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success bg-opacity-10 border-0 shadow-sm">
+                <div class="card-body py-2 text-center">
+                    <div class="fw-bold text-success" style="font-size:24px;">@members.Sum(m => m.TotalEarned).ToString("N0")</div>
+                    <div class="text-muted small">แต้มสะสมรวม</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info bg-opacity-10 border-0 shadow-sm">
+                <div class="card-body py-2 text-center">
+                    <div class="fw-bold text-info" style="font-size:24px;">@members.Sum(m => m.LinkedOrderCount).ToString("N0")</div>
+                    <div class="text-muted small">ออเดอร์จับคู่แล้ว</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning bg-opacity-10 border-0 shadow-sm">
+                <div class="card-body py-2 text-center">
+                    <div class="fw-bold text-warning" style="font-size:24px;">@members.Count(m => m.PlatformAccountCount > 0)</div>
+                    <div class="text-muted small">ผูก Platform แล้ว</div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Loading *@
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary"></div>
+        <p class="text-muted mt-2">กำลังโหลด...</p>
+    </div>
+}
+else if (!members.Any())
+{
+    <div class="card shadow-sm">
+        <div class="card-body text-center text-muted py-5">
+            <i class="bi bi-inbox" style="font-size:50px;"></i>
+            <p class="mt-2">ไม่พบข้อมูล</p>
+        </div>
+    </div>
+}
+else
+{
+    @* Member Table *@
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle small">
+                <thead class="table-light">
+                    <tr>
+                        <th>รหัส</th>
+                        <th>ชื่อ</th>
+                        <th>เบอร์โทร</th>
+                        <th>Platform</th>
+                        <th class="text-center">ออเดอร์</th>
+                        <th class="text-end">แต้มสะสม</th>
+                        <th class="text-end">ใช้แล้ว</th>
+                        <th class="text-end">คงเหลือ</th>
+                        <th>สมัครเมื่อ</th>
+                        <th class="text-center" style="width:80px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in members)
+                    {
+                        <tr>
+                            <td>
+                                <code class="text-primary">@m.MemberCode</code>
+                            </td>
+                            <td>
+                                <span class="fw-semibold">@(m.DisplayName ?? "-")</span>
+                                @if (m.Status != "Active")
+                                {
+                                    <span class="badge bg-secondary ms-1">@m.Status</span>
+                                }
+                            </td>
+                            <td class="text-muted">@(m.Phone ?? "-")</td>
+                            <td>
+                                @if (m.PlatformAccountCount > 0)
+                                {
+                                    @foreach (var pt in (m.PlatformTypes ?? "").Split(", ", StringSplitOptions.RemoveEmptyEntries))
+                                    {
+                                        <span class="badge @GetPlatformBadge(pt) me-1">@pt</span>
+                                    }
+                                    <span class="text-muted">(@m.PlatformAccountCount)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td class="text-center">
+                                @if (m.LinkedOrderCount > 0)
+                                {
+                                    <span class="badge bg-info">@m.LinkedOrderCount</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">0</span>
+                                }
+                            </td>
+                            <td class="text-end fw-bold text-success">@m.TotalEarned.ToString("N0")</td>
+                            <td class="text-end text-danger">@m.TotalBurned.ToString("N0")</td>
+                            <td class="text-end fw-bold">
+                                <span class="badge bg-primary bg-opacity-75">@m.AvailablePoints.ToString("N0")</span>
+                            </td>
+                            <td class="text-muted text-nowrap">@m.RegisteredAt.ToString("dd/MM/yy")</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-primary py-0 px-1" title="ดูรายละเอียด"
+                                        @onclick="() => GoToDetail(m.MemberId)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center small">
+            <span class="text-muted">หน้า @currentPage</span>
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" @onclick="PrevPage" disabled="@(currentPage <= 1)">
+                    <i class="bi bi-chevron-left"></i> ก่อนหน้า
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="NextPage" disabled="@(members.Count < pageSize)">
+                    ถัดไป <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MemberSummaryStatsVm> members = new();
+    private bool isLoading = true;
+    private bool isProcessing;
+    private string searchKeyword = "";
+    private string? message;
+    private bool messageSuccess;
+    private int currentPage = 1;
+    private const int pageSize = 50;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            members = await MemberSvc.GetMemberSummaryAsync(token, 
+                string.IsNullOrWhiteSpace(searchKeyword) ? null : searchKeyword.Trim(), 
+                currentPage, pageSize);
+        }
+        catch (Exception ex)
+        {
+            message = $"❌ {ex.Message}";
+            messageSuccess = false;
+        }
+        isLoading = false;
+    }
+
+    private async Task TriggerEarn()
+    {
+        isProcessing = true;
+        message = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            var result = await MemberSvc.TriggerEarnAsync(token);
+            message = $"✅ {result.Message}";
+            messageSuccess = true;
+            // Refresh data after earn
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            message = $"❌ คำนวณแต้มไม่สำเร็จ: {ex.Message}";
+            messageSuccess = false;
+        }
+        isProcessing = false;
+    }
+
+    private async Task OnSearchKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            currentPage = 1;
+            await LoadData();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchKeyword = "";
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private async Task PrevPage()
+    {
+        if (currentPage > 1)
+        { currentPage--; await LoadData(); }
+    }
+
+    private async Task NextPage()
+    {
+        currentPage++;
+        await LoadData();
+    }
+
+    private static string GetPlatformBadge(string type) => type.ToUpper() switch
+    {
+        "SHOPEE" => "bg-warning text-dark",
+        "LAZADA" => "bg-primary",
+        "TIKTOK" => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    private void GoToDetail(long memberId) => Nav.NavigateTo($"/MemberDetail/{memberId}");
+}

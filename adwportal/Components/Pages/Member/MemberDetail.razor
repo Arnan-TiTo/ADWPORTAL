@@ -1,0 +1,474 @@
+@page "/MemberDetail/{MemberId:long}"
+@using adwportal.Services
+@inject MemberAdminService MemberSvc
+@inject AuthTokenProvider TokenProvider
+@inject NavigationManager Nav
+
+<div class="d-flex align-items-center gap-2 mb-3">
+    <button class="btn btn-sm btn-outline-secondary" @onclick='() => Nav.NavigateTo("/MemberList")'>
+        <i class="bi bi-arrow-left"></i> กลับ
+    </button>
+    <h3 class="page-title mb-0"><i class="bi bi-person-badge"></i> Member Detail</h3>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary"></div>
+    </div>
+}
+else if (member == null)
+{
+    <div class="alert alert-warning">ไม่พบสมาชิก</div>
+}
+else
+{
+    <div class="row g-3">
+        @* Profile Card *@
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    @if (member.Identities.Any(i => !string.IsNullOrEmpty(i.PictureUrl)))
+                    {
+                        <img src="@member.Identities.First(i => !string.IsNullOrEmpty(i.PictureUrl)).PictureUrl"
+                             class="rounded-circle mb-2" width="80" height="80" style="object-fit:cover;" />
+                    }
+                    else
+                    {
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-2"
+                             style="width:80px;height:80px;font-size:32px;">
+                            <i class="bi bi-person"></i>
+                        </div>
+                    }
+                    <h5>@(member.DisplayName ?? "ไม่ระบุ")</h5>
+                    <p class="text-muted small mb-1"><code>@member.MemberCode</code></p>
+                    <span class="badge @(member.Status == "Active" ? "bg-success" : "bg-secondary")">@member.Status</span>
+                </div>
+                <ul class="list-group list-group-flush small">
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">เบอร์โทร</span>
+                        <span>@(member.Phone ?? "-")</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">อีเมล</span>
+                        <span>@(member.Email ?? "-")</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">วันสมัคร</span>
+                        <span>@member.RegisteredAt.ToString("dd/MM/yy HH:mm")</span>
+                    </li>
+                </ul>
+            </div>
+
+            @* LINE Identities *@
+            @if (member.Identities.Any())
+            {
+                <div class="card shadow-sm mt-3">
+                    <div class="card-header"><i class="bi bi-chat-dots"></i> LINE</div>
+                    <ul class="list-group list-group-flush small">
+                        @foreach (var id in member.Identities)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>@(id.DisplayName ?? id.ProviderType)</span>
+                                <span class="badge @(id.IsActive ? "bg-success" : "bg-secondary")">
+                                    @(id.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+
+        @* Points & Platform *@
+        <div class="col-md-8">
+            @* Points summary *@
+            @if (member.PointBalance != null)
+            {
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="card bg-primary text-white shadow-sm">
+                            <div class="card-body text-center py-2">
+                                <div class="small">คงเหลือ</div>
+                                <div class="h4 mb-0">@member.PointBalance.AvailablePoints.ToString("N0")</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card bg-success text-white shadow-sm">
+                            <div class="card-body text-center py-2">
+                                <div class="small">สะสมทั้งหมด</div>
+                                <div class="h4 mb-0">@member.PointBalance.TotalEarned.ToString("N0")</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card bg-danger text-white shadow-sm">
+                            <div class="card-body text-center py-2">
+                                <div class="small">ใช้ไปแล้ว</div>
+                                <div class="h4 mb-0">@member.PointBalance.TotalBurned.ToString("N0")</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card bg-warning text-white shadow-sm">
+                            <div class="card-body text-center py-2">
+                                <div class="small">จอง</div>
+                                <div class="h4 mb-0">@member.PointBalance.ReservedPoints.ToString("N0")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* Point Adjust *@
+            <div class="card shadow-sm mb-3">
+                <div class="card-header"><i class="bi bi-plus-slash-minus"></i> ปรับแต้ม</div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <select class="form-select" @bind="adjustType">
+                                <option value="ADD">➕ เพิ่ม</option>
+                                <option value="DEDUCT">➖ หัก</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="number" class="form-control" @bind="adjustPoints" placeholder="จำนวนแต้ม" min="1" />
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" @bind="adjustReason" placeholder="เหตุผล" />
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100" @onclick="AdjustPoints" disabled="@adjusting">
+                                @if (adjusting) { <span class="spinner-border spinner-border-sm"></span> }
+                                else { <text>ยืนยัน</text> }
+                            </button>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(adjustMessage))
+                    {
+                        <div class="alert @(adjustSuccess ? "alert-success" : "alert-danger") mt-2 py-1 small">@adjustMessage</div>
+                    }
+                </div>
+            </div>
+
+            @* Point History *@
+            <div class="card shadow-sm mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-clock-history"></i> ประวัติแต้ม</span>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="LoadHistory" disabled="@historyLoading">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                @if (historyLoading)
+                {
+                    <div class="card-body text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-primary"></div>
+                    </div>
+                }
+                else if (pointHistory.Count == 0)
+                {
+                    <div class="card-body text-center text-muted small">ยังไม่มีประวัติ</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0 align-middle small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>วันที่</th>
+                                    <th>ประเภท</th>
+                                    <th class="text-end">แต้ม</th>
+                                    <th class="text-end">คงเหลือ</th>
+                                    <th>อ้างอิง</th>
+                                    <th>โดย</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var h in pointHistory)
+                                {
+                                    <tr>
+                                        <td>@h.OccurredAt.ToString("dd/MM/yy HH:mm")</td>
+                                        <td>
+                                            <span class="badge @GetTxnBadge(h.TxnType)">@h.TxnType</span>
+                                        </td>
+                                        <td class="text-end @(h.Points >= 0 ? "text-success" : "text-danger") fw-bold">
+                                            @(h.Points >= 0 ? "+" : "")@h.Points.ToString("N0")
+                                        </td>
+                                        <td class="text-end">@h.BalanceAfter.ToString("N0")</td>
+                                        <td class="text-muted">@(h.RefType ?? "-") @(h.RefId ?? "")</td>
+                                        <td class="text-muted">@(h.CreatedBy ?? "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="card-footer d-flex justify-content-end gap-1">
+                        <button class="btn btn-sm btn-outline-secondary" disabled="@(historyPage <= 1)" @onclick="PrevHistoryPage">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <span class="btn btn-sm btn-light disabled">@historyPage</span>
+                        <button class="btn btn-sm btn-outline-secondary" disabled="@(pointHistory.Count < historyPageSize)" @onclick="NextHistoryPage">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+
+            @* Platform Accounts *@
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-shop"></i> Platform Accounts</span>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="() => showPlatformForm = !showPlatformForm">
+                        <i class="bi bi-plus-lg"></i> เพิ่ม
+                    </button>
+                </div>
+
+                @* Add Platform Form *@
+                @if (showPlatformForm)
+                {
+                    <div class="card-body border-bottom bg-light">
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label class="form-label small">แพลตฟอร์ม</label>
+                                <select class="form-select form-select-sm" @bind="newPlatformType">
+                                    <option value="">-- เลือก --</option>
+                                    <option value="SHOPEE">🟠 Shopee</option>
+                                    <option value="LAZADA">🔵 Lazada</option>
+                                    <option value="TIKTOK">⚫ TikTok Shop</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">บัญชี / Username</label>
+                                <input type="text" class="form-control form-control-sm" @bind="newAccountKey" placeholder="buyer_username" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">ชื่อที่แสดง (ไม่บังคับ)</label>
+                                <input type="text" class="form-control form-control-sm" @bind="newAccountName" placeholder="ชื่อร้าน" />
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end gap-1">
+                                <button class="btn btn-sm btn-primary" @onclick="AddPlatformLink" disabled="@platformLinking">
+                                    @if (platformLinking) { <span class="spinner-border spinner-border-sm"></span> }
+                                    else { <text>✅ ผูก</text> }
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => showPlatformForm = false">ยกเลิก</button>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(platformMessage))
+                        {
+                            <div class="alert @(platformSuccess ? "alert-success" : "alert-danger") mt-2 py-1 small">@platformMessage</div>
+                        }
+                    </div>
+                }
+
+                @if (member.PlatformAccounts.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0 align-middle small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>แพลตฟอร์ม</th>
+                                    <th>บัญชี</th>
+                                    <th>ชื่อ</th>
+                                    <th>สถานะ</th>
+                                    <th class="text-center" style="width:60px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var pa in member.PlatformAccounts)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="badge @GetPlatformBadge(pa.PlatformType)">@pa.PlatformType</span>
+                                        </td>
+                                        <td><code>@pa.PlatformAccountKey</code></td>
+                                        <td>@(pa.PlatformAccountName ?? "-")</td>
+                                        <td>
+                                            <span class="badge @(pa.VerifiedStatus == "Verified" ? "bg-success" : "bg-warning text-dark")">
+                                                @pa.VerifiedStatus
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                                                    title="ลบ"
+                                                    @onclick="() => RemovePlatformLink(pa.MemberPlatformAccountId, pa.PlatformType, pa.PlatformAccountKey)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="card-body text-muted small text-center">ยังไม่มี Platform Account</div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public long MemberId { get; set; }
+
+    private MemberDetailVm? member;
+    private bool isLoading = true;
+
+    // Adjust
+    private string adjustType = "ADD";
+    private int adjustPoints;
+    private string adjustReason = "";
+    private bool adjusting;
+    private string? adjustMessage;
+    private bool adjustSuccess;
+
+    // History
+    private List<PointHistoryVm> pointHistory = new();
+    private bool historyLoading;
+    private int historyPage = 1;
+    private const int historyPageSize = 10;
+
+    // Platform Linking
+    private bool showPlatformForm;
+    private string newPlatformType = "";
+    private string newAccountKey = "";
+    private string newAccountName = "";
+    private bool platformLinking;
+    private string? platformMessage;
+    private bool platformSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            member = await MemberSvc.GetMemberAsync(token, MemberId);
+            await LoadHistory();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        isLoading = false;
+    }
+
+    private async Task PrevHistoryPage()
+    {
+        if (historyPage > 1) { historyPage--; await LoadHistory(); }
+    }
+
+    private async Task NextHistoryPage()
+    {
+        historyPage++;
+        await LoadHistory();
+    }
+
+    private async Task LoadHistory()
+    {
+        historyLoading = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            pointHistory = await MemberSvc.GetPointHistoryAsync(token, MemberId, historyPage, historyPageSize);
+        }
+        catch { pointHistory = new(); }
+        historyLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task AdjustPoints()
+    {
+        if (adjustPoints <= 0 || string.IsNullOrWhiteSpace(adjustReason)) return;
+        adjusting = true;
+        adjustMessage = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.AdjustPointsAsync(token, MemberId, adjustType, adjustPoints, adjustReason);
+            adjustMessage = $"✅ ปรับแต้มสำเร็จ ({adjustType} {adjustPoints})";
+            adjustSuccess = true;
+            member = await MemberSvc.GetMemberAsync(token, MemberId);
+            adjustPoints = 0;
+            adjustReason = "";
+            await LoadHistory();
+        }
+        catch (Exception ex)
+        {
+            adjustMessage = $"❌ {ex.Message}";
+            adjustSuccess = false;
+        }
+        adjusting = false;
+    }
+
+    private async Task AddPlatformLink()
+    {
+        if (string.IsNullOrWhiteSpace(newPlatformType))
+        {
+            platformMessage = "⚠️ กรุณาเลือกแพลตฟอร์ม"; platformSuccess = false; return;
+        }
+        if (string.IsNullOrWhiteSpace(newAccountKey))
+        {
+            platformMessage = "⚠️ กรุณากรอกชื่อบัญชี"; platformSuccess = false; return;
+        }
+        platformLinking = true;
+        platformMessage = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.DirectPlatformLinkAsync(token, MemberId, newPlatformType,
+                newAccountKey.Trim(), string.IsNullOrWhiteSpace(newAccountName) ? null : newAccountName.Trim());
+            platformMessage = $"✅ ผูก {newPlatformType}/{newAccountKey} สำเร็จ!";
+            platformSuccess = true;
+            member = await MemberSvc.GetMemberAsync(token, MemberId);
+            newPlatformType = ""; newAccountKey = ""; newAccountName = "";
+            showPlatformForm = false;
+        }
+        catch (Exception ex)
+        {
+            platformMessage = $"❌ {ex.Message}";
+            platformSuccess = false;
+        }
+        platformLinking = false;
+    }
+
+    private async Task RemovePlatformLink(long platformAccountId, string platformType, string accountKey)
+    {
+        platformMessage = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.RemovePlatformLinkAsync(token, MemberId, platformAccountId);
+            platformMessage = $"🗑️ ลบ {platformType}/{accountKey} แล้ว";
+            platformSuccess = true;
+            member = await MemberSvc.GetMemberAsync(token, MemberId);
+        }
+        catch (Exception ex)
+        {
+            platformMessage = $"❌ ลบไม่สำเร็จ: {ex.Message}";
+            platformSuccess = false;
+        }
+    }
+
+    private static string GetPlatformBadge(string type) => type.ToUpper() switch
+    {
+        "SHOPEE" => "bg-warning text-dark",
+        "LAZADA" => "bg-primary",
+        "TIKTOK" => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetTxnBadge(string txnType) => txnType.ToUpper() switch
+    {
+        "EARN" => "bg-success",
+        "BURN" => "bg-danger",
+        "ADJUST" => "bg-info",
+        "RESERVE" => "bg-warning text-dark",
+        "RELEASE" => "bg-secondary",
+        "EARN_REVERSAL" => "bg-info",
+        "EXPIRE" => "bg-dark",
+        _ => "bg-secondary"
+    };
+}

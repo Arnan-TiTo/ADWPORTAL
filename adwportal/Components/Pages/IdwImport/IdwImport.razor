@@ -356,8 +356,8 @@
     {
         try
         {
-            // 1) ลองอ่านจาก AuthTokenProvider ก่อน (กรณีมาจาก Dashboard ใน circuit เดียวกัน)
-            token = TokenProvider.IdwToken;
+            // 1) ลองอ่านจาก AuthTokenProvider ก่อน (async เพื่อไม่ให้ค้าง)
+            token = await TokenProvider.GetIdwTokenAsync();
 
             // 2) ถ้ายังว่าง ให้ใช้ username/password จาก Claims ไป login ใหม่
             if (string.IsNullOrWhiteSpace(token))
@@ -587,7 +587,16 @@
                 }
                 catch (Exception ex) when (Is401(ex))
                 {
-                    await LoginAsync("admin", "123456yjm");
+                    // Token หมดอายุ → ดึงใหม่แบบ async
+                    token = await TokenProvider.GetIdwTokenAsync();
+                    if (string.IsNullOrWhiteSpace(token))
+                    {
+                        var authState = await Auth.GetAuthenticationStateAsync();
+                        var u = authState.User.Identity?.Name ?? authState.User.FindFirst("USERNAME")?.Value;
+                        var p = TokenProvider.Password;
+                        if (!string.IsNullOrWhiteSpace(u) && !string.IsNullOrWhiteSpace(p))
+                            await LoginAsync(u, p);
+                    }
                     lastUpload = await DoUploadAsync();
                 }
             }

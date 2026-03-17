@@ -1,0 +1,145 @@
+@page "/MemberList"
+@using adwportal.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject MemberAdminService MemberSvc
+@inject AuthTokenProvider TokenProvider
+@inject NavigationManager Nav
+
+<h3 class="page-title"><i class="bi bi-people-fill"></i> Member List</h3>
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label small text-muted">ค้นหา (ชื่อ / รหัส / เบอร์โทร / อีเมล)</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" @bind="keyword" @bind:event="oninput"
+                           placeholder="พิมพ์เพื่อค้นหา..." @onkeypress="HandleKeyPress" />
+                    <button class="btn btn-primary" @onclick="() => GoToPage(1)"><i class="bi bi-search"></i> ค้นหา</button>
+                </div>
+            </div>
+            <div class="col-md-3 ms-auto text-end">
+                <span class="text-muted small">หน้า @currentPage</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">กำลังโหลด...</p>
+    </div>
+}
+else if (members.Count == 0)
+{
+    <div class="text-center py-5 text-muted">
+        <i class="bi bi-inbox display-4"></i>
+        <p class="mt-2">ไม่พบสมาชิก</p>
+    </div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>รหัส</th>
+                        <th>ชื่อ</th>
+                        <th>สถานะ</th>
+                        <th class="text-center">แพลตฟอร์ม</th>
+                        <th class="text-end">แต้ม</th>
+                        <th>วันสมัคร</th>
+                        <th class="text-center">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in members)
+                    {
+                        <tr>
+                            <td><code>@m.MemberCode</code></td>
+                            <td>@(m.DisplayName ?? "-")</td>
+                            <td>
+                                <span class="badge @(m.Status == "Active" ? "bg-success" : "bg-secondary")">
+                                    @m.Status
+                                </span>
+                            </td>
+                            <td class="text-center">@m.PlatformAccountCount</td>
+                            <td class="text-end fw-bold">@m.AvailablePoints.ToString("N0")</td>
+                            <td>@m.RegisteredAt.ToString("dd/MM/yy HH:mm")</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewMember(m.MemberId)">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <!-- Pagination -->
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <div>
+                <span class="text-muted small">แสดง @members.Count รายการ · หน้า @currentPage</span>
+            </div>
+            <div>
+                <button class="btn btn-sm btn-outline-secondary me-1" disabled="@(currentPage <= 1)" @onclick="() => GoToPage(currentPage - 1)">
+                    <i class="bi bi-chevron-left"></i> ก่อนหน้า
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" disabled="@(!hasMore)" @onclick="() => GoToPage(currentPage + 1)">
+                    ถัดไป <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MemberSummaryVm> members = new();
+    private string? keyword;
+    private bool isLoading = true;
+    private int currentPage = 1;
+    private bool hasMore;
+    private const int PageSize = 20;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            members = await MemberSvc.SearchMembersAsync(token, keyword, currentPage);
+            hasMore = members.Count >= PageSize;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading members: {ex.Message}");
+        }
+        isLoading = false;
+    }
+
+    private async Task GoToPage(int page)
+    {
+        if (page < 1) return;
+        currentPage = page;
+        await LoadData();
+    }
+
+    private async Task HandleKeyPress(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await GoToPage(1);
+    }
+
+    private void ViewMember(long memberId)
+    {
+        Nav.NavigateTo($"/MemberDetail/{memberId}");
+    }
+}

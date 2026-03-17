@@ -1,9 +1,9 @@
-﻿@page "/CompanyEdit"
+@page "/CompanyEdit"
 @page "/CompanyEdit/{Id:int}"
 @using adwportal.Dtos
 @using adwportal.Services
 @inject CompanyService Svc
-@inject IdwImportService Idw
+@inject AuthTokenProvider TokenProvider
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -53,9 +53,8 @@ else
         {
             loading = true;
 
-            // login เพื่อเอา token ไปยิง CompanyService
-            var loginIdw = await Idw.LoginAsync("admin", "123456yjm");
-            token = loginIdw?.Token;
+            // token แบบ async
+            token = await TokenProvider.GetIdwTokenAsync();
             if (string.IsNullOrWhiteSpace(token))
             {
                 error = "Login IDW failed";

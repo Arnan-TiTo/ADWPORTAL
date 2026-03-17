@@ -1,4 +1,4 @@
-﻿@page "/normalize"
+@page "/normalize"
 @using System.Text
 @using System.Text.Json
 @using System.Globalization
@@ -282,8 +282,8 @@
 
         try
         {
-            _idwToken = TokenProvider.IdwToken;
-            _mdwToken = TokenProvider.MdwToken;
+            _idwToken = await TokenProvider.GetIdwTokenAsync();
+            _mdwToken = await TokenProvider.GetMdwTokenAsync();
 
             _idw = ClientFactory.CreateClient("IdwApiBaseUrl");
             _idw.DefaultRequestHeaders.Authorization =

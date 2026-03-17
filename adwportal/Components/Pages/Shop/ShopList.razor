@@ -140,7 +140,7 @@ else
             loading = true;
             
             // Get token from AuthTokenProvider (which delegates to TokenCacheService)
-            token = TokenProvider.IdwToken;
+            token = await TokenProvider.GetIdwTokenAsync();
             if (string.IsNullOrWhiteSpace(token)) { error = "Token is empty. Please login."; return; }
 
             // โหลดข้อมูลครั้งเดียว แล้วกรองฝั่ง FE

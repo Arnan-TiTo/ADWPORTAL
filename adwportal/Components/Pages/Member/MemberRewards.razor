@@ -1,0 +1,527 @@
+@page "/MemberRewards"
+@using adwportal.Services
+@inject MemberAdminService MemberSvc
+@inject AuthTokenProvider TokenProvider
+
+<h3 class="page-title"><i class="bi bi-gift"></i> จัดการรางวัล (Rewards)</h3>
+
+@* Tab Nav *@
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "rewards" ? "active" : "")" @onclick='() => activeTab = "rewards"'>
+            🎁 รางวัล (@rewards.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "redemptions" ? "active" : "")" @onclick="SwitchToRedemptions">
+            📋 การแลก (@redemptions.Count)
+        </button>
+    </li>
+</ul>
+
+@if (activeTab == "rewards")
+{
+    @* ─── REWARDS TAB ─── *@
+
+    @* Create New *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-plus-circle"></i> เพิ่มรางวัลใหม่</span>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="() => showCreateForm = !showCreateForm">
+                @(showCreateForm ? "ซ่อน" : "แสดง")
+            </button>
+        </div>
+        @if (showCreateForm)
+        {
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label small">ชื่อรางวัล</label>
+                        <input type="text" class="form-control" @bind="newReward.RewardName" placeholder="ชื่อรางวัล" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">ประเภท</label>
+                        <select class="form-select" @bind="newReward.RewardType">
+                            <option value="GIFT">🎁 ของรางวัล</option>
+                            <option value="COUPON">🎟️ คูปอง</option>
+                            <option value="DISCOUNT">💰 ส่วนลด</option>
+                            <option value="SHIPPING">📦 จัดส่งฟรี</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">แต้มที่ใช้</label>
+                        <input type="number" class="form-control" @bind="newReward.PointsCost" min="1" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">จำนวนคงเหลือ</label>
+                        <input type="number" class="form-control" @bind="newReward.StockTotal" min="1" />
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" @onclick="CreateReward" disabled="@creating">
+                            @if (creating) { <span class="spinner-border spinner-border-sm"></span> }
+                            else { <text><i class="bi bi-plus"></i> สร้าง</text> }
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">รายละเอียด</label>
+                        <input type="text" class="form-control" @bind="newReward.Description" placeholder="รายละเอียด (ไม่บังคับ)" />
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(createMsg))
+                {
+                    <div class="alert @(createOk ? "alert-success" : "alert-danger") mt-2 py-1 small">@createMsg</div>
+                }
+            </div>
+        }
+    </div>
+
+    @* Reward List *@
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>🎁 รางวัลทั้งหมด (@rewards.Count)</span>
+                <button class="btn btn-sm btn-outline-primary" @onclick="LoadData">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>ชื่อ</th>
+                            <th>ประเภท</th>
+                            <th class="text-end">แต้ม</th>
+                            <th class="text-end">คงเหลือ</th>
+                            <th>สถานะ</th>
+                            <th class="text-center">โค้ด</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in rewards)
+                        {
+                            <tr>
+                                <td>@r.RewardId</td>
+                                <td>
+                                    <strong>@r.RewardName</strong>
+                                    @if (!string.IsNullOrEmpty(r.Description))
+                                    {
+                                        <br /><small class="text-muted">@r.Description</small>
+                                    }
+                                </td>
+                                <td><span class="badge bg-info text-dark">@r.RewardType</span></td>
+                                <td class="text-end fw-bold">@r.PointsCost.ToString("N0")</td>
+                                <td class="text-end">@r.StockRemaining</td>
+                                <td>
+                                    <button class="btn btn-sm @(r.IsActive ? "btn-success" : "btn-outline-secondary")"
+                                            @onclick="() => ToggleActive(r.RewardId)" title="คลิกเพื่อเปลี่ยนสถานะ">
+                                        <i class="bi @(r.IsActive ? "bi-toggle-on" : "bi-toggle-off")"></i>
+                                        @(r.IsActive ? "Active" : "Inactive")
+                                    </button>
+                                </td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-outline-info" @onclick="() => ToggleCodes(r.RewardId)">
+                                        <i class="bi bi-qr-code"></i> จัดการโค้ด
+                                    </button>
+                                </td>
+                            </tr>
+                            @if (expandedRewardId == r.RewardId)
+                            {
+                                <tr>
+                                    <td colspan="7" class="p-0">
+                                        <div class="bg-light p-3 border-top">
+                                            @* Add Codes Form *@
+                                            <div class="row g-2 mb-3">
+                                                <div class="col-md-8">
+                                                    <label class="form-label small fw-bold">เพิ่มโค้ด (ใส่ทีละบรรทัด — เช่น โค้ดจาก Shopee/TikTok)</label>
+                                                    <textarea class="form-control" rows="3" @bind="newCodesText"
+                                                              placeholder="SHOPEE50-ABC123&#10;SHOPEE50-DEF456&#10;SHOPEE50-GHI789"></textarea>
+                                                </div>
+                                                <div class="col-md-4 d-flex align-items-end">
+                                                    <button class="btn btn-primary w-100" @onclick="() => AddCodes(r.RewardId)" disabled="@addingCodes">
+                                                        @if (addingCodes) { <span class="spinner-border spinner-border-sm"></span> }
+                                                        else { <text><i class="bi bi-plus-lg"></i> เพิ่มโค้ด</text> }
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(codeMsg))
+                                            {
+                                                <div class="alert @(codeOk ? "alert-success" : "alert-danger") py-1 small mb-2">@codeMsg</div>
+                                            }
+
+                                            @* Codes Table *@
+                                            @if (codesLoading)
+                                            {
+                                                <div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+                                            }
+                                            else if (currentCodes.Count == 0)
+                                            {
+                                                <div class="text-center text-muted small py-2">
+                                                    <i class="bi bi-inbox"></i> ยังไม่มีโค้ด — เพิ่มโค้ดที่ gen จาก Shopee/TikTok ที่ช่องด้านบน
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <table class="table table-sm table-bordered mb-0 small">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>โค้ด</th>
+                                                            <th>สถานะ</th>
+                                                            <th>แจกเมื่อ</th>
+                                                            <th>Redemption</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var c in currentCodes)
+                                                        {
+                                                            <tr class="@(c.Status == "Available" ? "" : "table-secondary")">
+                                                                <td><code>@c.Code</code></td>
+                                                                <td>
+                                                                    <span class="badge @GetCodeStatusBadge(c.Status)">@c.Status</span>
+                                                                </td>
+                                                                <td>@(c.IssuedAt?.ToString("dd/MM HH:mm") ?? "-")</td>
+                                                                <td>@(c.RedemptionId?.ToString() ?? "-")</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                                <div class="mt-1 small text-muted">
+                                                    Available: @currentCodes.Count(c => c.Status == "Available") /
+                                                    Issued: @currentCodes.Count(c => c.Status == "Issued") /
+                                                    ทั้งหมด: @currentCodes.Count
+                                                </div>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+else
+{
+    @* ─── REDEMPTIONS TAB ─── *@
+
+    @* Filter *@
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small">กรอง:</span>
+                <select class="form-select form-select-sm" style="max-width:150px;" @bind="redemptionFilter" @bind:after="LoadRedemptions">
+                    <option value="">ทั้งหมด</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Reserved">Reserved</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Failed">Failed</option>
+                </select>
+                <span class="ms-auto text-muted small">@redemptions.Count รายการ</span>
+                <button class="btn btn-sm btn-outline-primary" @onclick="LoadRedemptions">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(redeemMsg))
+    {
+        <div class="alert @(redeemOk ? "alert-success" : "alert-danger") py-2 small">@redeemMsg</div>
+    }
+
+    @if (redemptionLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (redemptions.Count == 0)
+    {
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox display-4"></i>
+            <p class="mt-2">ไม่มีรายการแลกรางวัล</p>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>สมาชิก</th>
+                            <th>รางวัล</th>
+                            <th class="text-end">แต้ม</th>
+                            <th>โค้ด</th>
+                            <th>สถานะ</th>
+                            <th>วันที่</th>
+                            <th class="text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rd in redemptions)
+                        {
+                            <tr>
+                                <td>@rd.RedemptionId</td>
+                                <td>
+                                    <div>@(rd.MemberName ?? "-")</div>
+                                    <small class="text-muted">@rd.MemberCode</small>
+                                </td>
+                                <td>@rd.RewardName</td>
+                                <td class="text-end fw-bold">@rd.PointsSpent.ToString("N0")</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(rd.Code))
+                                    {
+                                        <code>@rd.Code</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @GetStatusBadge(rd.Status)">@rd.Status</span>
+                                </td>
+                                <td>@rd.ReservedAt.ToString("dd/MM/yy HH:mm")</td>
+                                <td class="text-center">
+                                    @if (rd.Status == "Completed" || rd.Status == "Reserved")
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelRedemption(rd.RedemptionId)"
+                                                disabled="@cancellingId.Contains(rd.RedemptionId)">
+                                            @if (cancellingId.Contains(rd.RedemptionId))
+                                            {
+                                                <span class="spinner-border spinner-border-sm"></span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-x-circle"></i>
+                                            }
+                                            ยกเลิก
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private string activeTab = "rewards";
+
+    // ── Rewards ──
+    private List<RewardVm> rewards = new();
+    private bool isLoading = true;
+    private bool showCreateForm;
+    private RewardCreateVm newReward = new();
+    private bool creating;
+    private string? createMsg;
+    private bool createOk;
+
+    // ── Redemptions ──
+    private List<RedemptionVm> redemptions = new();
+    private bool redemptionLoading;
+    private string redemptionFilter = "";
+    private string? redeemMsg;
+    private bool redeemOk;
+    private HashSet<long> cancellingId = new();
+
+    // ── Codes ──
+    private int? expandedRewardId;
+    private List<RewardCodeVm> currentCodes = new();
+    private bool codesLoading;
+    private string newCodesText = "";
+    private bool addingCodes;
+    private string? codeMsg;
+    private bool codeOk;
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task SwitchToRedemptions()
+    {
+        activeTab = "redemptions";
+        await LoadRedemptions();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            rewards = await MemberSvc.GetRewardsAsync(token);
+        }
+        catch (Exception ex) { Console.WriteLine($"Error: {ex.Message}"); }
+        isLoading = false;
+    }
+
+    private async Task CreateReward()
+    {
+        if (string.IsNullOrWhiteSpace(newReward.RewardName) || newReward.PointsCost <= 0)
+        {
+            createMsg = "⚠️ กรุณากรอกข้อมูลให้ครบ";
+            createOk = false;
+            return;
+        }
+        creating = true;
+        createMsg = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.CreateRewardAsync(token, newReward);
+            createMsg = "✅ สร้างรางวัลสำเร็จ!";
+            createOk = true;
+            newReward = new();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            createMsg = $"❌ {ex.Message}";
+            createOk = false;
+        }
+        creating = false;
+    }
+
+    private async Task ToggleActive(int rewardId)
+    {
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.ToggleRewardActiveAsync(token, rewardId);
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            createMsg = $"❌ {ex.Message}";
+            createOk = false;
+        }
+    }
+
+    private async Task LoadRedemptions()
+    {
+        redemptionLoading = true;
+        redeemMsg = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            var filter = string.IsNullOrWhiteSpace(redemptionFilter) ? null : redemptionFilter;
+            redemptions = await MemberSvc.GetRedemptionsAsync(token, filter);
+        }
+        catch (Exception ex)
+        {
+            redeemMsg = $"❌ {ex.Message}";
+            redeemOk = false;
+        }
+        redemptionLoading = false;
+    }
+
+    private async Task CancelRedemption(long redemptionId)
+    {
+        cancellingId.Add(redemptionId);
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.CancelRedemptionAsync(token, redemptionId, "Admin cancelled");
+            redeemMsg = $"✅ ยกเลิก #{redemptionId} สำเร็จ (คืนแต้มแล้ว)";
+            redeemOk = true;
+            await LoadRedemptions();
+        }
+        catch (Exception ex)
+        {
+            redeemMsg = $"❌ {ex.Message}";
+            redeemOk = false;
+        }
+        cancellingId.Remove(redemptionId);
+    }
+
+    private static string GetStatusBadge(string status) => status switch
+    {
+        "Completed" => "bg-success",
+        "Reserved" => "bg-warning text-dark",
+        "Cancelled" => "bg-secondary",
+        "Failed" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    // ── Code Management ──
+    private async Task ToggleCodes(int rewardId)
+    {
+        if (expandedRewardId == rewardId)
+        {
+            expandedRewardId = null;
+            return;
+        }
+        expandedRewardId = rewardId;
+        codeMsg = null;
+        newCodesText = "";
+        await LoadCodes(rewardId);
+    }
+
+    private async Task LoadCodes(int rewardId)
+    {
+        codesLoading = true;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            currentCodes = await MemberSvc.GetRewardCodesAsync(token, rewardId);
+        }
+        catch { currentCodes = new(); }
+        codesLoading = false;
+    }
+
+    private async Task AddCodes(int rewardId)
+    {
+        var lines = newCodesText.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .Where(l => !string.IsNullOrEmpty(l))
+            .ToList();
+
+        if (lines.Count == 0)
+        {
+            codeMsg = "⚠️ ใส่โค้ดอย่างน้อย 1 รายการ";
+            codeOk = false;
+            return;
+        }
+
+        addingCodes = true;
+        codeMsg = null;
+        try
+        {
+            var token = TokenProvider.MdwToken ?? "";
+            await MemberSvc.AddRewardCodesAsync(token, rewardId, lines);
+            codeMsg = $"✅ เพิ่ม {lines.Count} โค้ดเรียบร้อย";
+            codeOk = true;
+            newCodesText = "";
+            await LoadCodes(rewardId);
+            await LoadData(); // refresh stock count
+        }
+        catch (Exception ex)
+        {
+            codeMsg = $"❌ {ex.Message}";
+            codeOk = false;
+        }
+        addingCodes = false;
+    }
+
+    private static string GetCodeStatusBadge(string status) => status switch
+    {
+        "Available" => "bg-success",
+        "Issued" => "bg-primary",
+        "Used" => "bg-secondary",
+        "Cancelled" => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+}
