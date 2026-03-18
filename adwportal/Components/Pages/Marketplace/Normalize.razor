@@ -38,6 +38,10 @@
                         <InputRadio TValue="string" class="form-check-input" Value="orderList" id="modeList" />
                         <label class="form-check-label" for="modeList">by-list</label>
                     </div>
+                    <div class="form-check form-check-inline">
+                        <InputRadio TValue="string" class="form-check-input" Value="@("syncReturns")" id="modeReturns" />
+                        <label class="form-check-label" for="modeReturns">🔄 sync-returns</label>
+                    </div>
                 </InputRadioGroup>
             </div>
 
@@ -128,9 +132,72 @@
                     </select>
                 </div>
             }
+            else if (IsSyncReturns)
+            {
+                <div class="col-md-3">
+                    <label class="form-label">orderRef <small class="text-muted">(เว้นว่าง = ทั้งหมด)</small></label>
+                    <input class="form-control" @bind="returnOrderRef" placeholder="250319ABCDEF" />
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">status <small class="text-muted">(เว้นว่าง = ทุกสถานะ)</small></label>
+                    <select class="form-select" @bind="returnStatus">
+                        <option value="">(All)</option>
+                        <option value="REQUESTED">REQUESTED</option>
+                        <option value="ACCEPTED">ACCEPTED</option>
+                        <option value="PROCESSING">PROCESSING</option>
+                        <option value="SELLER_DISPUTE">SELLER_DISPUTE</option>
+                        <option value="JUDGING">JUDGING</option>
+                        <option value="REFUND_PAID">REFUND_PAID</option>
+                        <option value="CLOSED">CLOSED</option>
+                        <option value="CANCELLED">CANCELLED</option>
+                    </select>
+                </div>
+
+                @if (string.IsNullOrWhiteSpace(returnOrderRef))
+                {
+                    <div class="col-md-3">
+                        <label class="form-label">timeFrom</label>
+                        <div class="input-group">
+                            <input class="form-control" type="number" @bind="TimeFrom" @bind:event="oninput" />
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => SetFromNow(-24*7)">-7d</button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="() => SetFromNow(-24*30)">-30d</button>
+                        </div>
+                        <input class="form-control mt-1" type="datetime-local" @bind="FromLocalDT" />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">timeTo</label>
+                        <div class="input-group">
+                            <input class="form-control" type="number" @bind="TimeTo" @bind:event="oninput" />
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="SetToNow">now</button>
+                        </div>
+                        <input class="form-control mt-1" type="datetime-local" @bind="ToLocalDT" />
+                    </div>
+                }
+
+                <div class="col-12">
+                    <div class="alert alert-info mb-0 py-2">
+                        @if (string.IsNullOrWhiteSpace(returnOrderRef))
+                        {
+                            <strong>🔄 Sync Returns (ทั้งหมด)</strong>
+                            <span> — ดึง return/refund ทั้งหมดตาม time range</span>
+                        }
+                        else
+                        {
+                            <strong>🔄 Sync Returns (by-ref)</strong>
+                            <span> — ดึง return เฉพาะ order <code>@returnOrderRef</code></span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(returnStatus))
+                        {
+                            <span> [filter: <code>@returnStatus</code>]</span>
+                        }
+                    </div>
+                </div>
+            }
 
             <div class="col-12 d-flex gap-2 align-items-end">
-                <button class="btn btn-primary" @onclick="CallApi" disabled="@busy">@(busy ? "Calling..." : "Call API")</button>
+                <button class="btn @(IsSyncReturns ? "btn-warning" : "btn-primary")" @onclick="CallApi" disabled="@busy">@(busy ? "Calling..." : IsSyncReturns ? "🔄 Sync Returns" : "Call API")</button>
                 <button class="btn btn-outline-secondary" @onclick="ResetForm" disabled="@busy">Reset</button>
             </div>
 
@@ -187,11 +254,14 @@
     private string mode = "by-list";
     private bool IsByRef => string.Equals(mode, "by-ref", StringComparison.OrdinalIgnoreCase);
     private bool IsByList => string.Equals(mode, "by-list", StringComparison.OrdinalIgnoreCase);
+    private bool IsSyncReturns => string.Equals(mode, "syncReturns", StringComparison.OrdinalIgnoreCase);
 
     private string platform = "";
     private string shopIdStr = "";
     private string orderRef = "by-ref";
     private string orderList = "by-list";
+    private string returnOrderRef = "";
+    private string returnStatus = "";
 
     // time window (backing fields)
     private long _timeFrom;
@@ -449,6 +519,8 @@
         pageSize = 50;
         sellerId = null;
         env = "prod";
+        returnOrderRef = "";
+        returnStatus = "";
         lastUrl = jsonPretty = error = info = lastBody = lastMethod = null;
     }
 
@@ -488,7 +560,7 @@
                 if (!resp.IsSuccessStatusCode) error = $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}";
                 else info = "Normalize by-ref finished.";
             }
-            else
+            else if (IsByList)
             {
                 if (string.IsNullOrWhiteSpace(timeRangeField))
                     throw new Exception("timeRangeField is required");
@@ -518,6 +590,42 @@
                 jsonPretty = PrettyJson(txt);
                 if (!resp.IsSuccessStatusCode) error = $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}";
                 else info = "Normalize by-list finished.";
+            }
+            else if (IsSyncReturns)
+            {
+                var syncUrl = new StringBuilder("api/market/orders/actions/sync-returns?");
+                syncUrl.Append("platform=").Append(Uri.EscapeDataString(platform));
+                syncUrl.Append("&shopId=").Append(Uri.EscapeDataString(shopIdStr));
+                if (!string.IsNullOrWhiteSpace(returnStatus))
+                    syncUrl.Append("&status=").Append(Uri.EscapeDataString(returnStatus));
+
+                if (!string.IsNullOrWhiteSpace(returnOrderRef))
+                {
+                    syncUrl.Append("&orderRef=").Append(Uri.EscapeDataString(returnOrderRef.Trim()));
+                }
+                else
+                {
+                    if (TimeFrom <= 0 || TimeTo <= 0)
+                        throw new Exception("timeFrom/timeTo are required (or specify orderRef)");
+                    syncUrl.Append("&timeFrom=").Append(TimeFrom);
+                    syncUrl.Append("&timeTo=").Append(TimeTo);
+                }
+
+                lastMethod = "POST";
+                lastUrl = $"{_mdw.BaseAddress}{syncUrl}";
+
+                var syncReq = new HttpRequestMessage(HttpMethod.Post, syncUrl.ToString())
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                };
+
+                var syncResp = await _mdw.SendAsync(syncReq);
+                var syncTxt = await syncResp.Content.ReadAsStringAsync();
+                jsonPretty = PrettyJson(syncTxt);
+                if (!syncResp.IsSuccessStatusCode) error = $"HTTP {(int)syncResp.StatusCode} {syncResp.ReasonPhrase}";
+                else info = string.IsNullOrWhiteSpace(returnOrderRef)
+                    ? "Sync returns (all) finished."
+                    : $"Sync returns for order {returnOrderRef} finished.";
             }
         }
         catch (Exception ex) { error = ex.Message; }
