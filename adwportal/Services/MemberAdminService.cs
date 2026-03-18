@@ -465,6 +465,7 @@ public class PointPolicyVm
     public decimal EarnRate { get; set; } = 1.0m;
     public decimal? MinOrderAmount { get; set; }
     public string? EligibleStatuses { get; set; }
+    public int? ExpiryDays { get; set; }
     public DateTime EffectiveFrom { get; set; } = DateTime.Now;
     public DateTime? EffectiveTo { get; set; }
     public bool IsActive { get; set; }

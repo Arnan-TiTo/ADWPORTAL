@@ -94,15 +94,20 @@ else
                 </div>
             </div>
             <div class="row g-2 mt-1">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small fw-semibold">ยอดขั้นต่ำ (บาท)</label>
                     <input type="number" class="form-control form-control-sm" @bind="form.MinOrderAmount" step="1" placeholder="ไม่บังคับ" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-semibold">หมดอายุ (วัน)</label>
+                    <input type="number" class="form-control form-control-sm" @bind="form.ExpiryDays" min="0" placeholder="ไม่หมดอายุ" />
+                    <div class="form-text" style="font-size:10px;">ว่าง = ไม่มีวันหมดอายุ</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small fw-semibold">เริ่มมีผล</label>
                     <input type="date" class="form-control form-control-sm" @bind="form.EffectiveFrom" />
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small fw-semibold">สิ้นสุด (ไม่บังคับ)</label>
                     <input type="date" class="form-control form-control-sm" @bind="form.EffectiveTo" />
                 </div>
@@ -144,6 +149,7 @@ else
                             <th>สูตร</th>
                             <th class="text-end">Rate</th>
                             <th class="text-end">ขั้นต่ำ</th>
+                            <th class="text-center">หมดอายุ</th>
                             <th>ช่วงเวลา</th>
                             <th>สร้างโดย</th>
                             <th class="text-center" style="width:120px;"></th>
@@ -178,6 +184,16 @@ else
                                 </td>
                                 <td class="text-end fw-bold">@p.EarnRate.ToString("N1")</td>
                                 <td class="text-end">@(p.MinOrderAmount.HasValue ? $"฿{p.MinOrderAmount:N0}" : "-")</td>
+                                <td class="text-center">
+                                    @if (p.ExpiryDays.HasValue)
+                                    {
+                                        <span class="badge bg-warning text-dark">⏰ @p.ExpiryDays วัน</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">♾️</span>
+                                    }
+                                </td>
                                 <td>
                                     <span class="text-nowrap">@p.EffectiveFrom.ToString("dd/MM/yy")</span>
                                     <span class="text-muted">→</span>
@@ -277,6 +293,7 @@ else
             EarnRate = p.EarnRate,
             MinOrderAmount = p.MinOrderAmount,
             EligibleStatuses = p.EligibleStatuses,
+            ExpiryDays = p.ExpiryDays,
             EffectiveFrom = p.EffectiveFrom,
             EffectiveTo = p.EffectiveTo
         };
