@@ -46,6 +46,10 @@ else
                 </div>
                 <ul class="list-group list-group-flush small">
                     <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">ชื่อ-นามสกุล</span>
+                        <span>@(member.FirstName ?? "") @(member.LastName ?? "")</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
                         <span class="text-muted">เบอร์โทร</span>
                         <span>@(member.Phone ?? "-")</span>
                     </li>
@@ -54,9 +58,42 @@ else
                         <span>@(member.Email ?? "-")</span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between">
+                        <span class="text-muted">วันเกิด/อายุ</span>
+                        <span>
+                            @(member.BirthDate?.ToString("dd/MM/yyyy") ?? "-") 
+                            @if(member.Age.HasValue) { <text>(@member.Age.Value ปี)</text> }
+                        </span>
+                    </li>
+                    <li class="list-group-item">
+                        <div class="text-muted mb-1">ที่อยู่</div>
+                        <div class="small">
+                            @(member.Address ?? "-") <br />
+                            @($"{member.Subdistrict} {member.District} {member.Province} {member.ZipCode}".Trim())
+                        </div>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
                         <span class="text-muted">วันสมัคร</span>
                         <span>@member.RegisteredAt.ToString("dd/MM/yy HH:mm")</span>
                     </li>
+                    @if (!string.IsNullOrEmpty(member.MembershipTier))
+                    {
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span class="text-muted">ระดับสมาชิก</span>
+                            <span class="badge bg-info text-dark">@member.MembershipTier</span>
+                        </li>
+                    }
+                    @if (!string.IsNullOrEmpty(member.Tags))
+                    {
+                        <li class="list-group-item">
+                            <div class="text-muted mb-1">แท็ก</div>
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var tag in member.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    <span class="badge rounded-pill bg-light text-dark border">@tag.Trim()</span>
+                                }
+                            </div>
+                        </li>
+                    }
                 </ul>
             </div>
 
@@ -69,7 +106,10 @@ else
                         @foreach (var id in member.Identities)
                         {
                             <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <span>@(id.DisplayName ?? id.ProviderType)</span>
+                                <div class="d-flex flex-column flex-grow-1 ms-2">
+                                    <span class="fw-bold">@(id.DisplayName ?? id.ProviderType)</span>
+                                    <code class="x-small text-muted">@id.ProviderUserKey</code>
+                                </div>
                                 <span class="badge @(id.IsActive ? "bg-success" : "bg-secondary")">
                                     @(id.IsActive ? "Active" : "Inactive")
                                 </span>
@@ -83,43 +123,57 @@ else
         @* Points & Platform *@
         <div class="col-md-8">
             @* Points summary *@
-            @if (member.PointBalance != null)
-            {
-                <div class="row g-2 mb-3">
-                    <div class="col-6 col-md-3">
-                        <div class="card bg-primary text-white shadow-sm">
-                            <div class="card-body text-center py-2">
-                                <div class="small">คงเหลือ</div>
+            <div class="row g-2 mb-3">
+                @if (member.PointBalance != null)
+                {
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <div class="card bg-dark text-white shadow-sm border-0">
+                            <div class="card-body text-center py-2 h-100">
+                                <div class="small opacity-75">คะแนนทั้งหมด</div>
+                                <div class="h4 mb-0 fw-bold">@member.PointBalance.TotalPoints.ToString("N0")</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <div class="card bg-primary text-white shadow-sm border-0">
+                            <div class="card-body text-center py-2 h-100">
+                                <div class="small opacity-75">ใช้ได้ทันที</div>
                                 <div class="h4 mb-0">@member.PointBalance.AvailablePoints.ToString("N0")</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-md-3">
-                        <div class="card bg-success text-white shadow-sm">
-                            <div class="card-body text-center py-2">
-                                <div class="small">สะสมทั้งหมด</div>
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <div class="card bg-info text-white shadow-sm border-0">
+                            <div class="card-body text-center py-2 h-100">
+                                <div class="small opacity-75">รอตรวจสอบ</div>
+                                <div class="h4 mb-0">@member.PointBalance.PendingPoints.ToString("N0")</div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                @* Tier Points (Independent) *@
+                <div class="col-6 col-md-3 col-lg-3">
+                    <div class="card bg-warning text-dark border-0 shadow-sm">
+                        <div class="card-body text-center py-2 h-100">
+                            <div class="small opacity-75">แต้มสำหรับเลื่อนระดับ</div>
+                            <div class="h4 mb-0 fw-bold">@member.PointsForTier.ToString("N0")</div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (member.PointBalance != null)
+                {
+                    <div class="col-6 col-md-3 col-lg-3">
+                        <div class="card bg-light border text-dark shadow-sm">
+                            <div class="card-body text-center py-2 h-100">
+                                <div class="small text-muted">สะสม (Lifetime)</div>
                                 <div class="h4 mb-0">@member.PointBalance.TotalEarned.ToString("N0")</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-md-3">
-                        <div class="card bg-danger text-white shadow-sm">
-                            <div class="card-body text-center py-2">
-                                <div class="small">ใช้ไปแล้ว</div>
-                                <div class="h4 mb-0">@member.PointBalance.TotalBurned.ToString("N0")</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="card bg-warning text-white shadow-sm">
-                            <div class="card-body text-center py-2">
-                                <div class="small">จอง</div>
-                                <div class="h4 mb-0">@member.PointBalance.ReservedPoints.ToString("N0")</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
+                }
+            </div>
 
             @* Point Adjust *@
             <div class="card shadow-sm mb-3">

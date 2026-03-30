@@ -20,7 +20,9 @@
                 </div>
             </div>
             <div class="col-md-3 ms-auto text-end">
-                <span class="text-muted small">หน้า @currentPage</span>
+                <button class="btn btn-success" @onclick="AddMember">
+                    <i class="bi bi-person-plus"></i> เพิ่มสมาชิก
+                </button>
             </div>
         </div>
     </div>
@@ -71,9 +73,14 @@ else
                             <td class="text-end fw-bold">@m.AvailablePoints.ToString("N0")</td>
                             <td>@m.RegisteredAt.ToString("dd/MM/yy HH:mm")</td>
                             <td class="text-center">
-                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewMember(m.MemberId)">
-                                    <i class="bi bi-eye"></i>
-                                </button>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewMember(m.MemberId)">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-warning" @onclick="() => EditMember(m.MemberId)">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     }
@@ -115,7 +122,7 @@ else
         isLoading = true;
         try
         {
-            var token = TokenProvider.MdwToken ?? "";
+            var token = await TokenProvider.GetMdwTokenAsync() ?? "";
             members = await MemberSvc.SearchMembersAsync(token, keyword, currentPage);
             hasMore = members.Count >= PageSize;
         }
@@ -141,5 +148,15 @@ else
     private void ViewMember(long memberId)
     {
         Nav.NavigateTo($"/MemberDetail/{memberId}");
+    }
+
+    private void EditMember(long memberId)
+    {
+        Nav.NavigateTo($"/MemberEdit/{memberId}");
+    }
+
+    private void AddMember()
+    {
+        Nav.NavigateTo("/MemberEdit");
     }
 }

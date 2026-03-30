@@ -1,0 +1,289 @@
+@page "/BulkMemImport"
+@using adwportal.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject MemberAdminService MemberSvc
+@inject AuthTokenProvider TokenProvider
+@inject NavigationManager Nav
+
+<h3 class="page-title"><i class="bi bi-file-earmark-excel-fill"></i> Bulk Member Import</h3>
+
+<div class="row">
+    @if (currentStep == ImportStep.Upload)
+    {
+        <div class="col-md-6">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Step 1: Upload File</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">
+                        กรุณาอัปโหลดไฟล์ <code>.xlsx</code> หรือ <code>.csv</code> (Member export format) <br />
+                        ระบบจะทำการตรวจสอบข้อมูล รูปแบบ และรายการซ้ำก่อนการนำเข้าจริง
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold">เลือกไฟล์ (.xlsx, .csv)</label>
+                        <InputFile OnChange="OnInputFileChange" class="form-control" accept=".xlsx,.csv" />
+                    </div>
+
+                    @if (selectedFile != null)
+                    {
+                        <div class="alert alert-info py-2">
+                            <i class="bi bi-file-earmark-check"></i> @selectedFile.Name (@((selectedFile.Size / 1024).ToString("N0")) KB)
+                        </div>
+                        
+                        <button class="btn btn-primary w-100 py-2" @onclick="HandleValidate" disabled="@isProcessing">
+                            @if (isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span> กำลังตรวจสอบข้อมูล...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-search"></i><span> ตรวจสอบข้อมูล (Validate)</span>
+                            }
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (currentStep == ImportStep.Preview && validationResult != null)
+    {
+        <div class="col-12">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Step 2: Review & Validate Data</h5>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="Reset">ยกเลิกและเลือกไฟล์ใหม่</button>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="p-3 bg-light border rounded text-center">
+                                <div class="h3 mb-0">@validationResult.TotalRows</div>
+                                <div class="text-muted small">ทั้งหมด</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3 bg-success-light border border-success rounded text-center">
+                                <div class="h3 mb-0 text-success">@validationResult.ReadyCount</div>
+                                <div class="text-muted small">พร้อมนำเข้า</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3 bg-primary-light border border-primary rounded text-center">
+                                <div class="h3 mb-0 text-primary">@validationResult.DuplicateCount</div>
+                                <div class="text-muted small">พบข้อมูลเดิม (Update)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3 bg-danger-light border border-danger rounded text-center">
+                                <div class="h3 mb-0 text-danger">@validationResult.ErrorCount</div>
+                                <div class="text-muted small">ข้อมูลไม่ครบ/ผิดพลาด</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 500px;">
+                        <table class="table table-sm table-hover border">
+                            <thead class="bg-light sticky-top">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Status</th>
+                                    <th>Phone / Line ID</th>
+                                    <th>Name</th>
+                                    <th>Current Pts</th>
+                                    <th>Total Pts</th>
+                                    <th>Details/Errors</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in validationResult.Rows)
+                                {
+                                    <tr class="@(row.Status == "Invalid" ? "table-danger-light" : "")">
+                                        <td>@row.RowNumber</td>
+                                        <td>
+                                            @if (row.Status == "Ready") { <span class="badge bg-success">Ready</span> }
+                                            else if (row.Status == "Duplicate") { <span class="badge bg-primary">Duplicate</span> }
+                                            else { <span class="badge bg-danger">Invalid</span> }
+                                        </td>
+                                        <td class="small">
+                                            @(row.Data.Phone ?? "-") <br />
+                                            <span class="text-muted">@(row.Data.LineUserId ?? "")</span>
+                                        </td>
+                                        <td>@row.Data.DisplayName</td>
+                                        <td class="text-end">@row.Data.CurrentPoints.ToString("N0")</td>
+                                        <td class="text-end">@row.Data.TotalPoints.ToString("N0")</td>
+                                        <td class="small text-@(row.Status == "Invalid" ? "danger" : "muted")">
+                                            @row.Message
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-4 d-flex justify-content-end gap-2">
+                        @if (validationResult.ReadyCount > 0 || validationResult.DuplicateCount > 0)
+                        {
+                            <button class="btn btn-success btn-lg px-5" @onclick="HandleConfirmImport" disabled="@isProcessing">
+                                @if (isProcessing)
+                                {
+                                    <span class="spinner-border spinner-border-sm"></span>
+                                    <span> กำลังนำเข้า...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-check-circle"></i><span> เริ่มนำเข้าข้อมูลจริง</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (currentStep == ImportStep.Result && result != null)
+    {
+        <div class="col-md-8 mx-auto">
+            <div class="card shadow border-success">
+                <div class="card-body text-center py-5">
+                    <div class="mb-4">
+                        <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                    </div>
+                    <h2 class="mb-4">นำเข้าข้อมูลสำเร็จ!</h2>
+                    
+                    <div class="row mb-4 justify-content-center">
+                        <div class="col-3">
+                            <div class="h4 mb-0">@result.Created</div>
+                            <div class="text-muted small">รายการใหม่</div>
+                        </div>
+                        <div class="col-3 border-start">
+                            <div class="h4 mb-0">@result.Updated</div>
+                            <div class="text-muted small">อัปเดตข้อมูล</div>
+                        </div>
+                        <div class="col-3 border-start text-danger">
+                            <div class="h4 mb-0">@result.Failed</div>
+                            <div class="text-muted small">ล้มเหลว</div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 col-6 mx-auto">
+                        <button class="btn btn-primary" @onclick="BackToList">
+                            <i class="bi bi-people"></i> ไปที่หน้ารายการสมาชิก
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="Reset">
+                            <i class="bi bi-arrow-repeat"></i> นำเข้าไฟล์อื่นเพิ่ม
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (errorMessage != null)
+{
+    <div class="alert alert-danger mt-3">
+        <i class="bi bi-exclamation-triangle"></i> @errorMessage
+    </div>
+}
+
+<style>
+    .bg-success-light { background-color: #e8f5e9; }
+    .bg-primary-light { background-color: #e3f2fd; }
+    .bg-danger-light { background-color: #ffebee; }
+    .table-danger-light { background-color: #fff5f5; }
+</style>
+
+@code {
+    private enum ImportStep { Upload, Preview, Result }
+    private ImportStep currentStep = ImportStep.Upload;
+    
+    private IBrowserFile? selectedFile;
+    private bool isProcessing;
+    private BulkImportValidateResultVm? validationResult;
+    private BulkImportResultVm? result;
+    private string? errorMessage;
+
+    private void OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        validationResult = null;
+        result = null;
+        errorMessage = null;
+    }
+
+    private void Reset()
+    {
+        currentStep = ImportStep.Upload;
+        selectedFile = null;
+        validationResult = null;
+        result = null;
+        errorMessage = null;
+    }
+
+    private async Task HandleValidate()
+    {
+        if (selectedFile == null) return;
+
+        isProcessing = true;
+        errorMessage = null;
+        try
+        {
+            var token = await TokenProvider.GetMdwTokenAsync();
+            if (string.IsNullOrEmpty(token)) { errorMessage = "Login required"; return; }
+
+            validationResult = await MemberSvc.ValidateBulkImportAsync(token, selectedFile);
+            if (validationResult != null)
+            {
+                currentStep = ImportStep.Preview;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Validation failed: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task HandleConfirmImport()
+    {
+        if (validationResult == null) return;
+
+        isProcessing = true;
+        errorMessage = null;
+        try
+        {
+            var token = await TokenProvider.GetMdwTokenAsync();
+            if (string.IsNullOrEmpty(token)) return;
+
+            // Send only valid (Ready/Duplicate) rows
+            var toImport = validationResult.Rows
+                .Where(r => r.Status == "Ready" || r.Status == "Duplicate")
+                .Select(r => r.Data)
+                .ToList();
+
+            result = await MemberSvc.ConfirmBulkImportAsync(token, toImport);
+            if (result != null)
+            {
+                currentStep = ImportStep.Result;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private void BackToList() => Nav.NavigateTo("/MemberList");
+}

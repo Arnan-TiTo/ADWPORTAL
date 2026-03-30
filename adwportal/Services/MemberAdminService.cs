@@ -30,6 +30,36 @@ public class MemberAdminService
         return await http.GetFromJsonAsync<MemberDetailVm>($"api/admin/member/{memberId}", ct);
     }
 
+    public async Task<MemberDetailVm?> CreateMemberAsync(string token, MemberCreateVm dto, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        var resp = await http.PostAsJsonAsync("api/admin/member/register", new
+        {
+            dto.DisplayName, dto.Phone, dto.Email, dto.CompanysId,
+            dto.LineDisplayName, dto.LineUserId
+        }, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<MemberDetailVm>(ct);
+    }
+
+    public async Task<MemberDetailVm?> UpdateMemberAsync(string token, long memberId, MemberEditVm dto, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        var resp = await http.PutAsJsonAsync($"api/admin/member/{memberId}", new
+        {
+            dto.DisplayName, dto.Phone, dto.Email, dto.Status
+        }, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<MemberDetailVm>(ct);
+    }
+
+    public async Task DeleteMemberAsync(string token, long memberId, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        var resp = await http.DeleteAsync($"api/admin/member/{memberId}", ct);
+        resp.EnsureSuccessStatusCode();
+    }
+
     // ── Mapping Requests ──
     public async Task<List<MappingRequestVm>> GetPendingRequestsAsync(string token, CancellationToken ct = default)
     {
@@ -321,6 +351,44 @@ public class MemberAdminService
         resp.EnsureSuccessStatusCode();
         return await resp.Content.ReadFromJsonAsync<EarnResultVm>(ct) ?? new();
     }
+
+    public async Task<BulkImportResultVm> BulkImportMembersAsync(string token, List<MemberImportVm> members, int? companysId = null, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        var url = "api/admin/member/bulk-import";
+        if (companysId.HasValue) url += $"?companysId={companysId.Value}";
+
+        var resp = await http.PostAsJsonAsync(url, members, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<BulkImportResultVm>(ct) ?? new();
+    }
+
+    public async Task<BulkImportValidateResultVm?> ValidateBulkImportAsync(string token, Microsoft.AspNetCore.Components.Forms.IBrowserFile file, int? companysId = null, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        var url = "api/admin/member/bulk-import/validate";
+        if (companysId.HasValue) url += $"?companysId={companysId.Value}";
+
+        using var content = new MultipartFormDataContent();
+        var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024));
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+        content.Add(fileContent, "file", file.Name);
+
+        var resp = await http.PostAsync(url, content, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<BulkImportValidateResultVm>(ct);
+    }
+
+    public async Task<BulkImportResultVm?> ConfirmBulkImportAsync(string token, List<MemberImportVm> members, int? companysId = null, CancellationToken ct = default)
+    {
+        using var http = Create(token);
+        var url = "api/admin/member/bulk-import/confirm";
+        if (companysId.HasValue) url += $"?companysId={companysId.Value}";
+
+        var resp = await http.PostAsJsonAsync(url, members, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<BulkImportResultVm>(ct);
+    }
 }
 
 // ── View Models ──
@@ -340,8 +408,26 @@ public class MemberDetailVm
     public long MemberId { get; set; }
     public string MemberCode { get; set; } = "";
     public string? DisplayName { get; set; }
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
     public string? Phone { get; set; }
     public string? Email { get; set; }
+    public DateTime? BirthDate { get; set; }
+    public int? Age { get; set; }
+    public string? Gender { get; set; }
+    public string? Address { get; set; }
+    public string? Subdistrict { get; set; }
+    public string? District { get; set; }
+    public string? Province { get; set; }
+    public string? ZipCode { get; set; }
+    public string? MemberType { get; set; }
+    public string? MembershipTier { get; set; }
+    public string? Tags { get; set; }
+    public string? Branch { get; set; }
+    public decimal PointsForTier { get; set; }
+    public int UsageCount { get; set; }
+    public DateTime? LastActiveAt { get; set; }
+    public string? HowYouKnowMe { get; set; }
     public string Status { get; set; } = "";
     public DateTime RegisteredAt { get; set; }
     public List<MemberIdentityVm> Identities { get; set; } = new();
@@ -352,6 +438,7 @@ public class MemberDetailVm
 public class MemberIdentityVm
 {
     public string ProviderType { get; set; } = "";
+    public string ProviderUserKey { get; set; } = "";
     public string? DisplayName { get; set; }
     public string? PictureUrl { get; set; }
     public bool IsActive { get; set; }
@@ -369,6 +456,8 @@ public class PlatformAccountVm
 public class PointBalanceVm
 {
     public int AvailablePoints { get; set; }
+    public int PendingPoints { get; set; }
+    public int TotalPoints => AvailablePoints + PendingPoints;
     public int ReservedPoints { get; set; }
     public int TotalEarned { get; set; }
     public int TotalBurned { get; set; }
@@ -523,4 +612,86 @@ public class LineOaConfigVm
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+}
+
+public class MemberCreateVm
+{
+    public string? DisplayName { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    public int? CompanysId { get; set; }
+    public string? LineDisplayName { get; set; }
+    public string? LineUserId { get; set; }
+}
+
+public class MemberEditVm
+{
+    public string? DisplayName { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    public string? Status { get; set; }
+}
+
+public class MemberImportVm
+{
+    public string? LineUserId { get; set; }
+    public string? MemberType { get; set; }
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? DisplayName { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    public DateTime? BirthDate { get; set; }
+    public int? Age { get; set; }
+    public string? Gender { get; set; }
+    public string? Address { get; set; }
+    public string? Subdistrict { get; set; }
+    public string? District { get; set; }
+    public string? Province { get; set; }
+    public string? ZipCode { get; set; }
+    public string? MembershipTier { get; set; }
+    public string? Tags { get; set; }
+    public string? Branch { get; set; }
+    public decimal CurrentPoints { get; set; }
+    public decimal TotalPoints { get; set; }
+    public decimal PointsForTier { get; set; }
+    public int UsageCount { get; set; }
+    public DateTime? LastActiveAt { get; set; }
+    public int? LastActiveDays { get; set; }
+    public string? Status { get; set; }
+    public DateTime? RegisteredAt { get; set; }
+    public string? HowYouKnowMe { get; set; }
+
+    // Legacy support
+    public string? PictureUrl { get; set; }
+    public string? StatusMessage { get; set; }
+    public string? Language { get; set; }
+    public DateTime? AddedAt { get; set; }
+}
+
+public class BulkImportResultVm
+{
+    public int Total { get; set; }
+    public int Created { get; set; }
+    public int Updated { get; set; }
+    public int Failed { get; set; }
+    public List<string> Errors { get; set; } = new();
+}
+
+public class ImportValidationRowVm
+{
+    public int RowNumber { get; set; }
+    public string? Status { get; set; } // Ready, Duplicate, Invalid
+    public string? Message { get; set; }
+    public MemberImportVm Data { get; set; } = default!;
+}
+
+public class BulkImportValidateResultVm
+{
+    public string FileName { get; set; } = "";
+    public int TotalRows { get; set; }
+    public int ReadyCount { get; set; }
+    public int DuplicateCount { get; set; }
+    public int ErrorCount { get; set; }
+    public List<ImportValidationRowVm> Rows { get; set; } = new();
 }

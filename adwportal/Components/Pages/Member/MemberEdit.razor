@@ -1,0 +1,281 @@
+@page "/MemberEdit"
+@page "/MemberEdit/{MemberId:long}"
+@using adwportal.Services
+@inject MemberAdminService MemberSvc
+@inject AuthTokenProvider TokenProvider
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="d-flex align-items-center gap-2 mb-3">
+    <button class="btn btn-sm btn-outline-secondary" @onclick='() => Nav.NavigateTo("/MemberList")'>
+        <i class="bi bi-arrow-left"></i> กลับ
+    </button>
+    <h3 class="page-title mb-0">
+        <i class="bi bi-person-plus"></i> @(IsEdit ? "แก้ไขสมาชิก" : "เพิ่มสมาชิกใหม่")
+    </h3>
+</div>
+
+@if (loading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary"></div>
+        <p class="mt-2 text-muted">กำลังโหลด...</p>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">ชื่อที่แสดง</label>
+                    <input class="form-control" @bind="form.DisplayName" placeholder="ชื่อ-นามสกุล" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">เบอร์โทร</label>
+                    <input class="form-control" @bind="form.Phone" placeholder="0812345678" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">อีเมล</label>
+                    <input type="email" class="form-control" @bind="form.Email" placeholder="example@email.com" />
+                </div>
+
+                @if (IsEdit)
+                {
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">สถานะ</label>
+                        <select class="form-select" @bind="editForm.Status">
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="Suspended">Suspended</option>
+                        </select>
+                    </div>
+                }
+                else
+                {
+                    <div class="col-12 mt-2">
+                        <hr />
+                        <h6 class="fw-semibold text-success"><i class="bi bi-chat-dots"></i> LINE (ไม่บังคับ)</h6>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">ชื่อบน LINE</label>
+                        <input class="form-control" @bind="lineDisplayName" placeholder="ชื่อที่แสดงใน LINE" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">LINE User ID</label>
+                        <input class="form-control" @bind="lineUserId" placeholder="U1234567890abcdef..." />
+                        <div class="form-text" style="font-size:11px;">รหัสผู้ใช้ LINE (ขึ้นต้นด้วย U)</div>
+                    </div>
+                }
+
+                @if (IsEdit && detail != null)
+                {
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">รหัสสมาชิก</label>
+                        <input class="form-control" value="@detail.MemberCode" disabled />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">วันสมัคร</label>
+                        <input class="form-control" value="@detail.RegisteredAt.ToString("dd/MM/yyyy HH:mm")" disabled />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">แต้มคงเหลือ</label>
+                        <input class="form-control" value="@(detail.PointBalance?.AvailablePoints.ToString("N0") ?? "0")" disabled />
+                    </div>
+                }
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button class="btn btn-success" @onclick="Save" disabled="@saving">
+                    <i class="bi bi-check-lg"></i> @(saving ? "กำลังบันทึก..." : "บันทึก")
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="Cancel">ยกเลิก</button>
+
+                @if (IsEdit)
+                {
+                    <button class="btn btn-outline-danger ms-auto" @onclick="Delete">
+                        <i class="bi bi-trash"></i> ปิดการใช้งาน
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* Platform Accounts (edit mode only) *@
+    @if (IsEdit && detail != null && detail.PlatformAccounts.Any())
+    {
+        <div class="card shadow-sm mt-3">
+            <div class="card-header"><i class="bi bi-link-45deg"></i> Platform Accounts ที่ผูกไว้</div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Platform</th>
+                            <th>Account Key</th>
+                            <th>Account Name</th>
+                            <th>สถานะ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var pa in detail.PlatformAccounts)
+                        {
+                            <tr>
+                                <td><span class="badge bg-info">@pa.PlatformType</span></td>
+                                <td><code>@pa.PlatformAccountKey</code></td>
+                                <td>@(pa.PlatformAccountName ?? "-")</td>
+                                <td>
+                                    <span class="badge @(pa.VerifiedStatus == "Verified" ? "bg-success" : "bg-secondary")">
+                                        @pa.VerifiedStatus
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @* LINE Identities (edit mode only) *@
+    @if (IsEdit && detail != null && detail.Identities.Any())
+    {
+        <div class="card shadow-sm mt-3">
+            <div class="card-header"><i class="bi bi-chat-dots"></i> LINE</div>
+            <ul class="list-group list-group-flush small">
+                @foreach (var id in detail.Identities)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>@(id.DisplayName ?? id.ProviderType)</span>
+                        <span class="badge @(id.IsActive ? "bg-success" : "bg-secondary")">
+                            @(id.IsActive ? "Active" : "Inactive")
+                        </span>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+}
+@code {
+    [Parameter] public long? MemberId { get; set; }
+    private bool IsEdit => MemberId.HasValue;
+
+    private bool loading, saving;
+    private string? error;
+
+    // shared form fields
+    private MemberFormVm form = new();
+    // edit-only fields
+    private MemberEditVm editForm = new();
+    // loaded detail for edit
+    private MemberDetailVm? detail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsEdit) return;
+
+        loading = true;
+        try
+        {
+            var token = await TokenProvider.GetMdwTokenAsync() ?? "";
+            detail = await MemberSvc.GetMemberAsync(token, MemberId!.Value);
+            if (detail == null)
+            {
+                error = "ไม่พบสมาชิก";
+                return;
+            }
+
+            form = new MemberFormVm
+            {
+                DisplayName = detail.DisplayName,
+                Phone = detail.Phone,
+                Email = detail.Email
+            };
+
+            editForm = new MemberEditVm
+            {
+                DisplayName = detail.DisplayName,
+                Phone = detail.Phone,
+                Email = detail.Email,
+                Status = detail.Status
+            };
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { loading = false; }
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            saving = true;
+            var token = await TokenProvider.GetMdwTokenAsync() ?? "";
+
+            if (IsEdit)
+            {
+                editForm.DisplayName = form.DisplayName;
+                editForm.Phone = form.Phone;
+                editForm.Email = form.Email;
+
+                await MemberSvc.UpdateMemberAsync(token, MemberId!.Value, editForm);
+                await JS.InvokeVoidAsync("showToast", "บันทึกเรียบร้อย", "success");
+            }
+            else
+            {
+                var createDto = new MemberCreateVm
+                {
+                    DisplayName = form.DisplayName,
+                    Phone = form.Phone,
+                    Email = form.Email,
+                    LineDisplayName = lineDisplayName,
+                    LineUserId = lineUserId
+                };
+
+                var result = await MemberSvc.CreateMemberAsync(token, createDto);
+                await JS.InvokeVoidAsync("showToast", $"สร้างสมาชิกสำเร็จ: {result?.MemberCode}", "success");
+            }
+
+            Nav.NavigateTo("/MemberList");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", ex.Message, "error");
+        }
+        finally { saving = false; }
+    }
+
+    private async Task Delete()
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", "ต้องการปิดการใช้งานสมาชิกนี้?");
+        if (!ok) return;
+
+        try
+        {
+            var token = await TokenProvider.GetMdwTokenAsync() ?? "";
+            await MemberSvc.DeleteMemberAsync(token, MemberId!.Value);
+            await JS.InvokeVoidAsync("showToast", "ปิดการใช้งานสมาชิกแล้ว", "success");
+            Nav.NavigateTo("/MemberList");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("showToast", ex.Message, "error");
+        }
+    }
+
+    private void Cancel() => Nav.NavigateTo(IsEdit ? $"/MemberDetail/{MemberId}" : "/MemberList");
+
+    // Shared form for create/edit
+    private class MemberFormVm
+    {
+        public string? DisplayName { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+    }
+
+    // LINE fields (create only)
+    private string? lineDisplayName;
+    private string? lineUserId;
+}
