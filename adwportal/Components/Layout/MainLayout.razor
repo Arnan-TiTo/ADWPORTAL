@@ -203,6 +203,12 @@
                                     <span class="nav-label">Labels</span>
                                 </NavLink>
                             </li>
+                            <li>
+                                <NavLink href="/ReloadLabel" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="Reload Label">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                    <span class="nav-label">Reload Label</span>
+                                </NavLink>
+                            </li>
                         }
                         @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
                         {

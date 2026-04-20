@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -18,6 +18,8 @@ namespace adwportal.Dtos
         public string? Channel { get; set; }
         public long ShopId { get; set; }
         public string? SellerId { get; set; }
+        public string? BuyerUserId { get; set; }
+        public string? BuyerUsername { get; set; }
         public string? OrderStatus { get; set; }
 
         public DateTime CreatedTimeUtc { get; set; }

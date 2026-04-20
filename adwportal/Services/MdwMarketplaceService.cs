@@ -259,6 +259,7 @@ namespace adwportal.Services
             string? token,
             string? channel = null,
             long? shopId = null,
+            string? buyerUserId = null,
             string? q = null,
             string? status = null,
             DateTime? fromUtc = null,
@@ -274,6 +275,7 @@ namespace adwportal.Services
             var qb = new QueryBuilder();
             if (!string.IsNullOrWhiteSpace(channel)) qb.Add("channel", channel);
             if (shopId is > 0) qb.Add("shopId", shopId.Value.ToString());
+            if (!string.IsNullOrWhiteSpace(buyerUserId)) qb.Add("buyerUserId", buyerUserId);
             if (!string.IsNullOrWhiteSpace(q)) qb.Add("q", q);
             if (!string.IsNullOrWhiteSpace(status)) qb.Add("status", status);
             if (fromUtc.HasValue) qb.Add("fromUtc", fromUtc.Value.ToUniversalTime().ToString("o"));
@@ -355,6 +357,22 @@ namespace adwportal.Services
 
             return await res.Content.ReadFromJsonAsync<LabelListResponse>(JsonOpts, ct)
                    ?? new LabelListResponse();
+        }
+
+        public async Task<(bool ok, string body)> ReloadLabelAsync(
+            string? token,
+            string platform,
+            long shopId,
+            string orderRef,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+
+            var url = $"/api/market/orders/actions/reload-label?platform={Uri.EscapeDataString(platform)}&shopId={shopId}&orderRef={Uri.EscapeDataString(orderRef)}";
+
+            using var res = await http.PostAsync(url, null, ct);
+            var body = await res.Content.ReadAsStringAsync(ct);
+            return (res.IsSuccessStatusCode, body);
         }
 
         public async Task<(bool ok, byte[]? data, string? contentType, string? fileName, string? error)> DownloadLabelAsync(

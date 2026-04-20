@@ -80,6 +80,44 @@
 
             <!--  Status filters (ดึงจาก Misc) -->
             <div class="col-md-2">
+                <label class="form-label">BuyerUserId</label>
+                <div class="dropdown" id="buyerDropdown">
+                    <button class="btn btn-outline-secondary w-100 d-flex justify-content-between align-items-center"
+                            type="button"
+                            @onclick="ToggleBuyerDropdown">
+                        <span class="text-truncate" style="max-width:90%">
+                            @(string.IsNullOrWhiteSpace(filterBuyerUserId) ? "(All)" : filterBuyerUserId)
+                        </span>
+                        <span>▼</span>
+                    </button>
+                    @if (buyerDropdownOpen)
+                    {
+                        <div class="dropdown-menu show w-100 p-0" style="max-height:260px;overflow-y:auto;z-index:9999">
+                            <div class="p-2 sticky-top bg-white border-bottom">
+                                <input class="form-control form-control-sm"
+                                       placeholder="ค้นหา..."
+                                       @bind="buyerSearchText"
+                                       @bind:event="oninput"
+                                       @onclick:stopPropagation="true" />
+                            </div>
+                            <button class="dropdown-item text-muted" @onclick='() => SelectBuyerUserId("")'>(All)</button>
+                            @foreach (var uid in FilteredBuyerUserIdOptions)
+                            {
+                                <button class="dropdown-item @(uid == filterBuyerUserId ? "active" : "")"
+                                        @onclick="() => SelectBuyerUserId(uid)">
+                                    @uid
+                                </button>
+                            }
+                            @if (!FilteredBuyerUserIdOptions.Any())
+                            {
+                                <div class="dropdown-item text-muted small">ไม่พบข้อมูล</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="col-md-2">
                 <label class="form-label">Payment Status</label>
                 <select class="form-select" @bind="filterPaymentStatus">
                     <option value="">(All)</option>
@@ -239,8 +277,10 @@
                         <dd class="col-sm-8">@detail.Channel</dd>
                         <dt class="col-sm-4">ShopId</dt>
                         <dd class="col-sm-8">@detail.ShopId</dd>
-                        <dt class="col-sm-4">SellerId</dt>
-                        <dd class="col-sm-8">@detail.SellerId</dd>
+                        <dt class="col-sm-4">BuyerUserId</dt>
+                        <dd class="col-sm-8">@detail.BuyerUserId</dd>
+                        <dt class="col-sm-4">BuyerUsername</dt>
+                        <dd class="col-sm-8">@detail.BuyerUsername</dd>
                         <dt class="col-sm-4">Status</dt>
                         <dd class="col-sm-8">@detail.OrderStatus</dd>
                         <dt class="col-sm-4">Created (local)</dt>
@@ -307,6 +347,30 @@
     private List<string> fulfillmentStatusOptions = new();   // type = StatusFullFillment
     private List<string> orderStatusOptions = new();         // type = StatusOrder
 
+    // BuyerUserId dropdown state
+    private bool buyerDropdownOpen = false;
+    private string buyerSearchText = "";
+    private List<string> buyerUserIdAllOptions = new();
+
+    private IEnumerable<string> FilteredBuyerUserIdOptions =>
+        buyerUserIdAllOptions
+        .Where(x => string.IsNullOrWhiteSpace(buyerSearchText) ||
+                    x.Contains(buyerSearchText, StringComparison.OrdinalIgnoreCase))
+        .Take(80);
+
+    private void ToggleBuyerDropdown()
+    {
+        buyerDropdownOpen = !buyerDropdownOpen;
+        if (buyerDropdownOpen) buyerSearchText = "";
+    }
+
+    private void SelectBuyerUserId(string val)
+    {
+        filterBuyerUserId = val;
+        buyerDropdownOpen = false;
+        buyerSearchText = "";
+    }
+
     // ---------- Filters / paging ----------
     private bool loading;
     private string? error;
@@ -315,6 +379,7 @@
     private string? filterChannel = "";
     private string? filterShopId = "";
     private string? filterQ = "";
+    private string? filterBuyerUserId = "";
 
     // status filters (ผูกกับ misc types)
     private string? filterPaymentStatus = "";
@@ -539,6 +604,7 @@
               token: mdwToken,
               channel: string.IsNullOrWhiteSpace(filterChannel) ? null : filterChannel,
               shopId: shopId,
+              buyerUserId: string.IsNullOrWhiteSpace(filterBuyerUserId) ? null : filterBuyerUserId,
               q: string.IsNullOrWhiteSpace(filterQ) ? null : filterQ,
               status: statusParam,
               fromUtc: fromUtc,
@@ -562,9 +628,23 @@
                 if (!string.IsNullOrWhiteSpace(filterOrderStatus))
                     filtered = filtered.Where(x => string.Equals(x.OrderStatus ?? "", filterOrderStatus, StringComparison.OrdinalIgnoreCase));
 
+                // กรอง BuyerUserId แบบ client-side
+                if (!string.IsNullOrWhiteSpace(filterBuyerUserId))
+                    filtered = filtered.Where(x => string.Equals(x.BuyerUserId ?? "", filterBuyerUserId, StringComparison.OrdinalIgnoreCase));
+
+                var filteredList = filtered.ToList();
+
+                // อัปเดต buyerUserIdAllOptions จาก result ทั้งหมด (ก่อน filter)
+                buyerUserIdAllOptions = result.Items
+                    .Select(x => x.BuyerUserId ?? "")
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList();
+
                 data = new PagedResult<FeUnifiedOrderDtos>
                 {
-                    Items = filtered.ToList(),
+                    Items = filteredList,
                     TotalItems = result.TotalItems
                 };
             }
@@ -596,6 +676,7 @@
         filterChannel = "";
         filterShopId = "";
         filterQ = "";
+        filterBuyerUserId = "";
 
         filterPaymentStatus = "";
         filterFulfillmentStatus = "";

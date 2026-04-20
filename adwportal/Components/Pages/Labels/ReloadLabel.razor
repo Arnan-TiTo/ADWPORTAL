@@ -1,0 +1,222 @@
+@page "/ReloadLabel"
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using adwportal.Dtos
+@using adwportal.Services
+
+@inject AuthenticationStateProvider Auth
+@inject TokenCacheService TokenCache
+@inject MdwMarketplaceService MdwSvc
+@inject ShopService ShopSvc
+@inject ShopGroupService ShopGroupSvc
+
+<style>
+    .reload-filter .form-label { font-size: .78rem; margin-bottom: 2px; }
+    .reload-filter .form-select,
+    .reload-filter .form-control { font-size: .82rem; padding: .3rem .5rem; }
+</style>
+
+<h3 class="mb-3">
+    <i class="bi bi-arrow-clockwise me-2"></i>Reload Label
+</h3>
+
+<div class="card mb-3 reload-filter">
+    <div class="card-body py-3 px-4">
+        <div class="d-flex flex-wrap align-items-end gap-3">
+
+            <div style="min-width:130px;">
+                <label class="form-label fw-bold">Platform</label>
+                <select class="form-select" @bind="selectedPlatform" @bind:after="OnPlatformChanged">
+                    <option value="">(Select)</option>
+                    @foreach (var p in platformOptions)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </div>
+
+            <div style="min-width:220px; max-width:400px; flex:1;">
+                <label class="form-label fw-bold">Shop</label>
+                <select class="form-select" @bind="selectedShopId">
+                    <option value="">(Select Shop)</option>
+                    @foreach (var s in filteredShops)
+                    {
+                        <option value="@s.ShopId">@((s.Name ?? "(no name)") + " [" + s.ShopId + "]")</option>
+                    }
+                </select>
+            </div>
+
+            <div style="min-width:300px; flex:1; max-width:500px;">
+                <label class="form-label fw-bold">Order Ref</label>
+                <input type="text" class="form-control" placeholder="e.g. 250312ABCDEF01" @bind="orderRef" />
+            </div>
+
+            <div>
+                <button class="btn btn-primary" @onclick="ReloadAsync" disabled="@isLoading">
+                    @if (isLoading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    <i class="bi bi-arrow-clockwise me-1"></i>Reload Label
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger py-2">
+        <i class="bi bi-exclamation-triangle me-1"></i>@errorMessage
+    </div>
+}
+
+@if (resultJson is not null)
+{
+    <div class="card">
+        <div class="card-header py-2 px-3 @(resultOk ? "bg-success text-white" : "bg-danger text-white") d-flex align-items-center gap-2">
+            @if (resultOk)
+            {
+                <i class="bi bi-check-circle-fill"></i><span class="fw-bold">Success</span>
+            }
+            else
+            {
+                <i class="bi bi-x-circle-fill"></i><span class="fw-bold">Failed</span>
+            }
+        </div>
+        <div class="card-body p-3">
+            <pre style="font-size:.82rem; white-space:pre-wrap; word-break:break-all; margin:0;">@resultJson</pre>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading;
+    private string? errorMessage;
+    private string? mdwToken;
+
+    private string selectedPlatform = "";
+    private string selectedShopId = "";
+    private string orderRef = "";
+
+    private bool resultOk;
+    private string? resultJson;
+
+    private List<ShopDtos> allShops = new();
+    private List<string> platformOptions = new();
+
+    private IEnumerable<ShopDtos> filteredShops =>
+        string.IsNullOrWhiteSpace(selectedPlatform)
+            ? allShops
+            : allShops.Where(s => string.Equals(s.Platform, selectedPlatform, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            mdwToken = await TokenCache.GetMdwTokenAsync();
+            var idwToken = await TokenCache.GetIdwTokenAsync();
+
+            var authState = await Auth.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var userRole = user.FindFirst("ROLE")?.Value
+                        ?? user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                        ?? "";
+            var username = user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "";
+
+            if (userRole.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                var shops = await ShopSvc.GetShopsAsync(idwToken!);
+                allShops.AddRange((shops ?? new())
+                    .GroupBy(s => s.ShopId).Select(g => g.First())
+                    .OrderBy(s => s.Name));
+            }
+            else if (!string.IsNullOrWhiteSpace(username))
+            {
+                var effectiveShops = await ShopGroupSvc.GetUserEffectiveShopsByUsernameAsync(idwToken!, username);
+                allShops.AddRange(effectiveShops
+                    .GroupBy(es => es.ShopId).Select(g => g.First())
+                    .Select(es => new ShopDtos(
+                        Id: 0,
+                        ShopId: es.ShopId,
+                        PartnerId: es.PartnerId,
+                        Name: es.ShopName,
+                        Country: null,
+                        CreatedAt: DateTime.MinValue,
+                        Platform: es.Platform
+                    )).OrderBy(s => s.Name));
+            }
+
+            platformOptions = allShops
+                .Select(s => s.Platform ?? "")
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Init failed: {ex.Message}";
+        }
+    }
+
+    private void OnPlatformChanged()
+    {
+        selectedShopId = "";
+    }
+
+    private async Task ReloadAsync()
+    {
+        errorMessage = null;
+        resultJson = null;
+
+        if (string.IsNullOrWhiteSpace(selectedPlatform))
+        {
+            errorMessage = "กรุณาเลือก Platform";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(selectedShopId))
+        {
+            errorMessage = "กรุณาเลือก Shop";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(orderRef))
+        {
+            errorMessage = "กรุณาระบุ Order Ref";
+            return;
+        }
+        if (!long.TryParse(selectedShopId, out var shopId))
+        {
+            errorMessage = "ShopId ไม่ถูกต้อง";
+            return;
+        }
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var (ok, body) = await MdwSvc.ReloadLabelAsync(mdwToken, selectedPlatform, shopId, orderRef.Trim());
+            resultOk = ok;
+
+            // pretty-print JSON
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                resultJson = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+            }
+            catch
+            {
+                resultJson = body;
+            }
+        }
+        catch (Exception ex)
+        {
+            resultOk = false;
+            resultJson = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

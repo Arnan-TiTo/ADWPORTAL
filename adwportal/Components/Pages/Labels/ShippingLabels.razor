@@ -320,8 +320,14 @@
 
         try
         {
-            // Fetch all then client-side filter by orderRef
-            var result = await MdwSvc.ListLabelsAsync(mdwToken, pageSize: 200);
+            long? shopId = null;
+            if (!string.IsNullOrWhiteSpace(selectedShopId) && long.TryParse(selectedShopId, out var sid))
+                shopId = sid;
+
+            var channel = string.IsNullOrWhiteSpace(selectedPlatform) ? null : selectedPlatform;
+
+            // Fetch with shop/channel filter (no date filter) then client-side filter by orderRef
+            var result = await MdwSvc.ListLabelsAsync(mdwToken, shopId, channel, pageSize: 500);
             labels = result.Items
                 .Where(l => (l.OrderExternalNo ?? "").Contains(searchRef.Trim(), StringComparison.OrdinalIgnoreCase))
                 .ToList();
