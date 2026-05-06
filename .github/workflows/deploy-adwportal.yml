@@ -1,0 +1,69 @@
+name: Deploy ADW Portal
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "adwportal/**"
+      - ".github/workflows/deploy-adwportal.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: adwportal-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - linux
+      - adwportal
+
+    defaults:
+      run:
+        working-directory: adwportal
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore
+        run: dotnet restore ./adwportal.csproj -r linux-x64
+
+      - name: Publish
+        run: |
+          rm -rf /tmp/adwportal-publish
+          dotnet publish ./adwportal.csproj \
+            -c Release \
+            -r linux-x64 \
+            --self-contained false \
+            --no-restore \
+            -o /tmp/adwportal-publish
+          rm -rf \
+            /tmp/adwportal-publish/artifacts \
+            /tmp/adwportal-publish/deploy
+
+      - name: Deploy files
+        run: |
+          sudo systemctl stop adwportal || true
+          sudo cp ./deploy/adwportal.service /etc/systemd/system/adwportal.service
+          sudo mkdir -p /var/www/adwportal
+          sudo rsync -a --delete /tmp/adwportal-publish/ /var/www/adwportal/
+          sudo chown -R www-data:www-data /var/www/adwportal
+          sudo systemctl daemon-reload
+          sudo systemctl enable adwportal
+          sudo systemctl restart adwportal
+
+      - name: Verify
+        run: |
+          sudo systemctl is-active adwportal
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 5 http://127.0.0.1:5067/ > /tmp/adwportal-home.html; then
+              exit 0
+            fi
+            sleep 2
+          done
+          sudo systemctl status adwportal --no-pager
+          sudo journalctl -u adwportal -n 80 --no-pager
+          exit 1

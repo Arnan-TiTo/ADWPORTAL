@@ -1,0 +1,23 @@
+[Unit]
+Description=ADW Portal
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/adwportal
+ExecStart=/usr/bin/dotnet /var/www/adwportal/adwportal.dll
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+SyslogIdentifier=adwportal
+User=www-data
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5067
+Environment=ApiSettings__ApiBaseUrl=https://appapi.vibeandchic.com/
+Environment=ApiSettings__IdwApiBaseUrl=https://indywe.vibeandchic.com/
+Environment=ApiSettings__MdwApiBaseUrl=https://madewe.vibeandchic.com/
+Environment=OAuth__CallbackBaseUrl=https://adwportal.vibeandchic.com
+Environment=ImageRootPath=/var/www/adwportal/wwwroot/images
+
+[Install]
+WantedBy=multi-user.target
