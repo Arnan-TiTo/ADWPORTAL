@@ -13,7 +13,7 @@ User=www-data
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
-Environment=ApiSettings__ApiBaseUrl=https://appapi.vibeandchic.com/
+Environment=ApiSettings__ApiBaseUrl=http://127.0.0.1:5001/
 Environment=ApiSettings__IdwApiBaseUrl=https://indywe.vibeandchic.com/
 Environment=ApiSettings__MdwApiBaseUrl=https://madewe.vibeandchic.com/
 Environment=OAuth__CallbackBaseUrl=https://adwportal.vibeandchic.com
