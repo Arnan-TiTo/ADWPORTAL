@@ -20,6 +20,9 @@ jobs:
       - linux
       - adwportal
 
+    env:
+      DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
+
     defaults:
       run:
         working-directory: adwportal
