@@ -16,11 +16,12 @@ public class MemberAdminService
     }
 
     // ── Members ──
-    public async Task<List<MemberSummaryVm>> SearchMembersAsync(string token, string? keyword = null, int page = 1, CancellationToken ct = default)
+    public async Task<List<MemberSummaryVm>> SearchMembersAsync(string token, string? keyword = null, int? companysId = null, int page = 1, CancellationToken ct = default)
     {
         using var http = Create(token);
         var url = $"api/admin/member/search?page={page}";
         if (!string.IsNullOrWhiteSpace(keyword)) url += $"&keyword={Uri.EscapeDataString(keyword)}";
+        if (companysId.HasValue) url += $"&companysId={companysId.Value}";
         return await http.GetFromJsonAsync<List<MemberSummaryVm>>(url, ct) ?? new();
     }
 

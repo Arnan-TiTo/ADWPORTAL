@@ -1,0 +1,1021 @@
+@page "/LoadLabel"
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Microsoft.Extensions.Options
+@using Microsoft.AspNetCore.Components.Authorization
+@using adwportal.Dtos
+@using adwportal.Models
+@using adwportal.Services
+
+@inject AuthenticationStateProvider Auth
+@inject TokenCacheService TokenCache
+@inject MdwMarketplaceService MdwSvc
+@inject ShopService ShopSvc
+@inject ShopGroupService ShopGroupSvc
+@inject IWebHostEnvironment Env
+@inject IOptions<ApiSettings> ApiOptions
+
+<style>
+    .load-filter .form-label { font-size: .78rem; margin-bottom: 2px; }
+    .load-filter .form-select,
+    .load-filter .form-control { font-size: .82rem; padding: .3rem .5rem; }
+    .load-table th { font-size: .76rem; text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; }
+    .load-table td { font-size: .84rem; vertical-align: middle; }
+    .load-detail-label { color: #6c757d; font-size: .74rem; font-weight: 700; letter-spacing: .25px; text-transform: uppercase; }
+    .load-detail-value { font-size: .9rem; word-break: break-word; }
+    .load-json { font-size:.78rem; white-space:pre-wrap; word-break:break-word; margin:0; max-height:260px; overflow:auto; }
+    .load-mode .form-check-label { font-size: .86rem; }
+</style>
+
+<h3 class="mb-3">
+    <i class="bi bi-cloud-arrow-down me-2"></i>Load Label
+</h3>
+
+<div class="card mb-3 load-filter">
+    <div class="card-body py-3 px-4">
+        <div class="d-flex flex-wrap align-items-end gap-3">
+
+            <div class="load-mode" style="min-width:190px;">
+                <label class="form-label fw-bold d-block">Mode</label>
+                <div class="d-flex gap-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="loadLabelMode" id="loadModeProduction"
+                               checked="@(loadMode == LabelLoadMode.Production)"
+                               @onchange="() => SetLoadMode(LabelLoadMode.Production)" />
+                        <label class="form-check-label" for="loadModeProduction">production</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="loadLabelMode" id="loadModeDev"
+                               checked="@(loadMode == LabelLoadMode.Dev)"
+                               @onchange="() => SetLoadMode(LabelLoadMode.Dev)" />
+                        <label class="form-check-label" for="loadModeDev">dev</label>
+                    </div>
+                </div>
+            </div>
+
+            <div style="min-width:130px;">
+                <label class="form-label fw-bold">Platform</label>
+                <select class="form-select" @bind="selectedPlatform" @bind:after="OnPlatformChanged">
+                    <option value="">(Select)</option>
+                    @foreach (var p in platformOptions)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </div>
+
+            <div style="min-width:220px; max-width:400px; flex:1;">
+                <label class="form-label fw-bold">Shop</label>
+                <select class="form-select" @bind="selectedShopId">
+                    <option value="">(Select Shop)</option>
+                    @foreach (var s in filteredShops)
+                    {
+                        <option value="@s.ShopId">@((s.Name ?? "(no name)") + " [" + s.ShopId + "]")</option>
+                    }
+                </select>
+            </div>
+
+            <div style="min-width:300px; flex:1; max-width:500px;">
+                <label class="form-label fw-bold">Order Ref / Order SN</label>
+                <input type="text" class="form-control" placeholder="e.g. label order ref or Shopee order_sn" @bind="orderRef" />
+            </div>
+
+            <div>
+                <button class="btn btn-primary" @onclick="LoadAsync" disabled="@isLoading">
+                    @if (isLoading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    <i class="bi bi-cloud-arrow-down me-1"></i>Load Label
+                </button>
+            </div>
+
+        </div>
+        @if (loadMode == LabelLoadMode.Dev)
+        {
+            <div class="form-text mt-2">
+                Dev mode posts a sample Shopee shipping document response to the ingest endpoint. Production mode uses the original GET endpoint without a request body.
+            </div>
+        }
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger py-2">
+        <i class="bi bi-exclamation-triangle me-1"></i>@errorMessage
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(requestSummary))
+{
+    <div class="alert alert-info py-2">
+        <i class="bi bi-info-circle me-1"></i>@requestSummary
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(lastShippingDocCurl))
+{
+    <div class="card mb-3">
+        <div class="card-header bg-white py-2 px-3">
+            <span class="fw-bold" style="font-size:.9rem;">
+                <i class="bi bi-terminal me-1"></i>cURL for cmd
+            </span>
+        </div>
+        <div class="card-body p-3">
+            <pre style="font-size:.82rem; white-space:pre-wrap; word-break:break-all; margin:0;">@lastShippingDocCurl</pre>
+        </div>
+    </div>
+}
+
+@if (returnedApiDetails.Count > 0)
+{
+    <div class="card mb-3">
+        <div class="card-header bg-white py-2 px-3">
+            <span class="fw-bold" style="font-size:.9rem;">
+                <i class="bi bi-link-45deg me-1"></i>API returned by response
+            </span>
+        </div>
+        <div class="card-body p-3">
+            @foreach (var detail in returnedApiDetails)
+            {
+                <div class="mb-2">
+                    <div class="load-detail-label">@detail.Label</div>
+                    <pre style="font-size:.82rem; white-space:pre-wrap; word-break:break-all; margin:0;">@detail.Value</pre>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (resultOk && resultJson is not null && shippingDocInfos.Count == 0)
+{
+    <div class="alert alert-info py-2">
+        <i class="bi bi-info-circle me-1"></i>Request succeeded, but no shipping document data was returned.
+    </div>
+}
+
+@if (resultOk && shippingDocInfos.Count > 0)
+{
+    <div class="card mb-3">
+        <div class="card-header bg-white d-flex align-items-center justify-content-between py-2 px-3">
+            <span class="fw-bold" style="font-size:.9rem;">
+                <i class="bi bi-file-earmark-text me-1"></i>Shipping Document Data (@shippingDocInfos.Count)
+            </span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 load-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Order SN</th>
+                            <th>Package</th>
+                            <th>Tracking</th>
+                            <th>Logistics</th>
+                            <th>Recipient</th>
+                            <th>Phone</th>
+                            <th>Status</th>
+                            <th>Fetched</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ var rowNo = 0; }
+                        @foreach (var info in shippingDocInfos)
+                        {
+                            rowNo++;
+                            <tr>
+                                <td class="text-muted">@rowNo</td>
+                                <td><code>@Dash(info.OrderSn)</code></td>
+                                <td>@Dash(info.PackageNumber)</td>
+                                <td><code>@Dash(info.TrackingNumber)</code></td>
+                                <td>@Dash(info.LogisticsChannelName)</td>
+                                <td>@Dash(info.RecipientName)</td>
+                                <td>@Dash(info.RecipientPhone)</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(info.FailError) || !string.IsNullOrWhiteSpace(info.FailMessage))
+                                    {
+                                        <span class="badge bg-danger">Failed</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">@Dash(info.Status, "OK")</span>
+                                    }
+                                </td>
+                                <td>@FormatDate(info.FetchedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    @foreach (var info in shippingDocInfos)
+    {
+        <div class="card mb-3">
+            <div class="card-header bg-white py-2 px-3">
+                <div class="fw-bold">
+                    <i class="bi bi-box-seam me-1"></i>@Dash(info.OrderSn)
+                    <span class="text-muted fw-normal">Shop @info.ShopId</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="load-detail-label">Platform</div>
+                        <div class="load-detail-value">@Dash(info.Platform)</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="load-detail-label">Document Type</div>
+                        <div class="load-detail-value">@Dash(info.DocumentType)</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="load-detail-label">Package Number</div>
+                        <div class="load-detail-value">@Dash(info.PackageNumber)</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="load-detail-label">Product Count</div>
+                        <div class="load-detail-value">@Dash(info.ProductCount?.ToString())</div>
+                    </div>
+
+                    <div class="col-12"><hr class="my-1" /></div>
+
+                    <div class="col-md-4">
+                        <div class="load-detail-label">Tracking Number</div>
+                        <div class="load-detail-value"><code>@Dash(info.TrackingNumber)</code></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="load-detail-label">Logistics Channel</div>
+                        <div class="load-detail-value">@Dash(info.LogisticsChannelName)</div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="load-detail-label">Weight</div>
+                        <div class="load-detail-value">@FormatWeight(info.ParcelChargeableWeightGram)</div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="load-detail-label">COD Amount</div>
+                        <div class="load-detail-value">@FormatAmount(info.CodAmount)</div>
+                    </div>
+
+                    <div class="col-12"><hr class="my-1" /></div>
+
+                    <div class="col-md-6">
+                        <h6 class="mb-2">Sender</h6>
+                        <div class="load-detail-label">Name / Phone</div>
+                        <div class="load-detail-value">@Dash(info.SenderName) / @Dash(info.SenderPhone)</div>
+                        <div class="load-detail-label mt-2">Address</div>
+                        <div class="load-detail-value">@Dash(info.SenderFullAddress)</div>
+                        <div class="load-detail-label mt-2">Zipcode</div>
+                        <div class="load-detail-value">@Dash(info.SenderZipcode)</div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-2">Recipient</h6>
+                        <div class="load-detail-label">Name / Phone</div>
+                        <div class="load-detail-value">@Dash(info.RecipientName) / @Dash(info.RecipientPhone)</div>
+                        <div class="load-detail-label mt-2">Address</div>
+                        <div class="load-detail-value">@Dash(info.RecipientFullAddress)</div>
+                        <div class="load-detail-label mt-2">Area</div>
+                        <div class="load-detail-value">
+                            @Dash(JoinNonEmpty(info.RecipientTown, info.RecipientDistrict, info.RecipientCity, info.RecipientState, info.RecipientRegion, info.RecipientZipcode))
+                        </div>
+                    </div>
+
+                    <div class="col-12"><hr class="my-1" /></div>
+
+                    <div class="col-md-3">
+                        <div class="load-detail-label">AS Sort Code</div>
+                        <div class="load-detail-value">@Dash(info.AsSortCode)</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="load-detail-label">CP Sort Code</div>
+                        <div class="load-detail-value">@Dash(info.CpSortCode)</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="load-detail-label">FM Sort Code</div>
+                        <div class="load-detail-value">@Dash(info.FmSortCode)</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="load-detail-label">QR Code Data</div>
+                        <div class="load-detail-value"><code>@Dash(info.QrCodeData)</code></div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(info.BuyerRemark) ||
+                         !string.IsNullOrWhiteSpace(info.FailError) ||
+                         !string.IsNullOrWhiteSpace(info.FailMessage) ||
+                         !string.IsNullOrWhiteSpace(info.PurchaseOrderNumber) ||
+                         !string.IsNullOrWhiteSpace(info.PurchaseOrderPrefix))
+                    {
+                        <div class="col-12"><hr class="my-1" /></div>
+                        <div class="col-md-3">
+                            <div class="load-detail-label">PO Prefix</div>
+                            <div class="load-detail-value">@Dash(info.PurchaseOrderPrefix)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="load-detail-label">PO Number</div>
+                            <div class="load-detail-value">@Dash(info.PurchaseOrderNumber)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="load-detail-label">Fail Error</div>
+                            <div class="load-detail-value">@Dash(info.FailError)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="load-detail-label">Fail Message</div>
+                            <div class="load-detail-value">@Dash(info.FailMessage)</div>
+                        </div>
+                        <div class="col-12">
+                            <div class="load-detail-label">Buyer Remark</div>
+                            <div class="load-detail-value">@Dash(info.BuyerRemark)</div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(info.ItemListJson) ||
+                         !string.IsNullOrWhiteSpace(info.RecipientAddrDecodedJson) ||
+                         !string.IsNullOrWhiteSpace(info.SenderAddrDecodedJson))
+                    {
+                        <div class="col-12"><hr class="my-1" /></div>
+                        @if (!string.IsNullOrWhiteSpace(info.ItemListJson))
+                        {
+                            <div class="col-md-4">
+                                <div class="load-detail-label">Item List JSON</div>
+                                <pre class="load-json bg-light border rounded p-2">@PrettyJsonOrText(info.ItemListJson)</pre>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(info.RecipientAddrDecodedJson))
+                        {
+                            <div class="col-md-4">
+                                <div class="load-detail-label">Recipient Decoded JSON</div>
+                                <pre class="load-json bg-light border rounded p-2">@PrettyJsonOrText(info.RecipientAddrDecodedJson)</pre>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(info.SenderAddrDecodedJson))
+                        {
+                            <div class="col-md-4">
+                                <div class="load-detail-label">Sender Decoded JSON</div>
+                                <pre class="load-json bg-light border rounded p-2">@PrettyJsonOrText(info.SenderAddrDecodedJson)</pre>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@if (resultJson is not null)
+{
+    <div class="card">
+        <div class="card-header py-2 px-3 @(resultOk ? "bg-success text-white" : "bg-danger text-white") d-flex align-items-center gap-2">
+            @if (resultOk)
+            {
+                <i class="bi bi-check-circle-fill"></i><span class="fw-bold">Success</span>
+            }
+            else
+            {
+                <i class="bi bi-x-circle-fill"></i><span class="fw-bold">Failed</span>
+            }
+        </div>
+        <div class="card-body p-3">
+            <pre style="font-size:.82rem; white-space:pre-wrap; word-break:break-all; margin:0;">@resultJson</pre>
+        </div>
+    </div>
+}
+
+@code {
+    private enum LabelLoadMode { Production, Dev }
+
+    private bool isLoading;
+    private string? errorMessage;
+    private string? mdwToken;
+
+    private LabelLoadMode loadMode = LabelLoadMode.Production;
+    private string selectedPlatform = "";
+    private string selectedShopId = "";
+    private string orderRef = "";
+
+    private bool resultOk;
+    private string? resultJson;
+    private string? requestSummary;
+    private string? lastShippingDocCurl;
+    private List<ReturnedApiDetail> returnedApiDetails = new();
+    private List<ShippingDocDataInfoDtos> shippingDocInfos = new();
+
+    private List<ShopDtos> allShops = new();
+    private List<string> platformOptions = new();
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        WriteIndented = true
+    };
+
+    private IEnumerable<ShopDtos> filteredShops =>
+        string.IsNullOrWhiteSpace(selectedPlatform)
+            ? allShops
+            : allShops.Where(s => string.Equals(s.Platform, selectedPlatform, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            mdwToken = await TokenCache.GetMdwTokenAsync();
+            var idwToken = await TokenCache.GetIdwTokenAsync();
+
+            var authState = await Auth.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var userRole = user.FindFirst("ROLE")?.Value
+                        ?? user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                        ?? "";
+            var username = user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "";
+
+            if (userRole.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                var shops = await ShopSvc.GetShopsAsync(idwToken!);
+                allShops.AddRange((shops ?? new())
+                    .Where(s => IsShopeePlatform(s.Platform))
+                    .GroupBy(s => s.ShopId).Select(g => g.First())
+                    .OrderBy(s => s.Name));
+            }
+            else if (!string.IsNullOrWhiteSpace(username))
+            {
+                var effectiveShops = await ShopGroupSvc.GetUserEffectiveShopsByUsernameAsync(idwToken!, username);
+                allShops.AddRange(effectiveShops
+                    .Where(es => IsShopeePlatform(es.Platform))
+                    .GroupBy(es => es.ShopId).Select(g => g.First())
+                    .Select(es => new ShopDtos(
+                        Id: 0,
+                        ShopId: es.ShopId,
+                        PartnerId: es.PartnerId,
+                        Name: es.ShopName,
+                        Country: null,
+                        CreatedAt: DateTime.MinValue,
+                        Platform: es.Platform
+                    )).OrderBy(s => s.Name));
+            }
+
+            platformOptions = allShops
+                .Select(s => s.Platform ?? "")
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p)
+                .ToList();
+
+            if (platformOptions.Count == 1)
+            {
+                selectedPlatform = platformOptions[0];
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Init failed: {ex.Message}";
+        }
+    }
+
+    private void OnPlatformChanged()
+    {
+        selectedShopId = "";
+    }
+
+    private async Task LoadAsync()
+    {
+        errorMessage = null;
+        requestSummary = null;
+        lastShippingDocCurl = null;
+        resultJson = null;
+        returnedApiDetails.Clear();
+        shippingDocInfos.Clear();
+
+        if (platformOptions.Count > 0 && string.IsNullOrWhiteSpace(selectedPlatform))
+        {
+            errorMessage = "Please select Platform.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(selectedShopId))
+        {
+            errorMessage = "Please select Shop.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(orderRef))
+        {
+            errorMessage = "Please enter Order Ref.";
+            return;
+        }
+        if (!long.TryParse(selectedShopId, out var shopId))
+        {
+            errorMessage = "Invalid ShopId.";
+            return;
+        }
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var orderInput = orderRef.Trim();
+            var orderSnForParsing = orderInput;
+            string body;
+
+            if (loadMode == LabelLoadMode.Dev)
+            {
+                var devIngestBody = await LoadDevIngestBodyAsync();
+                var ingestResult = await MdwSvc.IngestShopeeShippingDocDataInfoAsync(mdwToken, shopId, orderInput, devIngestBody);
+                resultOk = ingestResult.ok;
+                body = ingestResult.body;
+                requestSummary = $"Dev mode posted the sample Shopee payload using order_sn '{orderInput}'.";
+            }
+            else
+            {
+                var loadResult = await LoadProductionShopeeShippingDocInfoAsync(shopId, orderInput);
+                resultOk = loadResult.ok;
+                body = loadResult.body;
+                orderSnForParsing = loadResult.orderSnUsed ?? orderInput;
+                requestSummary = loadResult.summary;
+            }
+
+            shippingDocInfos = resultOk ? ParseShippingDocDataInfos(body, shopId, orderSnForParsing) : new();
+            returnedApiDetails = ExtractReturnedApiDetails(body);
+
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                resultJson = JsonSerializer.Serialize(doc.RootElement, JsonOptions);
+            }
+            catch
+            {
+                resultJson = body;
+            }
+        }
+        catch (Exception ex)
+        {
+            resultOk = false;
+            resultJson = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static bool IsShopeePlatform(string? platform) =>
+        !string.IsNullOrWhiteSpace(platform) &&
+        platform.Contains("shopee", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<(bool ok, string body, string? orderSnUsed, string? summary)> LoadProductionShopeeShippingDocInfoAsync(long shopId, string orderInput)
+    {
+        var resolvedOrderSn = await ResolveShopeeOrderSnAsync(shopId, orderInput);
+
+        if (!string.IsNullOrWhiteSpace(resolvedOrderSn) &&
+            !string.Equals(resolvedOrderSn, orderInput, StringComparison.OrdinalIgnoreCase))
+        {
+            lastShippingDocCurl = BuildShippingDocDataInfoCurl(shopId, resolvedOrderSn);
+            var resolvedResult = await MdwSvc.GetShopeeShippingDocDataInfoAsync(mdwToken, shopId, resolvedOrderSn);
+            if (resolvedResult.ok || !IsLikelyShopeeNotFound(resolvedResult.body))
+            {
+                var summary = resolvedResult.ok
+                    ? $"Resolved Shopee order_sn '{resolvedOrderSn}' from the entered ref '{orderInput}'."
+                    : $"Resolved Shopee order_sn '{resolvedOrderSn}' from the entered ref '{orderInput}', but Shopee still returned an error.";
+                return (resolvedResult.ok, resolvedResult.body, resolvedOrderSn, summary);
+            }
+
+            lastShippingDocCurl = BuildShippingDocDataInfoCurl(shopId, orderInput);
+            var directResult = await MdwSvc.GetShopeeShippingDocDataInfoAsync(mdwToken, shopId, orderInput);
+            var fallbackSummary = directResult.ok
+                ? $"Resolved Shopee order_sn '{resolvedOrderSn}' from '{orderInput}', then fell back to the original input and it succeeded."
+                : $"Resolved Shopee order_sn '{resolvedOrderSn}' from '{orderInput}', then retried the original input after Shopee returned not found.";
+            return (directResult.ok, directResult.body, directResult.ok ? orderInput : resolvedOrderSn, fallbackSummary);
+        }
+
+        lastShippingDocCurl = BuildShippingDocDataInfoCurl(shopId, orderInput);
+        var directOnlyResult = await MdwSvc.GetShopeeShippingDocDataInfoAsync(mdwToken, shopId, orderInput);
+        var directOnlySummary = !string.IsNullOrWhiteSpace(resolvedOrderSn)
+            ? $"Confirmed Shopee order_sn '{orderInput}' from the order detail response."
+            : $"Used '{orderInput}' directly as Shopee order_sn.";
+
+        if (!directOnlyResult.ok && IsLikelyShopeeNotFound(directOnlyResult.body))
+        {
+            directOnlySummary += " Shopee returned not found; this usually means the value is a label order ref, tracking number, or package number instead of order_sn.";
+        }
+
+        return (directOnlyResult.ok, directOnlyResult.body, orderInput, directOnlySummary);
+    }
+
+    private string BuildShippingDocDataInfoCurl(long shopId, string orderSn)
+    {
+        var baseUri = new Uri(ApiOptions.Value.MdwApiBaseUrl);
+        var pathAndQuery =
+            $"api/market/logistics/shopee/shipping-doc-data-info?shopId={shopId}&orderSn={Uri.EscapeDataString(orderSn)}";
+        var fullUrl = new Uri(baseUri, pathAndQuery).ToString();
+        var token = NormalizeBearerToken(mdwToken);
+
+        return string.IsNullOrWhiteSpace(token)
+            ? $"curl -X GET \"{EscapeCmdCurlValue(fullUrl)}\" -H \"Accept: application/json\""
+            : $"curl -X GET \"{EscapeCmdCurlValue(fullUrl)}\" -H \"Accept: application/json\" -H \"Authorization: Bearer {EscapeCmdCurlValue(token)}\"";
+    }
+
+    private static string NormalizeBearerToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return "";
+        }
+
+        var trimmed = token.Trim();
+        return trimmed.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? trimmed["Bearer ".Length..].Trim()
+            : trimmed;
+    }
+
+    private static string EscapeCmdCurlValue(string value) =>
+        value.Replace("\"", "\\\"");
+
+    private sealed record ReturnedApiDetail(string Label, string Value);
+
+    private static List<ReturnedApiDetail> ExtractReturnedApiDetails(string? body)
+    {
+        var details = new List<ReturnedApiDetail>();
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return details;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectReturnedApiDetails(doc.RootElement, "$", details, seen, 0);
+        }
+        catch
+        {
+            return details;
+        }
+
+        return details;
+    }
+
+    private static void CollectReturnedApiDetails(
+        JsonElement element,
+        string path,
+        List<ReturnedApiDetail> details,
+        HashSet<string> seen,
+        int depth)
+    {
+        if (depth > 8 || details.Count >= 10)
+        {
+            return;
+        }
+
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in element.EnumerateObject())
+            {
+                var propPath = $"{path}.{prop.Name}";
+                if (prop.Value.ValueKind == JsonValueKind.String)
+                {
+                    var value = prop.Value.GetString();
+                    if (IsReturnedApiDetail(prop.Name, value) && !string.IsNullOrWhiteSpace(value) && seen.Add(value))
+                    {
+                        details.Add(new ReturnedApiDetail(propPath, value));
+                    }
+                }
+
+                CollectReturnedApiDetails(prop.Value, propPath, details, seen, depth + 1);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            var index = 0;
+            foreach (var item in element.EnumerateArray())
+            {
+                CollectReturnedApiDetails(item, $"{path}[{index}]", details, seen, depth + 1);
+                index++;
+            }
+        }
+    }
+
+    private static bool IsReturnedApiDetail(string propertyName, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var normalizedName = propertyName
+            .Replace("_", "", StringComparison.Ordinal)
+            .Replace("-", "", StringComparison.Ordinal)
+            .ToLowerInvariant();
+
+        var looksLikeApiField =
+            normalizedName.Contains("api", StringComparison.Ordinal) ||
+            normalizedName.Contains("url", StringComparison.Ordinal) ||
+            normalizedName.Contains("endpoint", StringComparison.Ordinal) ||
+            normalizedName.Contains("curl", StringComparison.Ordinal);
+
+        if (!looksLikeApiField)
+        {
+            return false;
+        }
+
+        return value.Contains("http://", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("https://", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("/api/", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("curl ", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<string?> ResolveShopeeOrderSnAsync(long shopId, string orderRefInput)
+    {
+        var detailResult = await MdwSvc.GetOrderDetailAsync(selectedPlatform, shopId.ToString(), orderRefInput, mdwToken);
+        if (!detailResult.ok || string.IsNullOrWhiteSpace(detailResult.body))
+        {
+            return null;
+        }
+
+        return TryExtractShopeeOrderSn(detailResult.body);
+    }
+
+    private static bool IsLikelyShopeeNotFound(string? body) =>
+        !string.IsNullOrWhiteSpace(body) &&
+        body.Contains("404", StringComparison.OrdinalIgnoreCase) &&
+        body.Contains("not found", StringComparison.OrdinalIgnoreCase);
+
+    private static string? TryExtractShopeeOrderSn(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            return TryExtractShopeeOrderSn(doc.RootElement, 0);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? TryExtractShopeeOrderSn(JsonElement element, int depth)
+    {
+        if (depth > 8)
+        {
+            return null;
+        }
+
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in element.EnumerateObject())
+            {
+                if (IsOrderSnProperty(prop.Name))
+                {
+                    var value = GetStringValue(prop.Value);
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        return value;
+                    }
+                }
+            }
+
+            foreach (var prop in element.EnumerateObject())
+            {
+                var nested = TryExtractShopeeOrderSn(prop.Value, depth + 1);
+                if (!string.IsNullOrWhiteSpace(nested))
+                {
+                    return nested;
+                }
+            }
+
+            return null;
+        }
+
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                var nested = TryExtractShopeeOrderSn(item, depth + 1);
+                if (!string.IsNullOrWhiteSpace(nested))
+                {
+                    return nested;
+                }
+            }
+
+            return null;
+        }
+
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var raw = element.GetString();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            var trimmed = raw.Trim();
+            if (!trimmed.StartsWith("{", StringComparison.Ordinal) && !trimmed.StartsWith("[", StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                return TryExtractShopeeOrderSn(doc.RootElement, depth + 1);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsOrderSnProperty(string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(propertyName))
+        {
+            return false;
+        }
+
+        var normalized = propertyName.Replace("_", "", StringComparison.Ordinal).Trim();
+        return normalized.Equals("ordersn", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetStringValue(JsonElement value) =>
+        value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.ToString(),
+            _ => null
+        };
+
+    private void SetLoadMode(LabelLoadMode mode)
+    {
+        loadMode = mode;
+        resultJson = null;
+        shippingDocInfos.Clear();
+        errorMessage = null;
+        requestSummary = null;
+    }
+
+    private static List<ShippingDocDataInfoDtos> ParseShippingDocDataInfos(string body, long fallbackShopId, string fallbackOrderSn)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return new();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                return JsonSerializer.Deserialize<List<ShippingDocDataInfoDtos>>(root.GetRawText(), JsonOptions) ?? new();
+            }
+
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var propName in new[] { "items", "Items", "data", "Data" })
+                {
+                    if (root.TryGetProperty(propName, out var arrayEl) && arrayEl.ValueKind == JsonValueKind.Array)
+                    {
+                        return JsonSerializer.Deserialize<List<ShippingDocDataInfoDtos>>(arrayEl.GetRawText(), JsonOptions) ?? new();
+                    }
+                }
+
+                if (TryParseShopeeResponse(root, fallbackShopId, fallbackOrderSn, out var shopeeInfo))
+                {
+                    return new List<ShippingDocDataInfoDtos> { shopeeInfo };
+                }
+
+                var item = JsonSerializer.Deserialize<ShippingDocDataInfoDtos>(root.GetRawText(), JsonOptions);
+                return item is null || item.Id == 0 && item.ShopId == 0 && string.IsNullOrWhiteSpace(item.OrderSn)
+                    ? new()
+                    : new List<ShippingDocDataInfoDtos> { item };
+            }
+        }
+        catch
+        {
+            return new();
+        }
+
+        return new();
+    }
+
+    private static bool TryParseShopeeResponse(JsonElement root, long fallbackShopId, string fallbackOrderSn, out ShippingDocDataInfoDtos info)
+    {
+        info = new();
+
+        if (!root.TryGetProperty("response", out var response) || response.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        if (!response.TryGetProperty("shipping_document_info", out var docInfo) || docInfo.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        JsonElement? recipientSortCode = docInfo.TryGetProperty("recipient_sort_code", out var sortEl) && sortEl.ValueKind == JsonValueKind.Object
+            ? sortEl
+            : null;
+        JsonElement? thirdPartyLogistics = docInfo.TryGetProperty("third_party_logistic_info", out var thirdPartyEl) && thirdPartyEl.ValueKind == JsonValueKind.Object
+            ? thirdPartyEl
+            : null;
+
+        info = new ShippingDocDataInfoDtos
+        {
+            Platform = "Shopee",
+            ShopId = fallbackShopId,
+            OrderSn = fallbackOrderSn,
+            TrackingNumber = GetJsonString(docInfo, "tracking_number"),
+            LogisticsChannelName = GetJsonString(docInfo, "shipping_carrier"),
+            CodAmount = GetJsonDecimal(docInfo, "cod_amount"),
+            ParcelChargeableWeightGram = GetJsonLong(docInfo, "order_weight"),
+            AsSortCode = recipientSortCode.HasValue ? GetJsonString(recipientSortCode.Value, "first_recipient_sort_code") : null,
+            CpSortCode = recipientSortCode.HasValue ? GetJsonString(recipientSortCode.Value, "second_recipient_sort_code") : null,
+            FmSortCode = recipientSortCode.HasValue ? GetJsonString(recipientSortCode.Value, "third_recipient_sort_code") : null,
+            QrCodeData = thirdPartyLogistics.HasValue ? GetJsonString(thirdPartyLogistics.Value, "qrcode") : null,
+            RecipientAddrRawJson = response.TryGetProperty("recipient_address_info", out var recipientAddress) ? recipientAddress.GetRawText() : null,
+            SenderAddrRawJson = response.TryGetProperty("sender_address_info", out var senderAddress) ? senderAddress.GetRawText() : null
+        };
+
+        return true;
+    }
+
+    private static string? GetJsonString(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+    }
+
+    private static long? GetJsonLong(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var longValue)) return longValue;
+        if (value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out longValue)) return longValue;
+        return null;
+    }
+
+    private static decimal? GetJsonDecimal(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var decimalValue)) return decimalValue;
+        if (value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out decimalValue)) return decimalValue;
+        return null;
+    }
+
+    private async Task<string> LoadDevIngestBodyAsync()
+    {
+        var path = Path.Combine(Env.ContentRootPath, "DevPayloads", "shopee-shipping-doc-data-info.json");
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException($"Dev ingest payload not found: {path}");
+        }
+
+        return await File.ReadAllTextAsync(path);
+    }
+
+    private static string Dash(string? value, string fallback = "-") =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value;
+
+    private static string JoinNonEmpty(params string?[] values) =>
+        string.Join(", ", values.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()));
+
+    private static string FormatDate(DateTime? value) =>
+        value.HasValue ? value.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "-";
+
+    private static string FormatWeight(long? grams)
+    {
+        if (!grams.HasValue) return "-";
+        if (grams.Value < 1000) return $"{grams.Value:N0} g";
+        return $"{grams.Value / 1000.0:N2} kg";
+    }
+
+    private static string FormatAmount(decimal? amount) =>
+        amount.HasValue ? amount.Value.ToString("N2") : "-";
+
+    private static string PrettyJsonOrText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "-";
+
+        try
+        {
+            using var doc = JsonDocument.Parse(value);
+            return JsonSerializer.Serialize(doc.RootElement, JsonOptions);
+        }
+        catch
+        {
+            return value;
+        }
+    }
+}

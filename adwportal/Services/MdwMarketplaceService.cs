@@ -375,6 +375,48 @@ namespace adwportal.Services
             return (res.IsSuccessStatusCode, body);
         }
 
+        public async Task<(bool ok, string body)> GetShopeeShippingDocDataInfoAsync(
+            string? token,
+            long shopId,
+            string orderRef,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+
+            var qb = new QueryBuilder
+            {
+                { "shopId", shopId.ToString() },
+                { "orderSn", orderRef }
+            };
+            var url = "/api/market/logistics/shopee/shipping-doc-data-info" + qb.ToQueryString();
+
+            using var res = await http.GetAsync(url, ct);
+            var body = await res.Content.ReadAsStringAsync(ct);
+            return (res.IsSuccessStatusCode, body);
+        }
+
+        public async Task<(bool ok, string body)> IngestShopeeShippingDocDataInfoAsync(
+            string? token,
+            long shopId,
+            string orderSn,
+            string shopeeResponseBody,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+
+            var qb = new QueryBuilder
+            {
+                { "shopId", shopId.ToString() },
+                { "orderSn", orderSn }
+            };
+            var url = "/api/market/logistics/shopee/shipping-doc-data-info/ingest" + qb.ToQueryString();
+
+            using var content = new StringContent(shopeeResponseBody, System.Text.Encoding.UTF8, "application/json");
+            using var res = await http.PostAsync(url, content, ct);
+            var body = await res.Content.ReadAsStringAsync(ct);
+            return (res.IsSuccessStatusCode, body);
+        }
+
         public async Task<(bool ok, byte[]? data, string? contentType, string? fileName, string? error)> DownloadLabelAsync(
             string? token,
             string orderRef,

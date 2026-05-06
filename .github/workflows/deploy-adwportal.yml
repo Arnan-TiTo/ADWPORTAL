@@ -59,7 +59,7 @@ jobs:
         run: |
           sudo systemctl is-active adwportal
           for i in $(seq 1 30); do
-            if curl -fsS --max-time 5 http://127.0.0.1:5067/ > /tmp/adwportal-home.html; then
+            if curl -fsS --max-time 5 http://127.0.0.1:5000/ > /tmp/adwportal-home.html; then
               exit 0
             fi
             sleep 2

@@ -22,8 +22,19 @@ namespace adwportal.Dtos
         public string? BuyerUsername { get; set; }
         public string? OrderStatus { get; set; }
 
-        public DateTime CreatedTimeUtc { get; set; }
-        public DateTime UpdatedTimeUtc { get; set; }
+        public DateTime? CreatedTimeUtc { get; set; }
+        public DateTime? UpdatedTimeUtc { get; set; }
+
+        public decimal? EscrowAmount { get; set; }
+        public decimal? BuyerPaidShippingFee { get; set; }
+        public decimal? ActualShippingFee { get; set; }
+        public decimal? PlatformShippingRebate { get; set; }
+        public decimal? CommissionFee { get; set; }
+        public decimal? ServiceFee { get; set; }
+        public decimal? PlatformFee { get; set; }
+        public decimal? PaymentTransactionFee { get; set; }
+        public decimal? AmsCommissionFee { get; set; }
+        public string? SellerVoucherCode { get; set; }
 
         // ========== ข้อมูลย่อย (เก็บเป็น JSON เพื่อง่ายและยืดหยุ่น) ==========
 

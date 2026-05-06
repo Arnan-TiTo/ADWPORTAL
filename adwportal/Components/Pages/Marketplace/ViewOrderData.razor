@@ -214,6 +214,16 @@
                             <th style="width:110px">Channel</th>
                             <th style="width:140px">ShopId</th>
                             <th style="width:120px">Status</th>
+                            <th style="width:140px" class="text-end">Escrow</th>
+                            <th style="width:150px" class="text-end">Buyer Ship</th>
+                            <th style="width:150px" class="text-end">Actual Ship</th>
+                            <th style="width:150px" class="text-end">Ship Rebate</th>
+                            <th style="width:130px" class="text-end">Commission</th>
+                            <th style="width:130px" class="text-end">Service</th>
+                            <th style="width:130px" class="text-end">Platform</th>
+                            <th style="width:150px" class="text-end">Payment Fee</th>
+                            <th style="width:130px" class="text-end">AMS</th>
+                            <th style="width:180px">Voucher</th>
                             <th style="width:170px">Created</th>
                             <th style="width:170px">Updated</th>
                             <th style="width:100px"></th>
@@ -228,6 +238,16 @@
                                 <td>@(r.Channel ?? "-")</td>
                                 <td>@r.ShopId</td>
                                 <td>@(r.OrderStatus ?? "-")</td>
+                                <td class="text-end">@Money(r.EscrowAmount)</td>
+                                <td class="text-end">@Money(r.BuyerPaidShippingFee)</td>
+                                <td class="text-end">@Money(r.ActualShippingFee)</td>
+                                <td class="text-end">@Money(r.PlatformShippingRebate)</td>
+                                <td class="text-end">@Money(r.CommissionFee)</td>
+                                <td class="text-end">@Money(r.ServiceFee)</td>
+                                <td class="text-end">@Money(r.PlatformFee)</td>
+                                <td class="text-end">@Money(r.PaymentTransactionFee)</td>
+                                <td class="text-end">@Money(r.AmsCommissionFee)</td>
+                                <td>@(string.IsNullOrWhiteSpace(r.SellerVoucherCode) ? "-" : r.SellerVoucherCode)</td>
                                 <td>@ToLocalStringAny(r.CreatedTimeUtc)</td>
                                 <td>@ToLocalStringAny(r.UpdatedTimeUtc)</td>
                                 <td>
@@ -287,6 +307,32 @@
                         <dd class="col-sm-8">@ToLocalStringAny(detail.CreatedTimeUtc)</dd>
                         <dt class="col-sm-4">Updated (local)</dt>
                         <dd class="col-sm-8">@ToLocalStringAny(detail.UpdatedTimeUtc)</dd>
+                    </dl>
+                </div>
+
+                <div class="col-md-6">
+                    <h6>Income</h6>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">EscrowAmount</dt>
+                        <dd class="col-sm-7">@Money(detail.EscrowAmount)</dd>
+                        <dt class="col-sm-5">BuyerPaidShippingFee</dt>
+                        <dd class="col-sm-7">@Money(detail.BuyerPaidShippingFee)</dd>
+                        <dt class="col-sm-5">ActualShippingFee</dt>
+                        <dd class="col-sm-7">@Money(detail.ActualShippingFee)</dd>
+                        <dt class="col-sm-5">PlatformShippingRebate</dt>
+                        <dd class="col-sm-7">@Money(detail.PlatformShippingRebate)</dd>
+                        <dt class="col-sm-5">CommissionFee</dt>
+                        <dd class="col-sm-7">@Money(detail.CommissionFee)</dd>
+                        <dt class="col-sm-5">ServiceFee</dt>
+                        <dd class="col-sm-7">@Money(detail.ServiceFee)</dd>
+                        <dt class="col-sm-5">PlatformFee</dt>
+                        <dd class="col-sm-7">@Money(detail.PlatformFee)</dd>
+                        <dt class="col-sm-5">PaymentTransactionFee</dt>
+                        <dd class="col-sm-7">@Money(detail.PaymentTransactionFee)</dd>
+                        <dt class="col-sm-5">AmsCommissionFee</dt>
+                        <dd class="col-sm-7">@Money(detail.AmsCommissionFee)</dd>
+                        <dt class="col-sm-5">SellerVoucherCode</dt>
+                        <dd class="col-sm-7">@(string.IsNullOrWhiteSpace(detail.SellerVoucherCode) ? "-" : detail.SellerVoucherCode)</dd>
                     </dl>
                 </div>
 
@@ -776,6 +822,9 @@
 
         return utcVal.ToString() ?? "-";
     }
+
+    private static string Money(decimal? value) =>
+        value.HasValue ? value.Value.ToString("#,##0.00", CultureInfo.InvariantCulture) : "-";
 
     private RenderFragment RenderArrayTable(JsonElement rawEl) => builder =>
     {
