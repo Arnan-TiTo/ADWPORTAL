@@ -174,7 +174,7 @@ else
 
                 // Filter partner dropdown ให้เหลือเฉพาะ partner ที่มี shop ที่มีสิทธิ์
                 var allowedPartnerIds = all.Select(s => s.PartnerId).Distinct().ToHashSet();
-                partners = partners?.Where(p => allowedPartnerIds.Contains(p.Id)).ToList();
+                partners = partners.Where(p => allowedPartnerIds.Contains(p.Id)).ToList();
             }
 
             Apply();

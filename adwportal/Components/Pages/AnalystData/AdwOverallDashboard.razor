@@ -280,12 +280,13 @@
         public decimal TotalAmount { get; set; }
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
         // Default: 1st of current month to today
         var now = DateTime.Today;
         filter.CreatedFrom = new DateTime(now.Year, now.Month, 1);
         filter.CreatedTo = now;
+        return Task.CompletedTask;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

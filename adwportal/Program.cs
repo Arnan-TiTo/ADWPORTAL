@@ -162,7 +162,7 @@ app.MapPost("/auth/set-session", async (HttpContext ctx, SetSessionDtos dto, Tok
 
     // Eagerly fetch tokens to pre-warm the cache (Background Task to avoid blocking UI)
     // Pass args explicitly because Task.Run loses HttpContext
-    Task.Run(async () => 
+    _ = Task.Run(async () =>
     {
         try
         {
