@@ -12,7 +12,7 @@ SyslogIdentifier=adwportal
 User=www-data
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_ENVIRONMENT=Production
-Environment=ASPNETCORE_URLS=http://0.0.0.0:5067
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
 Environment=ApiSettings__ApiBaseUrl=https://appapi.vibeandchic.com/
 Environment=ApiSettings__IdwApiBaseUrl=https://indywe.vibeandchic.com/
 Environment=ApiSettings__MdwApiBaseUrl=https://madewe.vibeandchic.com/
