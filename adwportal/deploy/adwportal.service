@@ -14,9 +14,9 @@ Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
 Environment=ApiSettings__ApiBaseUrl=http://127.0.0.1:5001/
-Environment=ApiSettings__IdwApiBaseUrl=https://indywe.vibeandchic.com/
-Environment=ApiSettings__MdwApiBaseUrl=https://madewe.vibeandchic.com/
-Environment=OAuth__CallbackBaseUrl=https://adwportal.vibeandchic.com
+Environment=ApiSettings__IdwApiBaseUrl=http://127.0.0.1:5080/
+Environment=ApiSettings__MdwApiBaseUrl=http://127.0.0.1:7192/
+Environment=OAuth__CallbackBaseUrl=http://vibeandchic.com
 Environment=ImageRootPath=/var/www/adwportal/wwwroot/images
 
 [Install]
