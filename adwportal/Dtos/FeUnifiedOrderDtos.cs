@@ -25,6 +25,14 @@ namespace adwportal.Dtos
         public DateTime? CreatedTimeUtc { get; set; }
         public DateTime? UpdatedTimeUtc { get; set; }
 
+        public decimal? SubtotalAmount { get; set; }
+        public decimal? DiscountSellerAmount { get; set; }
+        public decimal? DiscountPlatformAmount { get; set; }
+        public decimal? VoucherAmount { get; set; }
+        public decimal? ShippingFeeAmount { get; set; }
+        public decimal? TotalAmount { get; set; }
+        public decimal? PaidAmount { get; set; }
+
         public decimal? EscrowAmount { get; set; }
         public decimal? BuyerPaidShippingFee { get; set; }
         public decimal? ActualShippingFee { get; set; }

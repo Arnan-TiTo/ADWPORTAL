@@ -215,6 +215,9 @@
                             <th style="width:140px">ShopId</th>
                             <th style="width:120px">Status</th>
                             <th style="width:140px" class="text-end">Escrow</th>
+                            <th style="width:140px" class="text-end">Seller Disc.</th>
+                            <th style="width:140px" class="text-end">Shopee Disc.</th>
+                            <th style="width:130px" class="text-end">Voucher</th>
                             <th style="width:150px" class="text-end">Buyer Ship</th>
                             <th style="width:150px" class="text-end">Actual Ship</th>
                             <th style="width:150px" class="text-end">Ship Rebate</th>
@@ -239,6 +242,9 @@
                                 <td>@r.ShopId</td>
                                 <td>@(r.OrderStatus ?? "-")</td>
                                 <td class="text-end">@Money(r.EscrowAmount)</td>
+                                <td class="text-end">@Money(r.DiscountSellerAmount)</td>
+                                <td class="text-end">@Money(r.DiscountPlatformAmount)</td>
+                                <td class="text-end">@Money(r.VoucherAmount)</td>
                                 <td class="text-end">@Money(r.BuyerPaidShippingFee)</td>
                                 <td class="text-end">@Money(r.ActualShippingFee)</td>
                                 <td class="text-end">@Money(r.PlatformShippingRebate)</td>
@@ -315,6 +321,12 @@
                     <dl class="row mb-0">
                         <dt class="col-sm-5">EscrowAmount</dt>
                         <dd class="col-sm-7">@Money(detail.EscrowAmount)</dd>
+                        <dt class="col-sm-5">DiscountSellerAmount</dt>
+                        <dd class="col-sm-7">@Money(detail.DiscountSellerAmount)</dd>
+                        <dt class="col-sm-5">DiscountPlatformAmount</dt>
+                        <dd class="col-sm-7">@Money(detail.DiscountPlatformAmount)</dd>
+                        <dt class="col-sm-5">VoucherAmount</dt>
+                        <dd class="col-sm-7">@Money(detail.VoucherAmount)</dd>
                         <dt class="col-sm-5">BuyerPaidShippingFee</dt>
                         <dd class="col-sm-7">@Money(detail.BuyerPaidShippingFee)</dd>
                         <dt class="col-sm-5">ActualShippingFee</dt>
