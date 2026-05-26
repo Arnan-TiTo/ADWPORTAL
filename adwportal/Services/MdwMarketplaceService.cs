@@ -325,6 +325,18 @@ namespace adwportal.Services
             if (!res.IsSuccessStatusCode) return null;
             return await res.Content.ReadFromJsonAsync<FeUnifiedOrderDtos>(JsonOpts, ct);
         }
+
+        public async Task<FeUnifiedOrderDtos?> FeOrderSyncShopeeEscrowAsync(
+            string? token,
+            long id,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+            using var res = await http.PostAsync($"api/fe/orders/{id}/sync-shopee-escrow", null, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            return await res.Content.ReadFromJsonAsync<FeUnifiedOrderDtos>(JsonOpts, ct);
+        }
+
         // ===== Shipping Labels =====
         public async Task<LabelListResponse> ListLabelsAsync(
             string? token,

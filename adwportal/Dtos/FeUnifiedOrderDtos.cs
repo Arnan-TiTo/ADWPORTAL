@@ -16,7 +16,7 @@ namespace adwportal.Dtos
         public long UnifiedOrderId { get; set; }
         public string? ExternalOrderNo { get; set; }
         public string? Channel { get; set; }
-        public long ShopId { get; set; }
+        public long? ShopId { get; set; }
         public string? SellerId { get; set; }
         public string? BuyerUserId { get; set; }
         public string? BuyerUsername { get; set; }
@@ -43,6 +43,9 @@ namespace adwportal.Dtos
         public decimal? PaymentTransactionFee { get; set; }
         public decimal? AmsCommissionFee { get; set; }
         public string? SellerVoucherCode { get; set; }
+
+        public FlowAccountAmountsDto? FlowAccountAmounts { get; set; }
+        public ReconciliationAmountsDto? ReconciliationAmounts { get; set; }
 
         // ========== ข้อมูลย่อย (เก็บเป็น JSON เพื่อง่ายและยืดหยุ่น) ==========
 
@@ -78,5 +81,33 @@ namespace adwportal.Dtos
 
         [JsonPropertyName("shipToJson")]
         public JsonElement ShipToJson { get => _shipTo; set => _shipTo = value; }
+    }
+
+    public sealed class FlowAccountAmountsDto
+    {
+        public decimal GrossAmount { get; set; }
+        public decimal SellerDiscountAmount { get; set; }
+        public decimal NetAfterSellerDiscountAmount { get; set; }
+        public decimal PlatformDiscountAmount { get; set; }
+        public decimal AmountDue { get; set; }
+        public decimal ShippingFeeAmount { get; set; }
+        public decimal TaxAmount { get; set; }
+        public decimal GrandTotalAmount { get; set; }
+    }
+
+    public sealed class ReconciliationAmountsDto
+    {
+        public decimal EscrowAmount { get; set; }
+        public decimal BuyerPaidShippingFee { get; set; }
+        public decimal ActualShippingFee { get; set; }
+        public decimal PlatformShippingRebate { get; set; }
+        public decimal CommissionFee { get; set; }
+        public decimal ServiceFee { get; set; }
+        public decimal PlatformFee { get; set; }
+        public decimal PaymentTransactionFee { get; set; }
+        public decimal AmsCommissionFee { get; set; }
+        public decimal TotalFeeAmount { get; set; }
+        public decimal NetPayoutAmount { get; set; }
+        public string? SellerVoucherCode { get; set; }
     }
 }

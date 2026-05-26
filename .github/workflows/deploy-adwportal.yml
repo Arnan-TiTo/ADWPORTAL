@@ -4,74 +4,71 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "adwportal/**"
-      - ".github/workflows/deploy-adwportal.yml"
   workflow_dispatch:
-
-concurrency:
-  group: adwportal-deploy
-  cancel-in-progress: true
 
 jobs:
   deploy:
+    name: Build and deploy ADW Portal
     runs-on:
       - self-hosted
-      - linux
       - adwportal
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-adwportal
+      cancel-in-progress: true
 
     env:
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
-
-    defaults:
-      run:
-        working-directory: adwportal
+      PROJECT_PATH: adwportal/adwportal.csproj
+      PUBLISH_DIR: ${{ github.workspace }}/artifacts/adwportal-publish
+      DEPLOY_DIR: /opt/adwportal
+      SERVICE_NAME: adwportal
+      HEALTH_URL: http://127.0.0.1:5000/
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 9.0.x
+      - name: Check .NET
+        run: dotnet --info
 
       - name: Restore
-        run: dotnet restore ./adwportal.csproj -r linux-x64
+        run: dotnet restore "$PROJECT_PATH"
 
       - name: Publish
-        run: |
-          rm -rf /tmp/adwportal-publish
-          dotnet publish ./adwportal.csproj \
-            -c Release \
-            -r linux-x64 \
-            --self-contained false \
-            --no-restore \
-            -o /tmp/adwportal-publish
-          rm -rf \
-            /tmp/adwportal-publish/artifacts \
-            /tmp/adwportal-publish/deploy
+        run: dotnet publish "$PROJECT_PATH" --configuration Release --no-restore --output "$PUBLISH_DIR"
 
-      - name: Deploy files
+      - name: Prepare deploy directory
+        shell: bash
         run: |
-          sudo systemctl stop adwportal || true
-          sudo cp ./deploy/adwportal.service /etc/systemd/system/adwportal.service
-          sudo mkdir -p /var/www/adwportal
-          sudo rsync -a --delete /tmp/adwportal-publish/ /var/www/adwportal/
-          sudo chown -R www-data:www-data /var/www/adwportal
-          sudo systemctl daemon-reload
-          sudo systemctl enable adwportal
-          sudo systemctl restart adwportal
+          set -euo pipefail
+          sudo -n mkdir -p "$DEPLOY_DIR"
+          sudo -n chown -R "$USER" "$DEPLOY_DIR"
 
-      - name: Verify
+      - name: Deploy published files
+        shell: bash
         run: |
-          sudo systemctl is-active adwportal
-          for i in $(seq 1 30); do
-            if curl -fsS --max-time 5 http://127.0.0.1:5000/ > /tmp/adwportal-home.html; then
+          set -euo pipefail
+          rsync -a --delete \
+            --exclude appsettings.Production.json \
+            "$PUBLISH_DIR"/ "$DEPLOY_DIR"/
+
+      - name: Restart service
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n systemctl restart "$SERVICE_NAME"
+          sudo -n systemctl status "$SERVICE_NAME" --no-pager
+
+      - name: Health check
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..20}; do
+            if curl -fsS --max-time 5 "$HEALTH_URL" > /tmp/adwportal-home.html; then
               exit 0
             fi
-            sleep 2
+            sleep 3
           done
-          sudo systemctl status adwportal --no-pager
-          sudo journalctl -u adwportal -n 80 --no-pager
+
+          sudo -n journalctl -u "$SERVICE_NAME" -n 100 --no-pager
           exit 1

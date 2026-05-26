@@ -3,21 +3,15 @@ Description=ADW Portal
 After=network.target
 
 [Service]
-WorkingDirectory=/var/www/adwportal
-ExecStart=/usr/bin/dotnet /var/www/adwportal/adwportal.dll
+WorkingDirectory=/opt/adwportal
+ExecStart=/usr/bin/dotnet /opt/adwportal/adwportal.dll
 Restart=always
 RestartSec=10
 KillSignal=SIGINT
 SyslogIdentifier=adwportal
-User=www-data
-Environment=ASPNETCORE_ENVIRONMENT=Production
-Environment=DOTNET_ENVIRONMENT=Production
-Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
-Environment=ApiSettings__ApiBaseUrl=http://127.0.0.1:5001/
-Environment=ApiSettings__IdwApiBaseUrl=http://127.0.0.1:5080/
-Environment=ApiSettings__MdwApiBaseUrl=http://127.0.0.1:7192/
-Environment=OAuth__CallbackBaseUrl=http://vibeandchic.com
-Environment=ImageRootPath=/var/www/adwportal/wwwroot/images
+User=dev01
+Group=dev02
+EnvironmentFile=/etc/adwportal/adwportal.env
 
 [Install]
 WantedBy=multi-user.target

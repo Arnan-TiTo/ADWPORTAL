@@ -214,22 +214,17 @@
                             <th style="width:110px">Channel</th>
                             <th style="width:140px">ShopId</th>
                             <th style="width:120px">Status</th>
+                            <th style="width:140px" class="text-end">รวมเงิน</th>
+                            <th style="width:140px" class="text-end">ส่วนลดรวม</th>
+                            <th style="width:150px" class="text-end">หลังหักส่วนลด</th>
+                            <th style="width:140px" class="text-end">ส่วนลดพิเศษ</th>
+                            <th style="width:140px" class="text-end">ยอดชำระ</th>
                             <th style="width:140px" class="text-end">Escrow</th>
-                            <th style="width:140px" class="text-end">Seller Disc.</th>
-                            <th style="width:140px" class="text-end">Shopee Disc.</th>
-                            <th style="width:130px" class="text-end">Voucher</th>
-                            <th style="width:150px" class="text-end">Buyer Ship</th>
-                            <th style="width:150px" class="text-end">Actual Ship</th>
-                            <th style="width:150px" class="text-end">Ship Rebate</th>
-                            <th style="width:130px" class="text-end">Commission</th>
-                            <th style="width:130px" class="text-end">Service</th>
-                            <th style="width:130px" class="text-end">Platform</th>
-                            <th style="width:150px" class="text-end">Payment Fee</th>
-                            <th style="width:130px" class="text-end">AMS</th>
-                            <th style="width:180px">Voucher</th>
+                            <th style="width:130px" class="text-end">Total Fee</th>
+                            <th style="width:150px">Voucher Code</th>
                             <th style="width:170px">Created</th>
                             <th style="width:170px">Updated</th>
-                            <th style="width:100px"></th>
+                            <th style="width:180px"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -241,25 +236,26 @@
                                 <td>@(r.Channel ?? "-")</td>
                                 <td>@r.ShopId</td>
                                 <td>@(r.OrderStatus ?? "-")</td>
-                                <td class="text-end">@Money(r.EscrowAmount)</td>
-                                <td class="text-end">@Money(r.DiscountSellerAmount)</td>
-                                <td class="text-end">@Money(r.DiscountPlatformAmount)</td>
-                                <td class="text-end">@Money(r.VoucherAmount)</td>
-                                <td class="text-end">@Money(r.BuyerPaidShippingFee)</td>
-                                <td class="text-end">@Money(r.ActualShippingFee)</td>
-                                <td class="text-end">@Money(r.PlatformShippingRebate)</td>
-                                <td class="text-end">@Money(r.CommissionFee)</td>
-                                <td class="text-end">@Money(r.ServiceFee)</td>
-                                <td class="text-end">@Money(r.PlatformFee)</td>
-                                <td class="text-end">@Money(r.PaymentTransactionFee)</td>
-                                <td class="text-end">@Money(r.AmsCommissionFee)</td>
-                                <td>@(string.IsNullOrWhiteSpace(r.SellerVoucherCode) ? "-" : r.SellerVoucherCode)</td>
+                                <td class="text-end">@Money(Flow(r).GrossAmount)</td>
+                                <td class="text-end">@Money(Flow(r).SellerDiscountAmount)</td>
+                                <td class="text-end">@Money(Flow(r).NetAfterSellerDiscountAmount)</td>
+                                <td class="text-end">@Money(Flow(r).PlatformDiscountAmount)</td>
+                                <td class="text-end fw-semibold">@Money(Flow(r).AmountDue)</td>
+                                <td class="text-end">@Money(Reconcile(r).EscrowAmount)</td>
+                                <td class="text-end">@Money(Reconcile(r).TotalFeeAmount)</td>
+                                <td>@(string.IsNullOrWhiteSpace(Reconcile(r).SellerVoucherCode) ? "-" : Reconcile(r).SellerVoucherCode)</td>
                                 <td>@ToLocalStringAny(r.CreatedTimeUtc)</td>
                                 <td>@ToLocalStringAny(r.UpdatedTimeUtc)</td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewDetail(r.UnifiedOrderId)">
                                         View
                                     </button>
+                                    @if (string.Equals(r.Channel, "Shopee", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <button class="btn btn-sm btn-outline-success ms-1" @onclick="() => SyncShopeeEscrow(r.UnifiedOrderId)" disabled="@syncingEscrow">
+                                            Sync
+                                        </button>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -289,7 +285,15 @@
                 <strong>Order #@detail.UnifiedOrderId</strong>
                 <span class="text-muted">(@(detail.Channel ?? "-"))</span>
             </div>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="() => detail = null">Close</button>
+            <div class="d-flex gap-2">
+                @if (string.Equals(detail.Channel, "Shopee", StringComparison.OrdinalIgnoreCase))
+                {
+                    <button class="btn btn-sm btn-outline-success" @onclick="() => SyncShopeeEscrow(detail.UnifiedOrderId)" disabled="@syncingEscrow">
+                        @(syncingEscrow ? "Syncing..." : "Sync Shopee")
+                    </button>
+                }
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => detail = null">Close</button>
+            </div>
         </div>
 
         <div class="card-body">
@@ -317,34 +321,56 @@
                 </div>
 
                 <div class="col-md-6">
-                    <h6>Income</h6>
+                    <h6>การชำระเงินของผู้ซื้อ</h6>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">รวมเงิน</dt>
+                        <dd class="col-sm-7 text-end">@Money(Flow(detail).GrossAmount)</dd>
+                        <dt class="col-sm-5">ส่วนลดรวม</dt>
+                        <dd class="col-sm-7 text-end">@Money(Flow(detail).SellerDiscountAmount)</dd>
+                        <dt class="col-sm-5">ราคาหลังหักส่วนลด</dt>
+                        <dd class="col-sm-7 text-end">@Money(Flow(detail).NetAfterSellerDiscountAmount)</dd>
+                        <dt class="col-sm-5">ส่วนลดพิเศษ</dt>
+                        <dd class="col-sm-7 text-end">@Money(Flow(detail).PlatformDiscountAmount)</dd>
+                        <dt class="col-sm-5">ค่าจัดส่ง</dt>
+                        <dd class="col-sm-7 text-end">@Money(Flow(detail).ShippingFeeAmount)</dd>
+                        <dt class="col-sm-5">ภาษีมูลค่าเพิ่ม</dt>
+                        <dd class="col-sm-7 text-end">@Money(Flow(detail).TaxAmount)</dd>
+                        <dt class="col-sm-5 fw-semibold">ยอดชำระ</dt>
+                        <dd class="col-sm-7 text-end fw-semibold">@Money(Flow(detail).AmountDue)</dd>
+                    </dl>
+                </div>
+
+                <div class="col-md-6">
+                    <h6>MDW / Shopee Reconciliation</h6>
                     <dl class="row mb-0">
                         <dt class="col-sm-5">EscrowAmount</dt>
-                        <dd class="col-sm-7">@Money(detail.EscrowAmount)</dd>
+                        <dd class="col-sm-7 text-end">@Money(Reconcile(detail).EscrowAmount)</dd>
                         <dt class="col-sm-5">DiscountSellerAmount</dt>
-                        <dd class="col-sm-7">@Money(detail.DiscountSellerAmount)</dd>
+                        <dd class="col-sm-7 text-end">@Money(detail.DiscountSellerAmount)</dd>
                         <dt class="col-sm-5">DiscountPlatformAmount</dt>
-                        <dd class="col-sm-7">@Money(detail.DiscountPlatformAmount)</dd>
+                        <dd class="col-sm-7 text-end">@Money(detail.DiscountPlatformAmount)</dd>
                         <dt class="col-sm-5">VoucherAmount</dt>
-                        <dd class="col-sm-7">@Money(detail.VoucherAmount)</dd>
+                        <dd class="col-sm-7 text-end">@Money(detail.VoucherAmount)</dd>
                         <dt class="col-sm-5">BuyerPaidShippingFee</dt>
-                        <dd class="col-sm-7">@Money(detail.BuyerPaidShippingFee)</dd>
+                        <dd class="col-sm-7 text-end">@Money(Reconcile(detail).BuyerPaidShippingFee)</dd>
                         <dt class="col-sm-5">ActualShippingFee</dt>
-                        <dd class="col-sm-7">@Money(detail.ActualShippingFee)</dd>
+                        <dd class="col-sm-7 text-end">@Money(Reconcile(detail).ActualShippingFee)</dd>
                         <dt class="col-sm-5">PlatformShippingRebate</dt>
-                        <dd class="col-sm-7">@Money(detail.PlatformShippingRebate)</dd>
+                        <dd class="col-sm-7 text-end">@Money(Reconcile(detail).PlatformShippingRebate)</dd>
                         <dt class="col-sm-5">CommissionFee</dt>
-                        <dd class="col-sm-7">@Money(detail.CommissionFee)</dd>
+                        <dd class="col-sm-7 text-end">@Money(Reconcile(detail).CommissionFee)</dd>
                         <dt class="col-sm-5">ServiceFee</dt>
-                        <dd class="col-sm-7">@Money(detail.ServiceFee)</dd>
+                        <dd class="col-sm-7 text-end">@Money(Reconcile(detail).ServiceFee)</dd>
                         <dt class="col-sm-5">PlatformFee</dt>
-                        <dd class="col-sm-7">@Money(detail.PlatformFee)</dd>
+                        <dd class="col-sm-7 text-end">@Money(Reconcile(detail).PlatformFee)</dd>
                         <dt class="col-sm-5">PaymentTransactionFee</dt>
-                        <dd class="col-sm-7">@Money(detail.PaymentTransactionFee)</dd>
+                        <dd class="col-sm-7 text-end">@Money(Reconcile(detail).PaymentTransactionFee)</dd>
                         <dt class="col-sm-5">AmsCommissionFee</dt>
-                        <dd class="col-sm-7">@Money(detail.AmsCommissionFee)</dd>
+                        <dd class="col-sm-7 text-end">@Money(Reconcile(detail).AmsCommissionFee)</dd>
+                        <dt class="col-sm-5 fw-semibold">Total Fee</dt>
+                        <dd class="col-sm-7 text-end fw-semibold">@Money(Reconcile(detail).TotalFeeAmount)</dd>
                         <dt class="col-sm-5">SellerVoucherCode</dt>
-                        <dd class="col-sm-7">@(string.IsNullOrWhiteSpace(detail.SellerVoucherCode) ? "-" : detail.SellerVoucherCode)</dd>
+                        <dd class="col-sm-7">@(string.IsNullOrWhiteSpace(Reconcile(detail).SellerVoucherCode) ? "-" : Reconcile(detail).SellerVoucherCode)</dd>
                     </dl>
                 </div>
 
@@ -431,6 +457,7 @@
 
     // ---------- Filters / paging ----------
     private bool loading;
+    private bool syncingEscrow;
     private string? error;
     private string? info;
 
@@ -759,6 +786,46 @@
         catch (Exception ex) { await JS.InvokeVoidAsync("alert", ex.Message); }
     }
 
+    private async Task SyncShopeeEscrow(long id)
+    {
+        if (syncingEscrow) return;
+        syncingEscrow = true;
+        error = info = null;
+
+        try
+        {
+            var updated = await MdwSvc.FeOrderSyncShopeeEscrowAsync(mdwToken, id);
+            if (updated is null)
+            {
+                error = $"Sync Shopee escrow failed for order {id}.";
+                return;
+            }
+
+            detail = detail?.UnifiedOrderId == id ? updated : detail;
+
+            if (data?.Items is not null)
+            {
+                var rows = data.Items.ToList();
+                var idx = rows.FindIndex(x => x.UnifiedOrderId == id);
+                if (idx >= 0)
+                {
+                    rows[idx] = updated;
+                    data.Items = rows;
+                }
+            }
+
+            info = $"Synced Shopee escrow for order {id}.";
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            syncingEscrow = false;
+        }
+    }
+
     private async Task NextPage() { if (!CanNext) return; currentPage++; await Reload(); }
     private async Task PrevPage() { if (!CanPrev) return; currentPage--; await Reload(); }
 
@@ -837,6 +904,49 @@
 
     private static string Money(decimal? value) =>
         value.HasValue ? value.Value.ToString("#,##0.00", CultureInfo.InvariantCulture) : "-";
+
+    private static FlowAccountAmountsDto Flow(FeUnifiedOrderDtos order)
+        => order.FlowAccountAmounts ?? new FlowAccountAmountsDto
+        {
+            GrossAmount = Round(order.SubtotalAmount),
+            SellerDiscountAmount = Round(order.DiscountSellerAmount),
+            NetAfterSellerDiscountAmount = Round(order.SubtotalAmount) - Round(order.DiscountSellerAmount),
+            PlatformDiscountAmount = order.DiscountPlatformAmount.HasValue ? Round(order.DiscountPlatformAmount) : Round(order.VoucherAmount),
+            AmountDue = Round(order.PaidAmount ?? order.TotalAmount),
+            ShippingFeeAmount = Round(order.ShippingFeeAmount),
+            TaxAmount = 0m,
+            GrandTotalAmount = Round(order.PaidAmount ?? order.TotalAmount)
+        };
+
+    private static ReconciliationAmountsDto Reconcile(FeUnifiedOrderDtos order)
+    {
+        if (order.ReconciliationAmounts is not null)
+            return order.ReconciliationAmounts;
+
+        var commission = Round(order.CommissionFee);
+        var service = Round(order.ServiceFee);
+        var platform = Round(order.PlatformFee);
+        var payment = Round(order.PaymentTransactionFee);
+        var ams = Round(order.AmsCommissionFee);
+
+        return new ReconciliationAmountsDto
+        {
+            EscrowAmount = Round(order.EscrowAmount),
+            BuyerPaidShippingFee = Round(order.BuyerPaidShippingFee),
+            ActualShippingFee = Round(order.ActualShippingFee),
+            PlatformShippingRebate = Round(order.PlatformShippingRebate),
+            CommissionFee = commission,
+            ServiceFee = service,
+            PlatformFee = platform,
+            PaymentTransactionFee = payment,
+            AmsCommissionFee = ams,
+            TotalFeeAmount = commission + service + platform + payment + ams,
+            NetPayoutAmount = Round(order.EscrowAmount),
+            SellerVoucherCode = order.SellerVoucherCode
+        };
+    }
+
+    private static decimal Round(decimal? value) => decimal.Round(value ?? 0m, 2);
 
     private RenderFragment RenderArrayTable(JsonElement rawEl) => builder =>
     {

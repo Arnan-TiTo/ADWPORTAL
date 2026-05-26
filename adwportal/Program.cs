@@ -52,7 +52,11 @@ builder.Services.AddHttpClient("ApiClient", (sp, http) =>
     var cfg = sp.GetRequiredService<IOptions<ApiSettings>>().Value;
     http.BaseAddress = new Uri(cfg.ApiBaseUrl);
 })
-.AddHttpMessageHandler<AuthMessageHandler>();
+.AddHttpMessageHandler<AuthMessageHandler>()
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+});
 
 // === IDW API client ===
 builder.Services.AddHttpClient("IdwApiBaseUrl", (sp, http) =>
