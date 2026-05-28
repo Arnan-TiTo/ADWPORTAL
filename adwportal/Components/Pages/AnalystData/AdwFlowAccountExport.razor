@@ -27,6 +27,14 @@
             <div class="row g-3">
 
                 <div class="col-md-3">
+                    <label class="form-label">Export Type</label>
+                    <InputSelect class="form-select" @bind-Value="filter.ExportType">
+                        <option value="Standard">Standard Format</option>
+                        <option value="CashSale">Cash Sale Format</option>
+                    </InputSelect>
+                </div>
+
+                <div class="col-md-3">
                     <label class="form-label">Platform</label>
                     <InputSelect class="form-select" @bind-Value="SelectedPlatform">
                         <option value="">(All)</option>
@@ -195,6 +203,14 @@ else
         "fee_payment","fee_service","vat_amount","wht_coupon_only","share_and_earn","points_paid"
     };
 
+    // ===== ลำดับคอลัมน์ “ตามสเปค Cash Sale” =====
+    private static readonly string[] DesiredCashSaleOrder = new[] {
+        "วันที่เอกสาร", "ราคาต่อหน่วย", "หมายเลขคำสั่งซื้อ/อ้างอิงจากเอกสาร", "รหัสสินค้า",
+        "ชื่อสินค้า/บริการ", "จำนวน", "หน่วย", "ส่วนลด(บาท)", "ส่วนลดก่อน VAT", "ส่วนลดหลัง VAT",
+        "วิธีการรับชำระ", "รายละเอียด", "รายได้อื่นๆ", "ชื่อลูกค้า", "เลขผู้เสียภาษี", "ที่อยู่",
+        "สาขา", "พนักงานขาย", "หมายเหตุ", "โน้ตภายในบริษัท"
+    };
+
     // ===== state =====
     private string? _mdwToken;
     private HttpClient? _mdwClient;
@@ -231,6 +247,7 @@ else
 
     private class FilterVm
     {
+        public string ExportType { get; set; } = "Standard";
         public string Channel { get; set; } = "";
         public string? ShopId { get; set; } = "";
         public DateTime? CreatedFrom { get; set; }
@@ -411,7 +428,10 @@ else
             updResp.EnsureSuccessStatusCode();
 
             // (2) โหลดข้อมูลจาก API ตามเดิม (ไม่ส่ง status)
-            var url = BuildApiUrl("/api/adw/export/flowaccount/orders", withPaging: true);
+            string apiPath = filter.ExportType == "CashSale" 
+                ? "/api/adw/export/flowaccount/cashsale" 
+                : "/api/adw/export/flowaccount/orders";
+            var url = BuildApiUrl(apiPath, withPaging: true);
             var resp = await _mdwClient.GetFromJsonAsync<ApiResp>(url);
 
             totalItems = resp?.total ?? 0;
@@ -423,7 +443,9 @@ else
             filteredCount = items.Count;
 
             // (4) columns + exportRows
-            columns = DesiredCsvOrder.ToList();
+            columns = filter.ExportType == "CashSale" 
+                ? DesiredCashSaleOrder.ToList() 
+                : DesiredCsvOrder.ToList();
 
             exportRows.Clear();
             foreach (var r in items)
@@ -479,14 +501,16 @@ else
     private async Task ExportCsvLocal()
     {
         if (columns.Count == 0 || exportRows.Count == 0) { errorMessage = "ไม่มีข้อมูลสำหรับส่งออก"; return; }
-        var file = $"order-export_{filter.Channel}_{filter.ShopId}_{DateTime.Now:yyyyMMddHHmmss}.csv";
+        var prefix = filter.ExportType == "CashSale" ? "cashsale-export" : "order-export";
+        var file = $"{prefix}_{filter.Channel}_{filter.ShopId}_{DateTime.Now:yyyyMMddHHmmss}.csv";
         await JS.InvokeVoidAsync("adwExportCsvFromRows", columns, exportRows, file);
     }
 
     private async Task ExportExcelLocal()
     {
         if (columns.Count == 0 || exportRows.Count == 0) { errorMessage = "ไม่มีข้อมูลสำหรับส่งออก"; return; }
-        var file = $"order-export_{filter.Channel}_{filter.ShopId}_{DateTime.Now:yyyyMMddHHmmss}.xls";
+        var prefix = filter.ExportType == "CashSale" ? "cashsale-export" : "order-export";
+        var file = $"{prefix}_{filter.Channel}_{filter.ShopId}_{DateTime.Now:yyyyMMddHHmmss}.xls";
         await JS.InvokeVoidAsync("adwExportExcelFromRows", columns, exportRows, file);
     }
 
