@@ -1,0 +1,779 @@
+@page "/normalize-auto"
+@using System.Text
+@using System.Text.Json
+@using System.Globalization
+@using adwportal.Dtos
+@using adwportal.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Authorization
+
+@inject AuthenticationStateProvider Auth
+@inject AuthTokenProvider TokenProvider
+@inject IHttpClientFactory ClientFactory
+@inject MdwMarketplaceService MdwSvc
+@inject MiscService MiscSvc
+@inject IJSRuntime JS
+
+<h3 class="mb-3">MDW — Normalize Orders Auto</h3>
+<p class="text-muted">ค้นหาออเดอร์และเลือกออเดอร์ที่ต้องการเพื่อยิงซ่อม (by-ref) แบบอัตโนมัติทีละรายการ</p>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <!-- Platform selection -->
+            <div class="col-md-3">
+                <label class="form-label">Platform</label>
+                <select class="form-select" @bind="Platform" disabled="@isRunning">
+                    <option value="">(All)</option>
+                    @foreach (var p in platformOptions)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Shop selection -->
+            <div class="col-md-5">
+                <label class="form-label">Shop (filtered by Platform)</label>
+                <select class="form-select" @bind="SelectedShopId" disabled="@isRunning">
+                    <option value="">-- Select shop --</option>
+                    @foreach (var s in FilteredShops)
+                    {
+                        <option value="@s.Id">
+                            @($"{s.Name ?? "-"}  ·  {s.ShopId}  ·  {s.Platform}")
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <!-- Shop ID display -->
+            <div class="col-md-4">
+                <label class="form-label">Shop Id</label>
+                <input class="form-control" @bind="shopIdStr" disabled />
+            </div>
+
+            <!-- Search query input -->
+            <div class="col-md-3">
+                <label class="form-label">ค้นหา (OrderId/ExternalOrder)</label>
+                <input class="form-control" @bind="filterQ" placeholder="OrderId or ExternalOrderNo" disabled="@isRunning" />
+            </div>
+
+            <!-- Order status filter -->
+            <div class="col-md-3">
+                <label class="form-label">Order Status</label>
+                <select class="form-select" @bind="filterOrderStatus" disabled="@isRunning">
+                    <option value="">(All)</option>
+                    @foreach (var st in orderStatusOptions)
+                    {
+                        <option value="@st">@st</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Date Range selector -->
+            <div class="col-md-6">
+                <label class="form-label d-block">ช่วงวันที่ (Updated Time)</label>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                    <input class="form-control" style="max-width:180px" type="datetime-local"
+                           value="@fromLocalText" @onchange="OnFromLocalChanged" disabled="@isRunning" />
+                    <span>—</span>
+                    <input class="form-control" style="max-width:180px" type="datetime-local"
+                           value="@toLocalText" @onchange="OnToLocalChanged" disabled="@isRunning" />
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="SetLast24h" disabled="@isRunning">-24h</button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="SetLast7d" disabled="@isRunning">-7d</button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="SetToday" disabled="@isRunning">วันนี้</button>
+                </div>
+            </div>
+
+            <!-- Page Size -->
+            <div class="col-md-2">
+                <label class="form-label">Page Size</label>
+                <select class="form-select" @bind="pageSize" disabled="@isRunning">
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                </select>
+            </div>
+
+            <!-- Buttons -->
+            <div class="col-12 d-flex gap-2">
+                <button class="btn btn-primary" @onclick="Search" disabled="@(loading || isRunning)">
+                    @if (loading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        <span>Searching...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-search me-1"></i>
+                        <span>Search</span>
+                    }
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="ResetFilters" disabled="@(loading || isRunning)">Reset</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@error
+        <button type="button" class="btn-close" @onclick="() => error = null" aria-label="Close"></button>
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(info))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>@info
+        <button type="button" class="btn-close" @onclick="() => info = null" aria-label="Close"></button>
+    </div>
+}
+
+@if (items != null && items.Count > 0)
+{
+    <div class="card border-primary mb-3">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-play-circle me-2"></i>Auto Normalize Panel</h5>
+            @if (isRunning)
+            {
+                <span class="badge bg-warning text-dark px-3 py-2 animate-pulse">
+                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                    Running...
+                </span>
+            }
+        </div>
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <!-- Delay Config -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Delay between requests (ms)</label>
+                    <input class="form-control" type="number" @bind="delayMs" min="0" max="10000" disabled="@isRunning" />
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="col-md-6 d-flex align-items-end gap-2">
+                    @if (!isRunning)
+                    {
+                        <button class="btn btn-success px-4" @onclick="StartAutoNormalize" disabled="@(SelectedCount == 0)">
+                            <i class="bi bi-play-fill me-1"></i>เริ่มซ่อมแบบ Auto (@SelectedCount ออเดอร์)
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-danger px-4" @onclick="StopAutoNormalize">
+                            <i class="bi bi-stop-fill me-1"></i>หยุดชั่วคราว
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Progress Bar section -->
+            @if (processedCount > 0 || isRunning)
+            {
+                <div class="mt-4">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="fw-semibold">Progress: @processedCount / @totalToProcess (@(GetPercent())%)</span>
+                        <span class="small text-muted">
+                            สำเร็จ: <span class="text-success fw-bold">@successCount</span> | 
+                            ล้มเหลว: <span class="text-danger fw-bold">@failedCount</span>
+                        </span>
+                    </div>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: @(GetPercent())%;" 
+                             aria-valuenow="@(GetPercent())" aria-valuemin="0" aria-valuemax="100">
+                            @(GetPercent())%
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        @if (loading && (items == null || items.Count == 0))
+        {
+            <div class="d-flex justify-content-center my-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+        else if (items == null)
+        {
+            <div class="text-muted text-center my-3">กรุณากดค้นหาเพื่อดึงข้อมูลออเดอร์</div>
+        }
+        else if (items.Count == 0)
+        {
+            <div class="text-muted text-center my-3">ไม่พบข้อมูลออเดอร์ตามเงื่อนไขที่เลือก</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:50px">
+                                <input type="checkbox" class="form-check-input" checked="@IsAllSelected" @onchange="ToggleSelectAll" disabled="@isRunning" />
+                            </th>
+                            <th style="width:120px">OrderId</th>
+                            <th>ExternalOrder</th>
+                            <th style="width:110px">Channel</th>
+                            <th style="width:140px">ShopId</th>
+                            <th style="width:120px">Status</th>
+                            <th style="width:170px">Created</th>
+                            <th style="width:170px">Updated</th>
+                            <th style="width:200px">Normalize Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in items)
+                        {
+                            <tr class="@GetRowClass(r)">
+                                <td>
+                                    <input type="checkbox" class="form-check-input" @bind="r.IsSelected" disabled="@isRunning" />
+                                </td>
+                                <td>@r.Order.UnifiedOrderId</td>
+                                <td>@(r.Order.ExternalOrderNo ?? "-")</td>
+                                <td>@(r.Order.Channel ?? "-")</td>
+                                <td>@r.Order.ShopId</td>
+                                <td>@(r.Order.OrderStatus ?? "-")</td>
+                                <td>@ToLocalStringAny(r.Order.CreatedTimeUtc)</td>
+                                <td>@ToLocalStringAny(r.Order.UpdatedTimeUtc)</td>
+                                <td>
+                                    @switch (r.State)
+                                    {
+                                        case NormalizeState.Pending:
+                                            <span class="badge bg-secondary">Pending</span>
+                                            break;
+                                        case NormalizeState.Processing:
+                                            <span class="badge bg-primary">
+                                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                Processing...
+                                            </span>
+                                            break;
+                                        case NormalizeState.Success:
+                                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Success</span>
+                                            break;
+                                        case NormalizeState.Failed:
+                                            <span class="badge bg-danger" title="@r.ErrorMessage" style="cursor:help;">
+                                                <i class="bi bi-exclamation-octagon me-1"></i>Failed
+                                            </span>
+                                            <div class="small text-danger text-truncate" style="max-width:180px;" title="@r.ErrorMessage">@r.ErrorMessage</div>
+                                            break;
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pager -->
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <div class="small text-muted">
+                    Total: @totalItems
+                    &nbsp;•&nbsp; Page @currentPage / @Math.Max(1, (int)Math.Ceiling((double)totalItems / Math.Max(1, pageSize)))
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="PrevPage" disabled="@(!CanPrev || isRunning)">Prev</button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="NextPage" disabled="@(!CanNext || isRunning)">Next</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .animate-pulse {
+        animation: pulse-animation 1.5s infinite;
+    }
+    @@keyframes pulse-animation {
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
+        100% { opacity: 1; }
+    }
+</style>
+
+@code {
+    private enum NormalizeState
+    {
+        Pending,
+        Processing,
+        Success,
+        Failed
+    }
+
+    private class AutoNormalizeItem
+    {
+        public FeUnifiedOrderDtos Order { get; set; } = null!;
+        public bool IsSelected { get; set; }
+        public NormalizeState State { get; set; } = NormalizeState.Pending;
+        public string? ErrorMessage { get; set; }
+    }
+
+    private record ShopRow(
+      int Id, long ShopId, string? Name,
+      int PartnerId, long PartnerExtId,
+      string? Country, string? Platform, DateTime CreatedAt);
+
+    private string? mdwToken;
+    private string? idwToken;
+    private HttpClient? _idw;
+
+    private List<string> platformOptions = new();
+    private HashSet<string> platformAllow = new(StringComparer.OrdinalIgnoreCase);
+    private List<ShopRow> allShops = new();
+    private List<string> orderStatusOptions = new();
+
+    private string platform = "";
+    private int? selectedShopId;
+    private string shopIdStr = "";
+    private string? filterQ;
+    private string? filterOrderStatus;
+
+    private string fromLocalText = DateTime.Now.AddHours(-24).ToString("yyyy-MM-ddTHH:mm");
+    private string toLocalText = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+
+    private int currentPage = 1;
+    private int pageSize = 50;
+    private int totalItems = 0;
+
+    private bool loading;
+    private string? error;
+    private string? info;
+
+    private List<AutoNormalizeItem>? items;
+
+    // Batch Auto state
+    private bool isRunning;
+    private bool stopRequested;
+    private int delayMs = 200;
+    private int processedCount = 0;
+    private int totalToProcess = 0;
+    private int successCount = 0;
+    private int failedCount = 0;
+
+    private int SelectedCount => items?.Count(i => i.IsSelected) ?? 0;
+    private bool IsAllSelected => items != null && items.Count > 0 && items.All(i => i.IsSelected);
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var val = e.Value is bool b && b;
+        if (items != null)
+        {
+            foreach (var item in items)
+            {
+                item.IsSelected = val;
+            }
+        }
+    }
+
+    private int GetPercent()
+    {
+        if (totalToProcess <= 0) return 0;
+        return (int)Math.Round((double)processedCount / totalToProcess * 100);
+    }
+
+    private string GetRowClass(AutoNormalizeItem r)
+    {
+        if (r.State == NormalizeState.Processing) return "table-primary";
+        if (r.State == NormalizeState.Success) return "table-success";
+        if (r.State == NormalizeState.Failed) return "table-danger";
+        return "";
+    }
+
+    private int? SelectedShopId
+    {
+        get => selectedShopId;
+        set
+        {
+            if (selectedShopId == value) return;
+            selectedShopId = value;
+            ApplySelectedShop();
+        }
+    }
+
+    private string Platform
+    {
+        get => platform;
+        set
+        {
+            var canon = CanonicalPlatform(value);
+            if (!string.IsNullOrWhiteSpace(canon) && platformAllow.Count > 0 && !platformAllow.Contains(canon))
+                canon = "";
+
+            if (platform != canon)
+            {
+                platform = canon;
+                SelectedShopId = null;
+                shopIdStr = "";
+
+                var first = FilteredShops.FirstOrDefault();
+                if (first is not null)
+                    SelectedShopId = first.Id;
+            }
+        }
+    }
+
+    private IEnumerable<ShopRow> FilteredShops =>
+        allShops
+            .Where(s =>
+                string.IsNullOrWhiteSpace(platform) ||
+                string.Equals(CanonicalPlatform(s.Platform), platform, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.Name ?? s.ShopId.ToString());
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            idwToken = await TokenProvider.GetIdwTokenAsync();
+            mdwToken = await TokenProvider.GetMdwTokenAsync();
+
+            _idw = ClientFactory.CreateClient("IdwApiBaseUrl");
+            _idw.DefaultRequestHeaders.Authorization =
+                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", idwToken);
+
+            if (string.IsNullOrWhiteSpace(idwToken) || string.IsNullOrWhiteSpace(mdwToken))
+            {
+                error = "Missing tokens. Please go to Home page (/) to initialize external tokens.";
+                StateHasChanged();
+                return;
+            }
+
+            // platform options
+            try
+            {
+                var plats = await MiscSvc.GetMiscAsync(idwToken, type: "Platform");
+                platformOptions = (plats ?? new List<MiscDtos>())
+                    .Where(x => x.IsActive)
+                    .Select(x => CanonicalPlatform(!string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1))
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList();
+                platformAllow = new HashSet<string>(platformOptions, StringComparer.OrdinalIgnoreCase);
+            }
+            catch { }
+
+            // order statuses
+            try
+            {
+                var list = await MiscSvc.GetMiscAsync(idwToken, type: "StatusOrder");
+                orderStatusOptions = (list ?? new List<MiscDtos>())
+                    .Where(x => x.IsActive)
+                    .Select(x => !string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1)
+                    .Select(x => (x ?? "").Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x)
+                    .ToList();
+            }
+            catch { }
+
+            await LoadShopsAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    private static string CanonicalPlatform(string? p)
+    {
+        var x = (p ?? "").Trim().ToLowerInvariant();
+        if (x.Contains("tiktok")) return "TikTok";
+        if (x.Contains("shopee")) return "Shopee";
+        if (x.Contains("lazada")) return "Lazada";
+        return p ?? "";
+    }
+
+    private async Task LoadShopsAsync()
+    {
+        try
+        {
+            var resp = await _idw!.GetAsync("api/shops");
+            resp.EnsureSuccessStatusCode();
+            var json = await resp.Content.ReadAsStringAsync();
+            var list = JsonSerializer.Deserialize<List<ShopRow>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            allShops = list.Select(s => s with { Platform = CanonicalPlatform(s.Platform) }).ToList();
+
+            var first = FilteredShops.FirstOrDefault();
+            if (first is not null)
+                SelectedShopId = first.Id;
+        }
+        catch (Exception ex)
+        {
+            error = $"Load shops failed: {ex.Message}";
+        }
+    }
+
+    private void ApplySelectedShop()
+    {
+        if (!(SelectedShopId is int sid)) return;
+        var row = allShops.FirstOrDefault(s => s.Id == sid);
+        if (row is null) return;
+
+        platform = CanonicalPlatform(row.Platform);
+        shopIdStr = row.ShopId.ToString();
+    }
+
+    private void OnFromLocalChanged(ChangeEventArgs e)
+    {
+        var s = e?.Value?.ToString() ?? "";
+        if (!string.IsNullOrWhiteSpace(s)) fromLocalText = s;
+    }
+
+    private void OnToLocalChanged(ChangeEventArgs e)
+    {
+        var s = e?.Value?.ToString() ?? "";
+        if (!string.IsNullOrWhiteSpace(s)) toLocalText = s;
+    }
+
+    private void SetLast24h()
+    {
+        fromLocalText = DateTime.Now.AddHours(-24).ToString("yyyy-MM-ddTHH:mm");
+        toLocalText = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+    }
+
+    private void SetLast7d()
+    {
+        fromLocalText = DateTime.Now.AddDays(-7).ToString("yyyy-MM-ddTHH:mm");
+        toLocalText = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+    }
+
+    private void SetToday()
+    {
+        fromLocalText = DateTime.Today.ToString("yyyy-MM-ddTHH:mm");
+        toLocalText = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+    }
+
+    private void ResetFilters()
+    {
+        platform = "";
+        SelectedShopId = null;
+        shopIdStr = "";
+        filterQ = null;
+        filterOrderStatus = null;
+        currentPage = 1;
+        pageSize = 50;
+        SetLast24h();
+        items = null;
+        error = info = null;
+    }
+
+    private async Task Search()
+    {
+        if (loading) return;
+        loading = true;
+        error = info = null;
+        items = null;
+
+        try
+        {
+            long? shopId = null;
+            if (!string.IsNullOrWhiteSpace(shopIdStr) && long.TryParse(shopIdStr, out var sid))
+                shopId = sid;
+
+            var fromUtc = ParseLocalToUtc(fromLocalText);
+            var toUtc = ParseLocalToUtc(toLocalText);
+
+            var result = await MdwSvc.FeOrdersListAsync(
+                token: mdwToken,
+                channel: string.IsNullOrWhiteSpace(platform) ? null : platform,
+                shopId: shopId,
+                buyerUserId: null,
+                q: string.IsNullOrWhiteSpace(filterQ) ? null : filterQ,
+                status: string.IsNullOrWhiteSpace(filterOrderStatus) ? null : filterOrderStatus,
+                fromUtc: fromUtc,
+                toUtc: toUtc,
+                dateField: "updated",
+                page: currentPage,
+                pageSize: pageSize,
+                sort: "updatedDesc"
+            );
+
+            if (result?.Items != null)
+            {
+                items = result.Items.Select(o => new AutoNormalizeItem
+                {
+                    Order = o,
+                    IsSelected = true, // default checked to be user friendly
+                    State = NormalizeState.Pending,
+                    ErrorMessage = null
+                }).ToList();
+                totalItems = result.TotalItems;
+            }
+            else
+            {
+                items = new();
+                totalItems = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private bool CanPrev => currentPage > 1;
+    private bool CanNext => items != null && currentPage < (int)Math.Ceiling((double)totalItems / pageSize);
+
+    private async Task PrevPage()
+    {
+        if (CanPrev)
+        {
+            currentPage--;
+            await Search();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (CanNext)
+        {
+            currentPage++;
+            await Search();
+        }
+    }
+
+    private async Task StartAutoNormalize()
+    {
+        if (items == null || items.Count == 0 || isRunning) return;
+
+        error = info = null;
+        var selectedItems = items.Where(i => i.IsSelected && i.State != NormalizeState.Success).ToList();
+        if (selectedItems.Count == 0)
+        {
+            error = "กรุณาเลือกอย่างน้อย 1 ออเดอร์ที่ยังไม่เสร็จสิ้น";
+            return;
+        }
+
+        isRunning = true;
+        stopRequested = false;
+        totalToProcess = selectedItems.Count;
+        processedCount = 0;
+        successCount = 0;
+        failedCount = 0;
+
+        foreach (var item in selectedItems)
+        {
+            if (stopRequested)
+            {
+                info = $"หยุดการยิงซ่อมชั่วคราว ดำเนินการแล้วทั้งหมด {processedCount} รายการ";
+                break;
+            }
+
+            item.State = NormalizeState.Processing;
+            StateHasChanged();
+
+            try
+            {
+                var targetPlatform = item.Order.Channel ?? platform;
+                var targetShopId = item.Order.ShopId.ToString();
+                var targetOrderRef = item.Order.ExternalOrderNo ?? item.Order.UnifiedOrderId.ToString();
+
+                if (string.IsNullOrWhiteSpace(targetPlatform) || string.IsNullOrWhiteSpace(targetShopId) || string.IsNullOrWhiteSpace(targetOrderRef))
+                {
+                    throw new Exception("Platform, Shop ID, or OrderRef is missing.");
+                }
+
+                var (ok, body) = await MdwSvc.NormalizeByRefAsync(
+                    platform: targetPlatform,
+                    shopId: targetShopId,
+                    orderRef: targetOrderRef,
+                    token: mdwToken
+                );
+
+                if (ok)
+                {
+                    item.State = NormalizeState.Success;
+                    item.ErrorMessage = null;
+                    successCount++;
+                }
+                else
+                {
+                    item.State = NormalizeState.Failed;
+                    item.ErrorMessage = GetErrorMessageFromJson(body);
+                    failedCount++;
+                }
+            }
+            catch (Exception ex)
+            {
+                item.State = NormalizeState.Failed;
+                item.ErrorMessage = ex.Message;
+                failedCount++;
+            }
+
+            processedCount++;
+            StateHasChanged();
+
+            if (delayMs > 0 && processedCount < totalToProcess)
+            {
+                await Task.Delay(delayMs);
+            }
+        }
+
+        isRunning = false;
+        if (!stopRequested)
+        {
+            info = $"ยิงซ่อม Auto เสร็จสิ้น! สำเร็จ: {successCount}, ล้มเหลว: {failedCount}";
+        }
+        StateHasChanged();
+    }
+
+    private void StopAutoNormalize()
+    {
+        stopRequested = true;
+    }
+
+    private string GetErrorMessageFromJson(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "Unknown error";
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.TryGetProperty("message", out var msg))
+                return msg.GetString() ?? raw;
+            if (doc.RootElement.TryGetProperty("error", out var err))
+                return err.GetString() ?? raw;
+            return raw;
+        }
+        catch
+        {
+            return raw;
+        }
+    }
+
+    private static DateTime ParseLocal(string s)
+    {
+        if (DateTime.TryParseExact(s ?? "", "yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var dt))
+            return dt;
+        if (DateTime.TryParseExact(s ?? "", "yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out dt))
+            return dt;
+        return DateTime.Now;
+    }
+
+    private static DateTime ParseLocalToUtc(string s) =>
+        DateTime.SpecifyKind(ParseLocal(s), DateTimeKind.Local).ToUniversalTime();
+
+    private static string ToLocalStringAny(object? utcVal)
+    {
+        if (utcVal is null) return "-";
+        if (utcVal is DateTime dt)
+            return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+        if (utcVal is string s && DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dts))
+            return dts.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+        return utcVal.ToString() ?? "-";
+    }
+}
