@@ -80,7 +80,7 @@
                 <!-- Status (ดึงจาก Misc) -->
                 <div class="col-md-3">
                     <label class="form-label">Payment Status</label>
-                    <InputSelect class="form-select" @bind-Value="filter.PaymentStatus">
+                    <InputSelect class="form-select" @bind-Value="SelectedPaymentStatus">
                         <option value="">(All)</option>
                         @foreach (var st in paymentStatusOptions)
                         {
@@ -92,7 +92,7 @@
 
                 <div class="col-md-3">
                     <label class="form-label">Fulfillment Status</label>
-                    <InputSelect class="form-select" @bind-Value="filter.FulfillmentStatus">
+                    <InputSelect class="form-select" @bind-Value="SelectedFulfillmentStatus">
                         <option value="">(All)</option>
                         @foreach (var st in fulfillmentStatusOptions)
                         {
@@ -104,7 +104,7 @@
 
                 <div class="col-md-3">
                     <label class="form-label">Order Status</label>
-                    <InputSelect class="form-select" @bind-Value="filter.OrderStatus">
+                    <InputSelect class="form-select" @bind-Value="SelectedOrderStatus">
                         <option value="">(All)</option>
                         @foreach (var st in orderStatusOptions)
                         {
@@ -245,6 +245,39 @@ else
                         string.Equals(CanonicalPlatform(s.Platform), SelectedPlatform, StringComparison.OrdinalIgnoreCase))
             .OrderBy(s => s.Name ?? s.ShopId.ToString());
 
+    private string SelectedPaymentStatus
+    {
+        get => filter.PaymentStatus ?? "";
+        set
+        {
+            if (string.Equals(filter.PaymentStatus, value, StringComparison.OrdinalIgnoreCase)) return;
+            filter.PaymentStatus = value;
+            ApplyDisplayRowsFromRawItems();
+        }
+    }
+
+    private string SelectedFulfillmentStatus
+    {
+        get => filter.FulfillmentStatus ?? "";
+        set
+        {
+            if (string.Equals(filter.FulfillmentStatus, value, StringComparison.OrdinalIgnoreCase)) return;
+            filter.FulfillmentStatus = value;
+            ApplyDisplayRowsFromRawItems();
+        }
+    }
+
+    private string SelectedOrderStatus
+    {
+        get => filter.OrderStatus ?? "";
+        set
+        {
+            if (string.Equals(filter.OrderStatus, value, StringComparison.OrdinalIgnoreCase)) return;
+            filter.OrderStatus = value;
+            ApplyDisplayRowsFromRawItems();
+        }
+    }
+
     private class FilterVm
     {
         public string ExportType { get; set; } = "Standard";
@@ -272,6 +305,7 @@ else
     private int filteredCount;
 
     private List<Dictionary<string, object?>>? items;
+    private List<Dictionary<string, object?>> rawItems = new();
     private List<string> columns = new();
     private List<Dictionary<string, string>> exportRows = new();
 
@@ -402,6 +436,7 @@ else
 
         isLoading = true; errorMessage = null;
         items = null; totalItems = 0; filteredCount = 0;
+        rawItems.Clear();
         columns.Clear(); exportRows.Clear();
 
         // require channel + shop
@@ -436,65 +471,100 @@ else
 
             totalItems = resp?.total ?? 0;
 
-            var rawItems = (resp?.items ?? new()).Select(RowToDict).ToList();
+            rawItems = (resp?.items ?? new()).Select(RowToDict).ToList();
 
-            // (3) กรอง status 
-            items = ApplyClientFilters(rawItems);
-            filteredCount = items.Count;
-
-            if (items != null)
-            {
-                foreach (var r in items)
-                {
-                    // Standard keys
-                    if (r.ContainsKey("shipto_name"))
-                    {
-                        r["shipto_name"] = "Cash Sale / ขายเงินสด";
-                    }
-                    if (r.ContainsKey("shipto_address"))
-                    {
-                        var addrStr = FmtCell(r["shipto_address"]);
-                        if (!string.IsNullOrEmpty(addrStr))
-                        {
-                            r["shipto_address"] = new string('*', addrStr.Length);
-                        }
-                    }
-
-                    // CashSale keys
-                    if (r.ContainsKey("ชื่อลูกค้า"))
-                    {
-                        r["ชื่อลูกค้า"] = "Cash Sale / ขายเงินสด";
-                    }
-                    if (r.ContainsKey("ที่อยู่"))
-                    {
-                        var addrStr = FmtCell(r["ที่อยู่"]);
-                        if (!string.IsNullOrEmpty(addrStr))
-                        {
-                            r["ที่อยู่"] = new string('*', addrStr.Length);
-                        }
-                    }
-                }
-            }
-
-            // (4) columns + exportRows
+            // (3) columns + filtered display/export rows
             columns = filter.ExportType == "CashSale" 
                 ? DesiredCashSaleOrder.ToList() 
                 : DesiredCsvOrder.ToList();
 
-            exportRows.Clear();
-            foreach (var r in items)
-            {
-                var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var c in columns)
-                {
-                    r.TryGetValue(c, out var val);
-                    d[c] = FmtCell(val);
-                }
-                exportRows.Add(d);
-            }
+            ApplyDisplayRowsFromRawItems();
         }
         catch (Exception ex) { errorMessage = ex.Message; }
         finally { isLoading = false; }
+    }
+
+    private void ApplyDisplayRowsFromRawItems()
+    {
+        if (rawItems.Count == 0)
+        {
+            items = rawItems.Count == 0 && columns.Count > 0 ? new() : items;
+            filteredCount = 0;
+            exportRows.Clear();
+            return;
+        }
+
+        items = ApplyClientFilters(rawItems)
+            .Select(CloneRow)
+            .ToList();
+        filteredCount = items.Count;
+
+        foreach (var r in items)
+        {
+            MaskCustomerFields(r);
+        }
+
+        if (columns.Count == 0)
+        {
+            columns = filter.ExportType == "CashSale"
+                ? DesiredCashSaleOrder.ToList()
+                : DesiredCsvOrder.ToList();
+        }
+
+        RebuildExportRows();
+    }
+
+    private void RebuildExportRows()
+    {
+        exportRows.Clear();
+        if (items is null) return;
+
+        foreach (var r in items)
+        {
+            var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in columns)
+            {
+                r.TryGetValue(c, out var val);
+                d[c] = FmtCell(val);
+            }
+            exportRows.Add(d);
+        }
+    }
+
+    private static Dictionary<string, object?> CloneRow(Dictionary<string, object?> row)
+    {
+        return new Dictionary<string, object?>(row, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void MaskCustomerFields(Dictionary<string, object?> r)
+    {
+        // Standard keys
+        if (r.ContainsKey("shipto_name"))
+        {
+            r["shipto_name"] = "Cash Sale / ขายเงินสด";
+        }
+        if (r.ContainsKey("shipto_address"))
+        {
+            var addrStr = FmtCell(r["shipto_address"]);
+            if (!string.IsNullOrEmpty(addrStr))
+            {
+                r["shipto_address"] = new string('*', addrStr.Length);
+            }
+        }
+
+        // CashSale keys
+        if (r.ContainsKey("ชื่อลูกค้า"))
+        {
+            r["ชื่อลูกค้า"] = "Cash Sale / ขายเงินสด";
+        }
+        if (r.ContainsKey("ที่อยู่"))
+        {
+            var addrStr = FmtCell(r["ที่อยู่"]);
+            if (!string.IsNullOrEmpty(addrStr))
+            {
+                r["ที่อยู่"] = new string('*', addrStr.Length);
+            }
+        }
     }
 
     private List<Dictionary<string, object?>> ApplyClientFilters(List<Dictionary<string, object?>> src)
