@@ -4,9 +4,11 @@
 @using adwportal.Dtos
 @using adwportal.Services
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
 @using Microsoft.AspNetCore.Components.Authorization
 
 @inject AuthenticationStateProvider Auth
+@inject IHttpClientFactory ClientFactory
 @inject AuthTokenProvider TokenProvider
 @inject MdwMarketplaceService MdwSvc
 @inject IdwImportService IdwSvc
@@ -419,6 +421,7 @@
 
     private string? mdwToken;
     private string? idwToken;
+    private HttpClient? _mdwClient;
 
     // shops (for dropdown)
     private readonly List<ShopDtos> allShops = new();
@@ -676,6 +679,28 @@
             long? shopId = null;
             if (!string.IsNullOrWhiteSpace(filterShopId) && long.TryParse(filterShopId, out var sid))
                 shopId = sid;
+
+            if (!string.IsNullOrWhiteSpace(mdwToken))
+            {
+                if (_mdwClient == null)
+                {
+                    _mdwClient = ClientFactory.CreateClient("MdwApiBaseUrl");
+                    _mdwClient.DefaultRequestHeaders.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", mdwToken);
+                }
+
+                var updateQs = new Dictionary<string, string?>
+                {
+                    ["channel"] = filterChannel,
+                    ["shopId"] = filterShopId,
+                    ["dryRun"] = "false",
+                    ["overwrite"] = "false"
+                };
+
+                var updateUrl = QueryHelpers.AddQueryString("api/adw/maintenance/update-addresses", updateQs);
+                using var updResp = await _mdwClient.PostAsync(updateUrl, content: null);
+                updResp.EnsureSuccessStatusCode();
+            }
 
             var fromUtc = ParseLocalToUtc(fromLocalText);
             var toUtc = ParseLocalToUtc(toLocalText);

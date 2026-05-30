@@ -442,6 +442,40 @@ else
             items = ApplyClientFilters(rawItems);
             filteredCount = items.Count;
 
+            if (items != null)
+            {
+                foreach (var r in items)
+                {
+                    // Standard keys
+                    if (r.ContainsKey("shipto_name"))
+                    {
+                        r["shipto_name"] = "Cash Sale / ขายเงินสด";
+                    }
+                    if (r.ContainsKey("shipto_address"))
+                    {
+                        var addrStr = FmtCell(r["shipto_address"]);
+                        if (!string.IsNullOrEmpty(addrStr))
+                        {
+                            r["shipto_address"] = new string('*', addrStr.Length);
+                        }
+                    }
+
+                    // CashSale keys
+                    if (r.ContainsKey("ชื่อลูกค้า"))
+                    {
+                        r["ชื่อลูกค้า"] = "Cash Sale / ขายเงินสด";
+                    }
+                    if (r.ContainsKey("ที่อยู่"))
+                    {
+                        var addrStr = FmtCell(r["ที่อยู่"]);
+                        if (!string.IsNullOrEmpty(addrStr))
+                        {
+                            r["ที่อยู่"] = new string('*', addrStr.Length);
+                        }
+                    }
+                }
+            }
+
             // (4) columns + exportRows
             columns = filter.ExportType == "CashSale" 
                 ? DesiredCashSaleOrder.ToList() 
