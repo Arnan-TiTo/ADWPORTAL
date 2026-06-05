@@ -22,6 +22,13 @@
 
 <h3>Import Data</h3>
 
+@if (!string.IsNullOrWhiteSpace(importStatusMessage))
+{
+    <div class="alert alert-@importStatusKind mb-3" role="alert">
+        @importStatusMessage
+    </div>
+}
+
 <div class="card mb-3">
     <div class="card-body">
 
@@ -309,6 +316,8 @@
     private string? previewText;
     private bool? isSaving;
     private bool? isDelete;
+    private string? importStatusMessage;
+    private string importStatusKind = "info";
 
     private UploadResponseDtos? lastUpload;
     private IdwImportDtos? lastImported;
@@ -583,11 +592,37 @@
 
     private async Task Save()
     {
-        if (selectedFile == null || string.IsNullOrWhiteSpace(token) || cachedFileStream == null) return;
+        if (selectedFile == null)
+        {
+            importStatusKind = "warning";
+            importStatusMessage = "ยังไม่ได้เลือกไฟล์สำหรับ import";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            importStatusKind = "danger";
+            importStatusMessage = "IDW token ว่าง กรุณา login ใหม่หรือกลับไปหน้า Dashboard เพื่อ initialize token";
+            await JS.InvokeVoidAsync("showToast", importStatusMessage, "error");
+            return;
+        }
+
+        if (cachedFileStream == null)
+        {
+            importStatusKind = "danger";
+            importStatusMessage = "ไม่พบ file buffer กรุณาเลือกไฟล์ใหม่อีกครั้ง";
+            await JS.InvokeVoidAsync("showToast", importStatusMessage, "error");
+            return;
+        }
+
         isSaving = true;
         var fileName = selectedFile.Name; // เก็บไว้ก่อน เผื่อ fallback
         try
         {
+            importStatusKind = "info";
+            importStatusMessage = $"กำลังส่งไฟล์ {fileName} ไป IDW API ({Options.Value.IdwApiBaseUrl})...";
+            StateHasChanged();
+
             // ===== Step 1: POST /api/idw/import =====
             bool uploadTimedOut = false;
             string? uploadErrorMessage = null;
@@ -596,6 +631,8 @@
                 try
                 {
                     lastUpload = await DoUploadAsync();
+                    importStatusKind = "success";
+                    importStatusMessage = $"IDW API รับไฟล์แล้ว ImportId={lastUpload.importId}";
                 }
                 catch (Exception ex) when (Is401(ex))
                 {
@@ -610,12 +647,16 @@
                             await LoginAsync(u, p);
                     }
                     lastUpload = await DoUploadAsync();
+                    importStatusKind = "success";
+                    importStatusMessage = $"IDW API รับไฟล์แล้ว ImportId={lastUpload.importId}";
                 }
             }
             catch (TaskCanceledException)
             {
                 uploadTimedOut = true;
                 uploadErrorMessage = "Upload timeout";
+                importStatusKind = "warning";
+                importStatusMessage = "Upload timeout หลังส่งไป IDW API กำลังค้นหา import ล่าสุด...";
                 await JS.InvokeVoidAsync("showToast",
                     "Upload timeout — กำลังค้นหา import ที่ backend บันทึกไปแล้ว...", "warning");
             }
@@ -623,6 +664,8 @@
             {
                 uploadTimedOut = true;
                 uploadErrorMessage = httpEx.Message;
+                importStatusKind = "warning";
+                importStatusMessage = $"ส่งไป IDW API แล้วเกิด network error: {httpEx.Message}";
                 await JS.InvokeVoidAsync("showToast",
                     $"Upload error: {httpEx.Message} — กำลังค้นหา import ที่ backend บันทึกไปแล้ว...", "warning");
             }
@@ -630,6 +673,8 @@
             {
                 uploadTimedOut = true;
                 uploadErrorMessage = ex.Message;
+                importStatusKind = "warning";
+                importStatusMessage = $"IDW API ตอบ error หลัง upload: {ex.Message}";
                 await JS.InvokeVoidAsync("showToast",
                     "IDW API import error — กำลังค้นหา import ที่ backend บันทึกไปแล้ว...", "warning");
             }
@@ -669,8 +714,10 @@
                 }
                 else
                 {
+                    importStatusKind = "danger";
+                    importStatusMessage = $"Import failed — ไม่พบข้อมูลใน server{(string.IsNullOrWhiteSpace(uploadErrorMessage) ? "" : $": {uploadErrorMessage}")}";
                     await JS.InvokeVoidAsync("showToast",
-                        $"Import failed — ไม่พบข้อมูลใน server{(string.IsNullOrWhiteSpace(uploadErrorMessage) ? "" : $": {uploadErrorMessage}")}", "error");
+                        importStatusMessage, "error");
                     return;
                 }
             }

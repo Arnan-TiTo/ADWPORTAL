@@ -10,10 +10,12 @@ public class IdwImportService
 {
     private readonly IHttpClientFactory _factory;
     private readonly HttpClient _http; // client ตั้งต้นจาก name "IdwApiBaseUrl"
+    private readonly ILogger<IdwImportService> _logger;
 
-    public IdwImportService(IHttpClientFactory factory)
+    public IdwImportService(IHttpClientFactory factory, ILogger<IdwImportService> logger)
     {
         _factory = factory;
+        _logger = logger;
         _http = factory.CreateClient("IdwApiBaseUrl");
     }
 
@@ -244,8 +246,24 @@ public class IdwImportService
         if (repetitionPenalty.HasValue) form.Add(new StringContent(repetitionPenalty.Value.ToString(CultureInfo.InvariantCulture)), "repetitionPenalty");
 
         // ตรงกับ [ApiController]/IdwController -> [HttpPost("import")]
+        _logger.LogInformation(
+            "Posting IDW import to {BaseAddress}api/idw/import. File={FileName}, ContentType={ContentType}, ShopId={ShopId}, MiscIdPlatform={MiscIdPlatform}, MiscIdLogistic={MiscIdLogistic}, OcrEngine={OcrEngine}",
+            http.BaseAddress,
+            fileName,
+            fileContent.Headers.ContentType?.MediaType,
+            shopId,
+            miscIdPlatform,
+            miscIdLogistic,
+            ocrEngine);
+
         var resp = await http.PostAsync("api/idw/import", form, ct);
-        var body = await resp.Content.ReadAsStringAsync(ct);
+        string body = await resp.Content.ReadAsStringAsync(ct) ?? string.Empty;
+
+        _logger.LogInformation(
+            "IDW import response {StatusCode}. File={FileName}, BodyLength={BodyLength}",
+            (int)resp.StatusCode,
+            fileName,
+            body.Length);
 
         if (!resp.IsSuccessStatusCode)
             throw new Exception($"Import failed {(int)resp.StatusCode}: {body}");
