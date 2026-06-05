@@ -364,6 +364,7 @@
     private int selectedImageDim = 1200;
     private int selectedMaxTokens = 4096;
     private string selectedRepetitionPenalty = "1.5";
+    private static readonly TimeSpan ImportRequestTimeout = TimeSpan.FromMinutes(3);
 
     private bool DisableSave => isSaving == true
                                 || selectedFile == null
@@ -548,7 +549,7 @@
         cachedFileStream = new MemoryStream(ms.ToArray());
     }
 
-    private async Task<UploadResponseDtos> DoUploadAsync()
+    private async Task<UploadResponseDtos> DoUploadAsync(CancellationToken ct)
     {
         var bytes = cachedFileStream!.ToArray();
         await using var ms = new MemoryStream(bytes, writable: false);
@@ -566,7 +567,7 @@
             imageDim: selectedImageDim,
             maxTokens: selectedMaxTokens,
             repetitionPenalty: double.TryParse(selectedRepetitionPenalty, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var rp) ? rp : 1.5,
-            ct: CancellationToken.None
+            ct: ct
         );
     }
 
@@ -626,11 +627,12 @@
             // ===== Step 1: POST /api/idw/import =====
             bool uploadTimedOut = false;
             string? uploadErrorMessage = null;
+            using var uploadTimeout = new CancellationTokenSource(ImportRequestTimeout);
             try
             {
                 try
                 {
-                    lastUpload = await DoUploadAsync();
+                    lastUpload = await DoUploadAsync(uploadTimeout.Token);
                     importStatusKind = "success";
                     importStatusMessage = $"IDW API รับไฟล์แล้ว ImportId={lastUpload.importId}";
                 }
@@ -646,7 +648,8 @@
                         if (!string.IsNullOrWhiteSpace(u) && !string.IsNullOrWhiteSpace(p))
                             await LoginAsync(u, p);
                     }
-                    lastUpload = await DoUploadAsync();
+                    using var retryTimeout = new CancellationTokenSource(ImportRequestTimeout);
+                    lastUpload = await DoUploadAsync(retryTimeout.Token);
                     importStatusKind = "success";
                     importStatusMessage = $"IDW API รับไฟล์แล้ว ImportId={lastUpload.importId}";
                 }
@@ -654,9 +657,9 @@
             catch (TaskCanceledException)
             {
                 uploadTimedOut = true;
-                uploadErrorMessage = "Upload timeout";
+                uploadErrorMessage = $"Upload timeout after {ImportRequestTimeout.TotalMinutes:0} minutes";
                 importStatusKind = "warning";
-                importStatusMessage = "Upload timeout หลังส่งไป IDW API กำลังค้นหา import ล่าสุด...";
+                importStatusMessage = $"IDW API ยังไม่ตอบภายใน {ImportRequestTimeout.TotalMinutes:0} นาที กำลังค้นหา import ล่าสุด...";
                 await JS.InvokeVoidAsync("showToast",
                     "Upload timeout — กำลังค้นหา import ที่ backend บันทึกไปแล้ว...", "warning");
             }
