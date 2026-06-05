@@ -209,6 +209,7 @@ public class IdwImportService
         string token,
         Stream fileStream,
         string fileName,
+        string? contentType = null,
         int? shopId = null,
         int? miscIdPlatform = null,
         int? miscIdLogistic = null,
@@ -224,7 +225,8 @@ public class IdwImportService
 
         using var form = new MultipartFormDataContent();
         var fileContent = new StreamContent(fileStream);
-        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("application/octet-stream");
+        fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(
+            string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType);
         form.Add(fileContent, "file", fileName);
 
         if (shopId.HasValue) form.Add(new StringContent(shopId.Value.ToString()), "shopId");

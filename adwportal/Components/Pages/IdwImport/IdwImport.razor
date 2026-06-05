@@ -547,6 +547,7 @@
             token!,
             ms,
             selectedFile!.Name,
+            contentType: selectedFile.ContentType,
             shopId: selectedShopDbId,
             miscIdPlatform: selectedPlatformId,
             miscIdLogistic: selectedLogisticId,
@@ -589,6 +590,7 @@
         {
             // ===== Step 1: POST /api/idw/import =====
             bool uploadTimedOut = false;
+            string? uploadErrorMessage = null;
             try
             {
                 try
@@ -613,14 +615,23 @@
             catch (TaskCanceledException)
             {
                 uploadTimedOut = true;
+                uploadErrorMessage = "Upload timeout";
                 await JS.InvokeVoidAsync("showToast",
                     "Upload timeout — กำลังค้นหา import ที่ backend บันทึกไปแล้ว...", "warning");
             }
             catch (HttpRequestException httpEx)
             {
                 uploadTimedOut = true;
+                uploadErrorMessage = httpEx.Message;
                 await JS.InvokeVoidAsync("showToast",
                     $"Upload error: {httpEx.Message} — กำลังค้นหา import ที่ backend บันทึกไปแล้ว...", "warning");
+            }
+            catch (Exception ex) when (ex.Message.Contains("Import failed 5", StringComparison.OrdinalIgnoreCase))
+            {
+                uploadTimedOut = true;
+                uploadErrorMessage = ex.Message;
+                await JS.InvokeVoidAsync("showToast",
+                    "IDW API import error — กำลังค้นหา import ที่ backend บันทึกไปแล้ว...", "warning");
             }
 
             // ===== Step 2: ดึงข้อมูล Import =====
@@ -659,7 +670,7 @@
                 else
                 {
                     await JS.InvokeVoidAsync("showToast",
-                        "Import failed — ไม่พบข้อมูลใน server", "error");
+                        $"Import failed — ไม่พบข้อมูลใน server{(string.IsNullOrWhiteSpace(uploadErrorMessage) ? "" : $": {uploadErrorMessage}")}", "error");
                     return;
                 }
             }
