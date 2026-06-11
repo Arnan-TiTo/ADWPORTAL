@@ -207,56 +207,144 @@
 
 @if (detail is not null)
 {
+    var returnView = BuildReturnView(detail);
+
     <div class="card mt-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <div>
-                <strong>Return #@DisplayId(detail)</strong>
-                <span class="text-muted">(@Text(detail.Channel))</span>
+                <strong>Return @Text(returnView.ReturnRef)</strong>
+                <span class="text-muted">(@Text(returnView.Channel))</span>
             </div>
             <button class="btn btn-sm btn-outline-secondary" @onclick="() => detail = null">Close</button>
         </div>
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-6">
-                    <h6>Header</h6>
+                    <h6>ข้อมูลการคืนสินค้า</h6>
                     <dl class="row mb-0">
                         <dt class="col-sm-4">Channel</dt>
-                        <dd class="col-sm-8">@Text(detail.Channel)</dd>
+                        <dd class="col-sm-8">@Text(returnView.Channel)</dd>
                         <dt class="col-sm-4">ShopId</dt>
-                        <dd class="col-sm-8">@(detail.ShopId?.ToString() ?? "-")</dd>
-                        <dt class="col-sm-4">Order Ref</dt>
-                        <dd class="col-sm-8">@Text(DisplayOrderRef(detail))</dd>
-                        <dt class="col-sm-4">Return Ref</dt>
-                        <dd class="col-sm-8">@Text(DisplayReturnRef(detail))</dd>
+                        <dd class="col-sm-8">@Text(returnView.ShopId)</dd>
+                        <dt class="col-sm-4">เลขออเดอร์</dt>
+                        <dd class="col-sm-8">@Text(returnView.OrderRef)</dd>
+                        <dt class="col-sm-4">เลขคืนสินค้า</dt>
+                        <dd class="col-sm-8">@Text(returnView.ReturnRef)</dd>
                         <dt class="col-sm-4">Status</dt>
-                        <dd class="col-sm-8">@Text(DisplayStatus(detail))</dd>
-                        <dt class="col-sm-4">Reason</dt>
-                        <dd class="col-sm-8">@Text(detail.Reason)</dd>
-                        <dt class="col-sm-4">Buyer</dt>
-                        <dd class="col-sm-8">@Text(detail.BuyerUsername)</dd>
+                        <dd class="col-sm-8">
+                            <span class="badge bg-secondary">@Text(returnView.Status)</span>
+                        </dd>
+                        <dt class="col-sm-4">เหตุผล</dt>
+                        <dd class="col-sm-8">@Text(returnView.Reason)</dd>
+                        <dt class="col-sm-4">รายละเอียดเหตุผล</dt>
+                        <dd class="col-sm-8">@Text(returnView.TextReason)</dd>
+                    </dl>
+                </div>
+
+                <div class="col-md-6">
+                    <h6>ยอดเงินและลูกค้า</h6>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">ยอด refund</dt>
+                        <dd class="col-sm-7 fw-semibold">@Money(returnView.RefundAmount, returnView.Currency)</dd>
+                        <dt class="col-sm-5">ยอดก่อนส่วนลด</dt>
+                        <dd class="col-sm-7">@Money(returnView.AmountBeforeDiscount, returnView.Currency)</dd>
+                        <dt class="col-sm-5">ผู้ซื้อ</dt>
+                        <dd class="col-sm-7">@Text(returnView.BuyerUsername)</dd>
+                        <dt class="col-sm-5">Email</dt>
+                        <dd class="col-sm-7">@Text(returnView.BuyerEmail)</dd>
+                        <dt class="col-sm-5">ชนิดคำขอ</dt>
+                        <dd class="col-sm-7">@Text(returnView.ReturnRefundType)</dd>
+                        <dt class="col-sm-5">Validation</dt>
+                        <dd class="col-sm-7">@Text(returnView.ValidationType)</dd>
                     </dl>
                 </div>
 
                 <div class="col-md-6">
                     <h6>Timeline</h6>
                     <dl class="row mb-0">
-                        <dt class="col-sm-4">Created</dt>
-                        <dd class="col-sm-8">@ToLocalStringAny(detail.CreatedTimeUtc)</dd>
-                        <dt class="col-sm-4">Updated</dt>
-                        <dd class="col-sm-8">@ToLocalStringAny(detail.UpdatedTimeUtc)</dd>
-                        <dt class="col-sm-4">Ingested</dt>
-                        <dd class="col-sm-8">@ToLocalStringAny(DisplayIngested(detail))</dd>
+                        <dt class="col-sm-5">สร้างคำขอ</dt>
+                        <dd class="col-sm-7">@Text(returnView.CreatedAt)</dd>
+                        <dt class="col-sm-5">อัปเดตล่าสุด</dt>
+                        <dd class="col-sm-7">@Text(returnView.UpdatedAt)</dd>
+                        <dt class="col-sm-5">Due date</dt>
+                        <dd class="col-sm-7">@Text(returnView.DueDate)</dd>
+                        <dt class="col-sm-5">กำหนดส่งคืน</dt>
+                        <dd class="col-sm-7">@Text(returnView.ReturnShipDueDate)</dd>
+                        <dt class="col-sm-5">เวลานำเข้าระบบ</dt>
+                        <dd class="col-sm-7">@ToLocalStringAny(DisplayIngested(detail))</dd>
+                    </dl>
+                </div>
+
+                <div class="col-md-6">
+                    <h6>Logistics / Proof</h6>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">เลขพัสดุ</dt>
+                        <dd class="col-sm-7">@Text(returnView.TrackingNumber)</dd>
+                        <dt class="col-sm-5">Logistics</dt>
+                        <dd class="col-sm-7">@Text(returnView.LogisticsStatus)</dd>
+                        <dt class="col-sm-5">Reverse logistics</dt>
+                        <dd class="col-sm-7">@Text(returnView.ReverseLogisticsStatus)</dd>
+                        <dt class="col-sm-5">ต้องใช้ logistics</dt>
+                        <dd class="col-sm-7">@Text(returnView.NeedsLogistics)</dd>
+                        <dt class="col-sm-5">หลักฐานผู้ขาย</dt>
+                        <dd class="col-sm-7">@Text(returnView.SellerProofStatus)</dd>
+                        <dt class="col-sm-5">หลักฐานจัดส่ง</dt>
+                        <dd class="col-sm-7">@Text(returnView.UploadedShippingProof)</dd>
                     </dl>
                 </div>
 
                 <div class="col-12">
-                    <h6>Items</h6>
-                    @RenderJsonBlock(FirstJson(detail.ItemsJson, detail.Items))
+                    <h6>รายการสินค้า</h6>
+                    @if (returnView.Items.Count == 0)
+                    {
+                        <div class="text-muted small">-</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>สินค้า</th>
+                                        <th style="width:160px">SKU</th>
+                                        <th style="width:90px" class="text-end">จำนวน</th>
+                                        <th style="width:130px" class="text-end">ราคา</th>
+                                        <th style="width:130px" class="text-end">Refund</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in returnView.Items)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@Text(item.Name)</div>
+                                                <div class="small text-muted">ItemId: @Text(item.ItemId) · ModelId: @Text(item.ModelId)</div>
+                                            </td>
+                                            <td>
+                                                <div>@Text(item.VariationSku)</div>
+                                                @if (!string.IsNullOrWhiteSpace(item.ItemSku))
+                                                {
+                                                    <div class="small text-muted">@item.ItemSku</div>
+                                                }
+                                            </td>
+                                            <td class="text-end">@Text(item.Amount)</td>
+                                            <td class="text-end">@Money(item.ItemPrice, returnView.Currency)</td>
+                                            <td class="text-end fw-semibold">@Money(item.RefundAmount, returnView.Currency)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 </div>
 
                 <div class="col-12">
-                    <h6>RawJson</h6>
-                    @RenderJsonBlock(detail.RawJson)
+                    <details>
+                        <summary class="small text-muted">ข้อมูลเทคนิค RawJson</summary>
+                        <div class="mt-2">
+                            @RenderJsonBlock(detail.RawJson)
+                        </div>
+                    </details>
                 </div>
             </div>
         </div>
@@ -606,8 +694,136 @@
     private static string Text(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "-" : value;
 
+    private static string Money(decimal? value, string? currency)
+    {
+        if (!value.HasValue) return "-";
+        var suffix = string.IsNullOrWhiteSpace(currency) ? "" : $" {currency}";
+        return value.Value.ToString("#,##0.##", CultureInfo.InvariantCulture) + suffix;
+    }
+
     private static JsonElement FirstJson(params JsonElement[] values) =>
         values.FirstOrDefault(x => x.ValueKind is not JsonValueKind.Undefined and not JsonValueKind.Null);
+
+    private static ReturnDetailView BuildReturnView(FeUnifiedReturnDtos detail)
+    {
+        var raw = MaterializeJson(detail.RawJson);
+        var response = TryGetProperty(raw, "response", out var responseEl) ? responseEl : raw;
+        var user = TryGetProperty(response, "user", out var userEl) ? userEl : default;
+        var sellerProof = TryGetProperty(response, "seller_proof", out var proofEl) ? proofEl : default;
+
+        var items = new List<ReturnItemView>();
+        if (TryGetProperty(response, "item", out var itemEl) && itemEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in itemEl.EnumerateArray())
+            {
+                items.Add(new ReturnItemView(
+                    Name: GetString(item, "name"),
+                    ItemId: GetString(item, "item_id"),
+                    ModelId: GetString(item, "model_id"),
+                    ItemSku: GetString(item, "item_sku"),
+                    VariationSku: GetString(item, "variation_sku"),
+                    Amount: GetString(item, "amount"),
+                    ItemPrice: GetDecimal(item, "item_price"),
+                    RefundAmount: GetDecimal(item, "refund_amount")
+                ));
+            }
+        }
+
+        return new ReturnDetailView(
+            Channel: detail.Channel,
+            ShopId: detail.ShopId?.ToString(CultureInfo.InvariantCulture),
+            OrderRef: FirstText(GetString(response, "order_sn"), DisplayOrderRef(detail)),
+            ReturnRef: FirstText(GetString(response, "return_sn"), DisplayReturnRef(detail)),
+            Status: FirstText(GetString(response, "status"), DisplayStatus(detail)),
+            Reason: FirstText(GetString(response, "reason"), detail.Reason),
+            TextReason: GetString(response, "text_reason"),
+            RefundAmount: GetDecimal(response, "refund_amount"),
+            AmountBeforeDiscount: GetDecimal(response, "amount_before_discount"),
+            Currency: GetString(response, "currency"),
+            BuyerUsername: FirstText(GetString(user, "username"), detail.BuyerUsername),
+            BuyerEmail: GetString(user, "email"),
+            ReturnRefundType: GetString(response, "return_refund_type"),
+            ValidationType: GetString(response, "validation_type"),
+            CreatedAt: FirstText(UnixText(response, "create_time"), ToLocalStringAny(detail.CreatedTimeUtc)),
+            UpdatedAt: FirstText(UnixText(response, "update_time"), ToLocalStringAny(detail.UpdatedTimeUtc)),
+            DueDate: UnixText(response, "due_date"),
+            ReturnShipDueDate: UnixText(response, "return_ship_due_date"),
+            TrackingNumber: GetString(response, "tracking_number"),
+            LogisticsStatus: GetString(response, "logistics_status"),
+            ReverseLogisticsStatus: GetString(response, "reverse_logistics_status"),
+            NeedsLogistics: BoolText(response, "needs_logistics"),
+            SellerProofStatus: GetString(sellerProof, "seller_proof_status"),
+            UploadedShippingProof: BoolText(response, "has_uploaded_shipping_proof"),
+            Items: items
+        );
+    }
+
+    private static JsonElement MaterializeJson(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            var text = value.GetString();
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(text);
+                    return doc.RootElement.Clone();
+                }
+                catch
+                {
+                    return value;
+                }
+            }
+        }
+
+        return value;
+    }
+
+    private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
+    {
+        value = default;
+        return element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out value);
+    }
+
+    private static string? GetString(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value)) return null;
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.ToString(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => null
+        };
+    }
+
+    private static decimal? GetDecimal(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value)) return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var d)) return d;
+        if (value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out d)) return d;
+        return null;
+    }
+
+    private static string? UnixText(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value)) return null;
+        long unix = 0;
+        if (value.ValueKind == JsonValueKind.Number) value.TryGetInt64(out unix);
+        if (value.ValueKind == JsonValueKind.String) long.TryParse(value.GetString(), out unix);
+        if (unix <= 0) return "-";
+        return DateTimeOffset.FromUnixTimeSeconds(unix).LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private static string? BoolText(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value)) return null;
+        if (value.ValueKind == JsonValueKind.True) return "ใช่";
+        if (value.ValueKind == JsonValueKind.False) return "ไม่ใช่";
+        return GetString(element, name);
+    }
 
     private static string JsonText(JsonElement value)
     {
@@ -645,4 +861,41 @@
         builder.AddContent(4, json);
         builder.CloseElement();
     };
+
+    private sealed record ReturnDetailView(
+        string? Channel,
+        string? ShopId,
+        string? OrderRef,
+        string? ReturnRef,
+        string? Status,
+        string? Reason,
+        string? TextReason,
+        decimal? RefundAmount,
+        decimal? AmountBeforeDiscount,
+        string? Currency,
+        string? BuyerUsername,
+        string? BuyerEmail,
+        string? ReturnRefundType,
+        string? ValidationType,
+        string? CreatedAt,
+        string? UpdatedAt,
+        string? DueDate,
+        string? ReturnShipDueDate,
+        string? TrackingNumber,
+        string? LogisticsStatus,
+        string? ReverseLogisticsStatus,
+        string? NeedsLogistics,
+        string? SellerProofStatus,
+        string? UploadedShippingProof,
+        List<ReturnItemView> Items);
+
+    private sealed record ReturnItemView(
+        string? Name,
+        string? ItemId,
+        string? ModelId,
+        string? ItemSku,
+        string? VariationSku,
+        string? Amount,
+        decimal? ItemPrice,
+        decimal? RefundAmount);
 }
