@@ -59,7 +59,13 @@
 
             <div class="col-md-2">
                 <label class="form-label">Status</label>
-                <input class="form-control" @bind="filterStatus" @bind:event="oninput" />
+                <select class="form-select" @bind="filterStatus">
+                    <option value="">(All)</option>
+                    @foreach (var st in orderStatusOptions)
+                    {
+                        <option value="@st">@st</option>
+                    }
+                </select>
             </div>
 
             <div class="col-md-4">
@@ -356,6 +362,7 @@
     private string? idwToken;
     private readonly List<ShopDtos> allShops = new();
     private List<string> channelOptions = new();
+    private List<string> orderStatusOptions = new();
 
     private bool loading;
     private string? error;
@@ -482,6 +489,8 @@
             {
                 channelOptions = miscPlatforms;
             }
+
+            orderStatusOptions = await LoadMiscOptionsAsync(idwToken, "StatusOrder");
         }
         catch
         {
@@ -492,6 +501,19 @@
                 .OrderBy(x => x)
                 .ToList();
         }
+    }
+
+    private async Task<List<string>> LoadMiscOptionsAsync(string token, string type)
+    {
+        var list = await MiscSvc.GetMiscAsync(token, type: type);
+        return (list ?? new List<MiscDtos>())
+            .Where(x => x.IsActive)
+            .Select(x => !string.IsNullOrWhiteSpace(x.Name) ? x.Name : x.Value1)
+            .Select(x => (x ?? "").Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
     }
 
     private async Task Search()
