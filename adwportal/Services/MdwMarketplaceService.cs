@@ -337,6 +337,88 @@ namespace adwportal.Services
             return await res.Content.ReadFromJsonAsync<FeUnifiedOrderDtos>(JsonOpts, ct);
         }
 
+        // ===== FE Unified Returns =====
+        public async Task<PagedResult<FeUnifiedReturnDtos>> FeReturnsListAsync(
+            string? token,
+            string? channel = null,
+            long? shopId = null,
+            string? q = null,
+            string? orderRef = null,
+            string? returnRef = null,
+            string? status = null,
+            DateTime? fromUtc = null,
+            DateTime? toUtc = null,
+            int page = 1,
+            int pageSize = 50,
+            string? sort = "updatedDesc",
+            bool includeRaw = false,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+
+            var qb = new QueryBuilder();
+            if (!string.IsNullOrWhiteSpace(channel)) qb.Add("channel", channel);
+            if (shopId is > 0) qb.Add("shopId", shopId.Value.ToString());
+            if (!string.IsNullOrWhiteSpace(q)) qb.Add("q", q);
+            if (!string.IsNullOrWhiteSpace(orderRef)) qb.Add("orderRef", orderRef);
+            if (!string.IsNullOrWhiteSpace(returnRef)) qb.Add("returnRef", returnRef);
+            if (!string.IsNullOrWhiteSpace(status)) qb.Add("status", status);
+            if (fromUtc.HasValue) qb.Add("fromUtc", fromUtc.Value.ToUniversalTime().ToString("o"));
+            if (toUtc.HasValue) qb.Add("toUtc", toUtc.Value.ToUniversalTime().ToString("o"));
+            if (page <= 0) page = 1;
+            if (pageSize <= 0 || pageSize > 200) pageSize = 50;
+            qb.Add("page", page.ToString());
+            qb.Add("pageSize", pageSize.ToString());
+            if (!string.IsNullOrWhiteSpace(sort)) qb.Add("sort", sort);
+            if (includeRaw) qb.Add("includeRaw", "true");
+
+            var url = "api/fe/orders/unifiedReturn" + qb.ToQueryString();
+
+            using var res = await http.GetAsync(url, ct);
+            res.EnsureSuccessStatusCode();
+
+            var obj = await res.Content.ReadFromJsonAsync<PagedResult<FeUnifiedReturnDtos>>(JsonOpts, ct);
+            return obj ?? new PagedResult<FeUnifiedReturnDtos>
+            {
+                Page = page,
+                Size = pageSize,
+                TotalItems = 0,
+                Items = new List<FeUnifiedReturnDtos>()
+            };
+        }
+
+        public async Task<FeUnifiedReturnDtos?> FeReturnGetByIdAsync(
+            string? token,
+            long id,
+            bool includeRaw = true,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+            var qb = new QueryBuilder();
+            if (includeRaw) qb.Add("includeRaw", "true");
+            using var res = await http.GetAsync($"api/fe/orders/unifiedReturn/{id}{qb.ToQueryString()}", ct);
+            if (!res.IsSuccessStatusCode) return null;
+            return await res.Content.ReadFromJsonAsync<FeUnifiedReturnDtos>(JsonOpts, ct);
+        }
+
+        public async Task<FeUnifiedReturnDtos?> FeReturnGetByExternalAsync(
+            string? token,
+            string channel,
+            string externalReturnId,
+            long? shopId = null,
+            bool includeRaw = true,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+            var qb = new QueryBuilder();
+            if (shopId is > 0) qb.Add("shopId", shopId.Value.ToString());
+            if (includeRaw) qb.Add("includeRaw", "true");
+            var url = $"api/fe/orders/unifiedReturn/by-external/{Uri.EscapeDataString(channel)}/{Uri.EscapeDataString(externalReturnId)}{qb.ToQueryString()}";
+            using var res = await http.GetAsync(url, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            return await res.Content.ReadFromJsonAsync<FeUnifiedReturnDtos>(JsonOpts, ct);
+        }
+
         // ===== Shipping Labels =====
         public async Task<LabelListResponse> ListLabelsAsync(
             string? token,
