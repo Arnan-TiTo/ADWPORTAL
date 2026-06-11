@@ -174,11 +174,11 @@
                                 <td>@DisplayId(r)</td>
                                 <td>@Text(r.Channel)</td>
                                 <td>@(r.ShopId?.ToString() ?? "-")</td>
-                                <td>@Text(DisplayOrderRef(r))</td>
-                                <td>@Text(DisplayReturnRef(r))</td>
-                                <td>@Text(DisplayStatus(r))</td>
-                                <td>@ToLocalStringAny(r.CreatedTimeUtc)</td>
-                                <td>@ToLocalStringAny(r.UpdatedTimeUtc)</td>
+                                <td>@Text(DisplayOrderRefWithRaw(r))</td>
+                                <td>@Text(DisplayReturnRefWithRaw(r))</td>
+                                <td>@Text(DisplayStatusWithRaw(r))</td>
+                                <td>@Text(DisplayCreatedWithRaw(r))</td>
+                                <td>@Text(DisplayUpdatedWithRaw(r))</td>
                                 <td>@ToLocalStringAny(DisplayIngested(r))</td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewDetail(DisplayId(r))">
@@ -369,7 +369,7 @@
     private string? filterReturnRef = "";
     private string? filterStatus = "";
     private string filterSort = "updatedDesc";
-    private bool includeRaw;
+    private bool includeRaw = true;
     private int currentPage = 1;
     private int pageSize = 50;
 
@@ -604,7 +604,7 @@
         filterReturnRef = "";
         filterStatus = "";
         filterSort = "updatedDesc";
-        includeRaw = false;
+        includeRaw = true;
         currentPage = 1;
         pageSize = 50;
         fromLocalText = DateTime.Now.AddDays(-1).ToString("yyyy-MM-ddTHH:mm");
@@ -688,6 +688,24 @@
     private static string? DisplayStatus(FeUnifiedReturnDtos r) => FirstText(r.Status, r.ReturnStatus);
     private static DateTime? DisplayIngested(FeUnifiedReturnDtos r) => r.IngestedTimeUtc ?? r.IngestedAtUtc;
 
+    private static string? DisplayOrderRefWithRaw(FeUnifiedReturnDtos r) =>
+        FirstText(DisplayOrderRef(r), GetRawResponseString(r, "order_sn"));
+
+    private static string? DisplayReturnRefWithRaw(FeUnifiedReturnDtos r) =>
+        FirstText(DisplayReturnRef(r), GetRawResponseString(r, "return_sn"));
+
+    private static string? DisplayStatusWithRaw(FeUnifiedReturnDtos r) =>
+        FirstText(DisplayStatus(r), GetRawResponseString(r, "status"));
+
+    private static string? DisplayCreatedWithRaw(FeUnifiedReturnDtos r) =>
+        FirstText(ToDisplayDate(r.CreatedTimeUtc), GetRawResponseUnixText(r, "create_time"));
+
+    private static string? DisplayUpdatedWithRaw(FeUnifiedReturnDtos r) =>
+        FirstText(ToDisplayDate(r.UpdatedTimeUtc), GetRawResponseUnixText(r, "update_time"));
+
+    private static string? ToDisplayDate(DateTime? value) =>
+        value.HasValue ? value.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : null;
+
     private static string? FirstText(params string?[] values) =>
         values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
 
@@ -704,10 +722,27 @@
     private static JsonElement FirstJson(params JsonElement[] values) =>
         values.FirstOrDefault(x => x.ValueKind is not JsonValueKind.Undefined and not JsonValueKind.Null);
 
+    private static string? GetRawResponseString(FeUnifiedReturnDtos r, string name)
+    {
+        var response = GetRawResponse(r);
+        return GetString(response, name);
+    }
+
+    private static string? GetRawResponseUnixText(FeUnifiedReturnDtos r, string name)
+    {
+        var response = GetRawResponse(r);
+        return UnixText(response, name);
+    }
+
+    private static JsonElement GetRawResponse(FeUnifiedReturnDtos r)
+    {
+        var raw = MaterializeJson(r.RawJson);
+        return TryGetProperty(raw, "response", out var response) ? response : raw;
+    }
+
     private static ReturnDetailView BuildReturnView(FeUnifiedReturnDtos detail)
     {
-        var raw = MaterializeJson(detail.RawJson);
-        var response = TryGetProperty(raw, "response", out var responseEl) ? responseEl : raw;
+        var response = GetRawResponse(detail);
         var user = TryGetProperty(response, "user", out var userEl) ? userEl : default;
         var sellerProof = TryGetProperty(response, "seller_proof", out var proofEl) ? proofEl : default;
 
