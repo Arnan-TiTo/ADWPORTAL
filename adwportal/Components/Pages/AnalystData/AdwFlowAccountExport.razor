@@ -546,30 +546,13 @@ else
 
         try
         {
-            FeUnifiedOrderDtos? externalOrder = null;
-            if (hasExternalOrderNo)
-            {
-                externalOrder = await FindExternalOrderAsync(filter.ExternalOrderNo!.Trim());
-                if (externalOrder is null)
-                {
-                    columns = filter.ExportType == "CashSale"
-                        ? DesiredCashSaleOrder.ToList()
-                        : DesiredCsvOrder.ToList();
-                    items = new();
-                    errorMessage = $"ไม่พบ External Order No: {filter.ExternalOrderNo}";
-                    return;
-                }
-            }
-
             if (hasShopScope)
                 await UpdateAddressesForTargetsAsync(new[] { (filter.Channel, long.Parse(filter.ShopId!)) });
-            else if (externalOrder?.ShopId is > 0 && !string.IsNullOrWhiteSpace(externalOrder.Channel))
-                await UpdateAddressesForTargetsAsync(new[] { (externalOrder.Channel!, externalOrder.ShopId.Value) });
 
             string apiPath = filter.ExportType == "CashSale" 
                 ? "/api/adw/export/flowaccount/cashsale" 
                 : "/api/adw/export/flowaccount/orders";
-            var url = BuildApiUrl(apiPath, withPaging: true, externalOrder);
+            var url = BuildApiUrl(apiPath, withPaging: true);
             var resp = await _mdwClient.GetFromJsonAsync<ApiResp>(url);
 
             totalItems = resp?.total ?? 0;
@@ -944,30 +927,19 @@ else
             : $"Failed {(int)resp.StatusCode}: {TrimForDisplay(body, 180)}";
     }
 
-    private string BuildApiUrl(string path, bool withPaging = false, FeUnifiedOrderDtos? externalOrder = null)
+    private string BuildApiUrl(string path, bool withPaging = false)
     {
         var baseUri = _mdwClient!.BaseAddress!;
         var root = new Uri(baseUri, path);
 
         var qs = new Dictionary<string, string?>();
 
-        var channel = !string.IsNullOrWhiteSpace(filter.Channel) ? filter.Channel : externalOrder?.Channel;
-        var shopId = !string.IsNullOrWhiteSpace(filter.ShopId) ? filter.ShopId : externalOrder?.ShopId?.ToString(CultureInfo.InvariantCulture);
+        if (!string.IsNullOrWhiteSpace(filter.Channel)) qs["channel"] = filter.Channel;
+        if (!string.IsNullOrWhiteSpace(filter.ShopId)) qs["shopId"] = filter.ShopId;
+        if (!string.IsNullOrWhiteSpace(filter.ExternalOrderNo)) qs["externalOrderNo"] = filter.ExternalOrderNo.Trim();
 
-        if (!string.IsNullOrWhiteSpace(channel)) qs["channel"] = channel;
-        if (!string.IsNullOrWhiteSpace(shopId)) qs["shopId"] = shopId;
-
-        var createdFrom = filter.CreatedFrom;
-        var createdTo = filter.CreatedTo;
-        if (!createdFrom.HasValue && !createdTo.HasValue && externalOrder?.CreatedTimeUtc is DateTime createdUtc)
-        {
-            var localDate = createdUtc.ToLocalTime().Date;
-            createdFrom = localDate.AddDays(-1);
-            createdTo = localDate.AddDays(1);
-        }
-
-        if (createdFrom.HasValue) qs["createdFrom"] = createdFrom.Value.ToString("yyyy-MM-dd");
-        if (createdTo.HasValue) qs["createdTo"] = createdTo.Value.ToString("yyyy-MM-dd");
+        if (filter.CreatedFrom.HasValue) qs["createdFrom"] = filter.CreatedFrom.Value.ToString("yyyy-MM-dd");
+        if (filter.CreatedTo.HasValue) qs["createdTo"] = filter.CreatedTo.Value.ToString("yyyy-MM-dd");
         if (filter.UpdatedFrom.HasValue) qs["updatedFrom"] = filter.UpdatedFrom.Value.ToString("yyyy-MM-dd");
         if (filter.UpdatedTo.HasValue) qs["updatedTo"] = filter.UpdatedTo.Value.ToString("yyyy-MM-dd");
 
@@ -978,23 +950,6 @@ else
         }
 
         return QueryHelpers.AddQueryString(root.ToString(), qs!);
-    }
-
-    private async Task<FeUnifiedOrderDtos?> FindExternalOrderAsync(string externalOrderNo)
-    {
-        var result = await MdwSvc.FeOrdersListAsync(
-            token: _mdwToken,
-            q: externalOrderNo,
-            fromUtc: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            toUtc: DateTime.UtcNow.AddYears(1),
-            dateField: "updated",
-            page: 1,
-            pageSize: 50,
-            sort: "updatedDesc");
-
-        return result.Items
-            .FirstOrDefault(x => string.Equals(x.ExternalOrderNo, externalOrderNo, StringComparison.OrdinalIgnoreCase))
-            ?? result.Items.FirstOrDefault();
     }
 
     private async Task UpdateAddressesForTargetsAsync(IEnumerable<(string Channel, long ShopId)> targets)
