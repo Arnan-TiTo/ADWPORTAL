@@ -546,13 +546,30 @@ else
 
         try
         {
+            FeUnifiedOrderDtos? externalOrder = null;
+            if (hasExternalOrderNo)
+            {
+                externalOrder = await FindExternalOrderAsync(filter.ExternalOrderNo!.Trim());
+                if (externalOrder is null)
+                {
+                    columns = filter.ExportType == "CashSale"
+                        ? DesiredCashSaleOrder.ToList()
+                        : DesiredCsvOrder.ToList();
+                    items = new();
+                    errorMessage = $"ไม่พบ External Order No: {filter.ExternalOrderNo}";
+                    return;
+                }
+            }
+
             if (hasShopScope)
                 await UpdateAddressesForTargetsAsync(new[] { (filter.Channel, long.Parse(filter.ShopId!)) });
+            else if (externalOrder?.ShopId is > 0 && !string.IsNullOrWhiteSpace(externalOrder.Channel))
+                await UpdateAddressesForTargetsAsync(new[] { (externalOrder.Channel!, externalOrder.ShopId.Value) });
 
             string apiPath = filter.ExportType == "CashSale" 
                 ? "/api/adw/export/flowaccount/cashsale" 
                 : "/api/adw/export/flowaccount/orders";
-            var url = BuildApiUrl(apiPath, withPaging: true);
+            var url = BuildApiUrl(apiPath, withPaging: true, externalOrder);
             var resp = await _mdwClient.GetFromJsonAsync<ApiResp>(url);
 
             totalItems = resp?.total ?? 0;
@@ -652,6 +669,12 @@ else
     private List<Dictionary<string, object?>> ApplyClientFilters(List<Dictionary<string, object?>> src)
     {
         IEnumerable<Dictionary<string, object?>> q = src;
+
+        if (!string.IsNullOrWhiteSpace(filter.ExternalOrderNo))
+        {
+            var external = filter.ExternalOrderNo.Trim();
+            q = q.Where(r => RowHasExternalOrderNo(r, external));
+        }
 
         if (!string.IsNullOrWhiteSpace(filter.PaymentStatus))
         {
@@ -921,19 +944,30 @@ else
             : $"Failed {(int)resp.StatusCode}: {TrimForDisplay(body, 180)}";
     }
 
-    private string BuildApiUrl(string path, bool withPaging = false)
+    private string BuildApiUrl(string path, bool withPaging = false, FeUnifiedOrderDtos? externalOrder = null)
     {
         var baseUri = _mdwClient!.BaseAddress!;
         var root = new Uri(baseUri, path);
 
         var qs = new Dictionary<string, string?>();
 
-        if (!string.IsNullOrWhiteSpace(filter.Channel)) qs["channel"] = filter.Channel;
-        if (!string.IsNullOrWhiteSpace(filter.ShopId)) qs["shopId"] = filter.ShopId;
-        if (!string.IsNullOrWhiteSpace(filter.ExternalOrderNo)) qs["q"] = filter.ExternalOrderNo.Trim();
+        var channel = !string.IsNullOrWhiteSpace(filter.Channel) ? filter.Channel : externalOrder?.Channel;
+        var shopId = !string.IsNullOrWhiteSpace(filter.ShopId) ? filter.ShopId : externalOrder?.ShopId?.ToString(CultureInfo.InvariantCulture);
 
-        if (filter.CreatedFrom.HasValue) qs["createdFrom"] = filter.CreatedFrom.Value.ToString("yyyy-MM-dd");
-        if (filter.CreatedTo.HasValue) qs["createdTo"] = filter.CreatedTo.Value.ToString("yyyy-MM-dd");
+        if (!string.IsNullOrWhiteSpace(channel)) qs["channel"] = channel;
+        if (!string.IsNullOrWhiteSpace(shopId)) qs["shopId"] = shopId;
+
+        var createdFrom = filter.CreatedFrom;
+        var createdTo = filter.CreatedTo;
+        if (!createdFrom.HasValue && !createdTo.HasValue && externalOrder?.CreatedTimeUtc is DateTime createdUtc)
+        {
+            var localDate = createdUtc.ToLocalTime().Date;
+            createdFrom = localDate.AddDays(-1);
+            createdTo = localDate.AddDays(1);
+        }
+
+        if (createdFrom.HasValue) qs["createdFrom"] = createdFrom.Value.ToString("yyyy-MM-dd");
+        if (createdTo.HasValue) qs["createdTo"] = createdTo.Value.ToString("yyyy-MM-dd");
         if (filter.UpdatedFrom.HasValue) qs["updatedFrom"] = filter.UpdatedFrom.Value.ToString("yyyy-MM-dd");
         if (filter.UpdatedTo.HasValue) qs["updatedTo"] = filter.UpdatedTo.Value.ToString("yyyy-MM-dd");
 
@@ -944,6 +978,23 @@ else
         }
 
         return QueryHelpers.AddQueryString(root.ToString(), qs!);
+    }
+
+    private async Task<FeUnifiedOrderDtos?> FindExternalOrderAsync(string externalOrderNo)
+    {
+        var result = await MdwSvc.FeOrdersListAsync(
+            token: _mdwToken,
+            q: externalOrderNo,
+            fromUtc: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            toUtc: DateTime.UtcNow.AddYears(1),
+            dateField: "updated",
+            page: 1,
+            pageSize: 50,
+            sort: "updatedDesc");
+
+        return result.Items
+            .FirstOrDefault(x => string.Equals(x.ExternalOrderNo, externalOrderNo, StringComparison.OrdinalIgnoreCase))
+            ?? result.Items.FirstOrDefault();
     }
 
     private async Task UpdateAddressesForTargetsAsync(IEnumerable<(string Channel, long ShopId)> targets)
@@ -1074,6 +1125,31 @@ else
     private static string Cell(Dictionary<string, object?> row, string key)
     {
         return row.TryGetValue(key, out var v) ? FmtCell(v).Trim() : "";
+    }
+
+    private static bool RowHasExternalOrderNo(Dictionary<string, object?> row, string externalOrderNo)
+    {
+        var candidates = new[]
+        {
+            "หมายเลขคำสั่งซื้อ/อ้างอิงจากเอกสาร",
+            "order_no",
+            "external_order_no",
+            "ExternalOrderNo",
+            "ExternalOrder",
+            "externalOrderNo",
+            "externalOrder",
+            "orderRef",
+            "OrderRef"
+        };
+
+        foreach (var key in candidates)
+        {
+            var value = Cell(row, key);
+            if (string.Equals(value, externalOrderNo, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return row.Values.Any(v => string.Equals(FmtCell(v).Trim(), externalOrderNo, StringComparison.OrdinalIgnoreCase));
     }
 
     private static decimal DecimalCell(Dictionary<string, object?> row, string key, decimal fallback)
