@@ -164,83 +164,118 @@
 
                         @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
                         {
-                            <li>
-                                <NavLink href="/IdwImport" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="IDW Import">
-                                    <i class="bi bi-cloud-upload"></i>
-                                    <span class="nav-label">IDW Import</span>
-                                </NavLink>
-                            </li>
-                            <li>
-                                <NavLink href="/IdwManageList" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="IDW Manage">
-                                    <i class="bi bi-clipboard-data"></i>
-                                    <span class="nav-label">IDW Manage</span>
-                                </NavLink>
+                            <li class="nav-group">
+                                <button type="button" class="nav-item-link group-toggle" @onclick="ToggleLabelManage" title="Label Manage">
+                                    <i class="bi bi-tags"></i>
+                                    <span class="nav-label">Label Manage</span>
+                                    @if (isSidebarOpen)
+                                    {
+                                        <i class="bi bi-chevron-right chevron @(labelManageOpen ? "rotated" : "")"></i>
+                                    }
+                                </button>
+                                @if (labelManageOpen)
+                                {
+                                    <ul class="sub-menu">
+                                        <li>
+                                            <NavLink href="/IdwImport" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="OCR Import">
+                                                <i class="bi bi-cloud-upload"></i>
+                                                <span class="nav-label">OCR Import</span>
+                                            </NavLink>
+                                        </li>
+                                        <li>
+                                            <NavLink href="/IdwManageList" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="OCR Manage">
+                                                <i class="bi bi-clipboard-data"></i>
+                                                <span class="nav-label">OCR Manage</span>
+                                            </NavLink>
+                                        </li>
+                                        <li>
+                                            <NavLink href="/ShippingLabels" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="View Labels">
+                                                <i class="bi bi-tag"></i>
+                                                <span class="nav-label">View Labels</span>
+                                            </NavLink>
+                                        </li>
+                                        <li>
+                                            <NavLink href="/ReloadLabel" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Reload Label">
+                                                <i class="bi bi-arrow-clockwise"></i>
+                                                <span class="nav-label">Reload Label</span>
+                                            </NavLink>
+                                        </li>
+                                    </ul>
+                                }
                             </li>
                         }
-                        @if (IsUserInRole(auth.User, "Admin"))
-                        {
-                            <li>
-                                <NavLink href="/shopsOAuth" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="MDW Shops OAuth">
-                                    <i class="bi bi-shield-lock"></i>
-                                    <span class="nav-label">Shops OAuth</span>
-                                </NavLink>
-                            </li>
-                        }
-                        @if (IsUserInRole(auth.User, "Admin", "SuperUser"))
-                        {
-                            <li>
-                                <NavLink href="/normalize" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="MDW Normalize">
-                                    <i class="bi bi-arrow-repeat"></i>
-                                    <span class="nav-label">Normalize</span>
-                                </NavLink>
-                            </li>
-                            <li>
-                                <NavLink href="/normalize-auto" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="MDW Normalize Auto">
-                                    <i class="bi bi-play-circle"></i>
-                                    <span class="nav-label">Normalize Auto</span>
-                                </NavLink>
-                            </li>
-                        }
+
                         @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
                         {
-                            <li>
-                                <NavLink href="/ShippingLabels" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="Shipping Labels">
-                                    <i class="bi bi-tag"></i>
-                                    <span class="nav-label">Labels</span>
-                                </NavLink>
-                            </li>
-                            <li>
-                                <NavLink href="/LoadLabel" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="Load Label">
-                                    <i class="bi bi-cloud-arrow-down"></i>
-                                    <span class="nav-label">Load Label</span>
-                                </NavLink>
-                            </li>
-                            <li>
-                                <NavLink href="/ReloadLabel" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="Reload Label">
-                                    <i class="bi bi-arrow-clockwise"></i>
-                                    <span class="nav-label">Reload Label</span>
-                                </NavLink>
+                            <li class="nav-group">
+                                <button type="button" class="nav-item-link group-toggle" @onclick="ToggleMarketplaceManage" title="Marketplace Manage">
+                                    <i class="bi bi-shop-window"></i>
+                                    <span class="nav-label">Marketplace Manage</span>
+                                    @if (isSidebarOpen)
+                                    {
+                                        <i class="bi bi-chevron-right chevron @(marketplaceManageOpen ? "rotated" : "")"></i>
+                                    }
+                                </button>
+                                @if (marketplaceManageOpen)
+                                {
+                                    <ul class="sub-menu">
+                                        @if (IsUserInRole(auth.User, "Admin"))
+                                        {
+                                            <li>
+                                                <NavLink href="/shopsOAuth" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Shop OAuth">
+                                                    <i class="bi bi-shield-lock"></i>
+                                                    <span class="nav-label">Shop OAuth</span>
+                                                </NavLink>
+                                            </li>
+                                        }
+                                        @if (IsUserInRole(auth.User, "Admin", "SuperUser"))
+                                        {
+                                            <li>
+                                                <NavLink href="/normalize" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Normalize Import">
+                                                    <i class="bi bi-arrow-repeat"></i>
+                                                    <span class="nav-label">Normalize Import</span>
+                                                </NavLink>
+                                            </li>
+                                            <li>
+                                                <NavLink href="/normalize-auto" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="Normalize Import Auto">
+                                                    <i class="bi bi-play-circle"></i>
+                                                    <span class="nav-label">Normalize Import Auto</span>
+                                                </NavLink>
+                                            </li>
+                                        }
+                                        <li>
+                                            <NavLink href="/ViewOrderData" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="View Data">
+                                                <i class="bi bi-database-add"></i>
+                                                <span class="nav-label">View Data</span>
+                                            </NavLink>
+                                        </li>
+                                    </ul>
+                                }
                             </li>
                         }
+
                         @if (IsUserInRole(auth.User, "Admin", "OfficeUser", "SuperUser"))
                         {
-                            <li>
-                                <NavLink href="/ViewOrderData" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="Raw Data Import">
-                                    <i class="bi bi-database-add"></i>
-                                    <span class="nav-label">Raw Data</span>
-                                </NavLink>
-                            </li>
-                            <li>
-                                <NavLink href="/ViewOrderReturn" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="Order Return">
-                                    <i class="bi bi-arrow-return-left"></i>
-                                    <span class="nav-label">Order Return</span>
-                                </NavLink>
-                            </li>
-                            <li>
-                                <NavLink href="/AdwFlowAccountExport" Match="NavLinkMatch.Prefix" class="nav-item-link" ActiveClass="active" title="FlowAccount Export">
+                            <li class="nav-group">
+                                <button type="button" class="nav-item-link group-toggle" @onclick="ToggleErpExport" title="ERP Export">
                                     <i class="bi bi-file-earmark-spreadsheet"></i>
                                     <span class="nav-label">ERP Export</span>
-                                </NavLink>
+                                    @if (isSidebarOpen)
+                                    {
+                                        <i class="bi bi-chevron-right chevron @(erpExportOpen ? "rotated" : "")"></i>
+                                    }
+                                </button>
+                                @if (erpExportOpen)
+                                {
+                                    <ul class="sub-menu">
+                                        <li>
+                                            <NavLink href="/AdwFlowAccountExport" Match="NavLinkMatch.Prefix" class="nav-item-link sub" ActiveClass="active" title="FlowAccount Export">
+                                                <i class="bi bi-file-earmark-spreadsheet"></i>
+                                                <span class="nav-label">FlowAccount Export</span>
+                                            </NavLink>
+                                        </li>
+                                    </ul>
+                                }
                             </li>
                             @if (IsUserInRole(auth.User, "Admin"))
                             {
@@ -296,10 +331,16 @@
     private bool isSidebarOpen = true;
     private bool configOpen = false;
     private bool memberOpen = false;
+    private bool labelManageOpen = false;
+    private bool marketplaceManageOpen = false;
+    private bool erpExportOpen = false;
 
     private void ToggleSidebar() => isSidebarOpen = !isSidebarOpen;
     private void ToggleConfig() => configOpen = !configOpen;
     private void ToggleMember() => memberOpen = !memberOpen;
+    private void ToggleLabelManage() => labelManageOpen = !labelManageOpen;
+    private void ToggleMarketplaceManage() => marketplaceManageOpen = !marketplaceManageOpen;
+    private void ToggleErpExport() => erpExportOpen = !erpExportOpen;
 
     private bool IsUserInRole(ClaimsPrincipal? user, params string[] roles)
     {
