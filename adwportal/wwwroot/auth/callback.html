@@ -62,20 +62,20 @@
             };
 
             // postMessage กลับไปหน้า Portal ที่เปิด popup (origin)
-            //const targetOrigin = get('origin') || '*';
-            //let posted = false;
-            //try { if (window.opener) { window.opener.postMessage(payload, targetOrigin); posted = true; } } catch (e) { }
-            //try { if (!posted && window.parent && window.parent !== window) { window.parent.postMessage(payload, targetOrigin); posted = true; } } catch (e) { }
+            const targetOrigin = get('origin') || '*';
+            let posted = false;
+            try { if (window.opener) { window.opener.postMessage(payload, targetOrigin); posted = true; } } catch (e) { }
+            try { if (!posted && window.parent && window.parent !== window) { window.parent.postMessage(payload, targetOrigin); posted = true; } } catch (e) { }
 
             // UI
-            //const el = document.getElementById('status');
-            //if (payload.error) { el.textContent = payload.errorDescription || payload.error; el.className = 'err'; }
-            //else if (payload.code) { el.textContent = 'Authorization received. You can close this window.'; el.className = 'ok'; }
-            //else { el.textContent = 'No code found in the redirect URL.'; el.className = 'err'; }
+            const el = document.getElementById('status');
+            if (payload.error) { el.textContent = payload.errorDescription || payload.error; el.className = 'err'; }
+            else if (payload.code) { el.textContent = 'Authorization received. You can close this window.'; el.className = 'ok'; }
+            else { el.textContent = 'No code found in the redirect URL.'; el.className = 'err'; }
 
             // --- Fallback: แลก token ฝั่งเซิร์ฟเวอร์ ---
             try {
-                if (payload.code && payload.state && payload.shopId) {
+                if (!posted && payload.code && payload.state && payload.shopId) {
                     await fetch('https://madewe.vibeandchic.com/api/market/auth/exchange-cb', {
                         method: 'POST',
                         mode: 'cors',

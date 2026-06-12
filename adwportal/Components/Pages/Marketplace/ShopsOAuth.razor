@@ -16,6 +16,7 @@
 @inject MdwMarketplaceService MdwSvc
 @inject IdwImportService Idw
 @inject MiscService MiscSvc
+@inject PartnerService PartnerSvc
 @inject Microsoft.Extensions.Configuration.IConfiguration Cfg
 
 <h1 class="mb-3">MDW — Shops OAuth</h1>
@@ -42,6 +43,32 @@
             </div>
             <div class="col-md-3">
                 <button class="btn btn-primary" @onclick="LoadShops">Reload</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">FlowAccount Partner</label>
+                <select class="form-select" @bind="selectedFlowPartnerId">
+                    <option value="">(Select partner)</option>
+                    @foreach (var p in partners)
+                    {
+                        <option value="@p.Id">@((p.Name ?? $"Partner {p.Id}") + " · Id: " + p.Id)</option>
+                    }
+                </select>
+                <div class="form-text">ใช้กรณี FlowAccount ยังไม่มี shop binding</div>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-outline-primary me-2" @onclick="StartFlowAccountPartnerAuthorizeAsync" disabled="@(selectedFlowPartnerId is null)">
+                    Authorize FlowAccount
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="CopyFlowAccountPartnerAuthLinkAsync" disabled="@(selectedFlowPartnerId is null)">
+                    Copy Link
+                </button>
             </div>
         </div>
     </div>
@@ -94,6 +121,10 @@
                             <div class="btn-group">
                                 <button class="btn btn-sm btn-outline-primary" @onclick="() => StartAuthorizeAsync(r)">Authorize</button>
                                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => CopyAuthLinkAsync(r)">Copy Link</button>
+                                @if (string.Equals(CanonicalPlatform(r.Platform, r.Name), "FlowAccount", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <button class="btn btn-sm btn-outline-success" @onclick="() => RefreshFlowAccountAsync(r)">Refresh</button>
+                                }
                             </div>
                         </td>
                     </tr>
@@ -122,11 +153,13 @@
     );
 
     private List<ShopVm> rows = new();
+    private List<PartnerDtos> partners = new();
     private bool isLoading;
     private string? errorMsg;
     private string? infoMsg;
     private string? filterName;
     private string? filterPlatform;
+    private int? selectedFlowPartnerId;
 
     // Platform dropdown options (from Misc where Type='Platform')
     private List<string> platformOptions = new();
@@ -156,9 +189,10 @@
 
     private class PendingAuth
     {
-        public required string Platform { get; init; }       // Shopee | TikTok | Lazada
+        public required string Platform { get; init; }       // Shopee | TikTok | Lazada | FlowAccount
         public required int PartnerIdInternal { get; init; } // Partners.Id (internal)
         public required long ShopId { get; init; }
+        public required string CallbackUrl { get; init; }
         public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
     }
 
@@ -208,10 +242,13 @@
                     .ToList();
             }
             catch { /* ignore */ }
+            if (!platformOptions.Contains("FlowAccount", StringComparer.OrdinalIgnoreCase))
+                platformOptions.Add("FlowAccount");
 
             // 4) register JS receiver + โหลดรายการ
             _selfRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("mdwOauth.registerReceiver", _selfRef);
+            await LoadPartners();
             await LoadShops();
         }
         catch (Exception ex) { errorMsg = ex.Message; }
@@ -233,6 +270,19 @@
         }
         catch (Exception ex) { errorMsg = ex.Message; }
         finally { isLoading = false; StateHasChanged(); }
+    }
+
+    private async Task LoadPartners()
+    {
+        if (string.IsNullOrWhiteSpace(_idwToken)) return;
+        try
+        {
+            partners = await PartnerSvc.GetPartnersAsync(_idwToken!);
+        }
+        catch
+        {
+            partners = new();
+        }
     }
 
     private static string? ReadQueryParamFromUrl(string url, string key)
@@ -272,9 +322,25 @@
                 sb.Append("&platform=Lazada")
                   .Append("&partnersId=").Append(s.PartnerId);
                 break;
+
+            case "FlowAccount":
+                sb.Append("&platform=FlowAccount");
+                if (s.ShopId > 0)
+                    sb.Append("&shopId=").Append(s.ShopId);
+                else
+                    sb.Append("&partnersId=").Append(s.PartnerId);
+                break;
         }
 
         return sb.ToString();
+    }
+
+    private string BuildFlowAccountPartnerAuthLinkQuery(int partnersId, string callbackUrl)
+    {
+        return new StringBuilder("api/market/auth/link?platform=FlowAccount")
+            .Append("&partnersId=").Append(partnersId)
+            .Append("&callbackUrl=").Append(Uri.EscapeDataString(callbackUrl))
+            .ToString();
     }
 
     private static string CanonicalPlatform(string? platform, string? name = null)
@@ -284,12 +350,14 @@
         if (p == "shopee") return "Shopee";
         if (p is "tiktok" or "tik tok" or "tiktokshop" or "tiktok shop") return "TikTok";
         if (p == "lazada") return "Lazada";
+        if (p is "flowaccount" or "flow account" or "flowaccoutn") return "FlowAccount";
 
         // กรณีไม่กรอก platform ใน DB
         var n = (name ?? "").ToLowerInvariant();
         if (n.Contains("tiktok")) return "TikTok";
         if (n.Contains("shopee")) return "Shopee";
         if (n.Contains("lazada")) return "Lazada";
+        if (n.Contains("flowaccount") || n.Contains("flow account")) return "FlowAccount";
 
         return ""; // unknown
     }
@@ -321,7 +389,8 @@
             {
                 Platform = CanonicalPlatform(s.Platform, s.Name),
                 PartnerIdInternal = s.PartnerId,
-                ShopId = s.ShopId
+                ShopId = s.ShopId,
+                CallbackUrl = callbackUrl
             };
 
             var opened = await JS.InvokeAsync<bool>("mdwOauth.openPopup", payload.AuthUrl, "mdw-oauth", 680, 760);
@@ -330,6 +399,66 @@
                 infoMsg = "Popup blocked — redirecting…";
                 Nav.NavigateTo(payload.AuthUrl!, forceLoad: true);
             }
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private async Task StartFlowAccountPartnerAuthorizeAsync()
+    {
+        if (_mdwClient is null || selectedFlowPartnerId is null) return;
+
+        try
+        {
+            errorMsg = infoMsg = null;
+            var callbackUrl = GetCallbackUrl("FlowAccount");
+            var url = BuildFlowAccountPartnerAuthLinkQuery(selectedFlowPartnerId.Value, callbackUrl);
+
+            var resp = await _mdwClient.GetAsync(url);
+            resp.EnsureSuccessStatusCode();
+            var body = await resp.Content.ReadAsStringAsync();
+
+            var payload = JsonSerializer.Deserialize<MdwAuthLinkResponse>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                          ?? throw new InvalidOperationException("Invalid auth link response");
+
+            if (payload.Success != true || string.IsNullOrWhiteSpace(payload.AuthUrl))
+                throw new InvalidOperationException("AuthUrl missing from response");
+
+            var state = ReadQueryParamFromUrl(payload.AuthUrl!, "state") ?? Guid.NewGuid().ToString("N");
+            _pending[state] = new PendingAuth
+            {
+                Platform = "FlowAccount",
+                PartnerIdInternal = selectedFlowPartnerId.Value,
+                ShopId = 0,
+                CallbackUrl = callbackUrl
+            };
+
+            var opened = await JS.InvokeAsync<bool>("mdwOauth.openPopup", payload.AuthUrl, "mdw-flowaccount-oauth", 680, 760);
+            if (!opened)
+            {
+                infoMsg = "Popup blocked — redirecting…";
+                Nav.NavigateTo(payload.AuthUrl!, forceLoad: true);
+            }
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
+    }
+
+    private async Task CopyFlowAccountPartnerAuthLinkAsync()
+    {
+        if (_mdwClient is null || selectedFlowPartnerId is null) return;
+
+        try
+        {
+            errorMsg = infoMsg = null;
+            var callbackUrl = GetCallbackUrl("FlowAccount");
+            var url = BuildFlowAccountPartnerAuthLinkQuery(selectedFlowPartnerId.Value, callbackUrl);
+
+            var resp = await _mdwClient.GetAsync(url);
+            resp.EnsureSuccessStatusCode();
+            var body = await resp.Content.ReadAsStringAsync();
+
+            var payload = JsonSerializer.Deserialize<MdwAuthLinkResponse>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", payload.AuthUrl);
+            infoMsg = "FlowAccount authorization link copied to clipboard.";
         }
         catch (Exception ex) { errorMsg = ex.Message; }
     }
@@ -379,8 +508,19 @@
             long shopForExchange = ctx.ShopId;
             if (!string.IsNullOrWhiteSpace(m.ShopId) && long.TryParse(m.ShopId, out var sidFromCb)) shopForExchange = sidFromCb;
 
-            // POST /api/market/auth/exchange?platform=...&shopId=...&code=...
-            var exUrl = $"api/market/auth/exchange?platform={Uri.EscapeDataString(ctx.Platform)}&shopId={shopForExchange}&code={Uri.EscapeDataString(m.Code!)}";
+            // POST /api/market/auth/exchange?platform=...&shopId=...&code=...&redirectUri=...
+            var exchangeQs = new Dictionary<string, string?>
+            {
+                ["platform"] = ctx.Platform,
+                ["code"] = m.Code,
+                ["redirectUri"] = ctx.CallbackUrl
+            };
+            if (shopForExchange > 0)
+                exchangeQs["shopId"] = shopForExchange.ToString();
+            else
+                exchangeQs["partnersId"] = ctx.PartnerIdInternal.ToString();
+
+            var exUrl = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/market/auth/exchange", exchangeQs);
             var resp = await _mdwClient.PostAsync(exUrl, new StringContent(""));
 
             if (!resp.IsSuccessStatusCode)
@@ -389,7 +529,9 @@
                 throw new InvalidOperationException($"Exchange failed: {(int)resp.StatusCode} {resp.ReasonPhrase} — {err}");
             }
 
-            infoMsg = $"Connected {ctx.Platform} shop {shopForExchange} successfully.";
+            infoMsg = shopForExchange > 0
+                ? $"Connected {ctx.Platform} shop {shopForExchange} successfully."
+                : $"Connected {ctx.Platform} partner {ctx.PartnerIdInternal} successfully.";
             if (!string.IsNullOrWhiteSpace(m.State)) _pending.Remove(m.State!);
             await LoadShops();
         }
@@ -404,6 +546,24 @@
         var callbackUrl = $"{cbBase}/auth/callback.html?origin={Uri.EscapeDataString(portalOrigin)}&platform={Uri.EscapeDataString(platform)}";
 
         return callbackUrl;
+    }
+
+    private async Task RefreshFlowAccountAsync(ShopVm s)
+    {
+        if (_mdwClient is null) return;
+
+        try
+        {
+            errorMsg = infoMsg = null;
+            var url = $"api/market/auth/refresh?platform=FlowAccount&shopId={s.ShopId}";
+            var resp = await _mdwClient.PostAsync(url, new StringContent(""));
+            var body = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+                throw new InvalidOperationException($"Refresh failed: {(int)resp.StatusCode} {resp.ReasonPhrase} — {body}");
+
+            infoMsg = $"FlowAccount token refreshed for shop {s.ShopId}.";
+        }
+        catch (Exception ex) { errorMsg = ex.Message; }
     }
 
     private sealed record MdwAuthLinkResponse(bool Success, string AuthUrl);

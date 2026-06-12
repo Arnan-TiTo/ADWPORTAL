@@ -3,6 +3,8 @@
 @using Microsoft.AspNetCore.WebUtilities
 @using System.Globalization
 @using System.Linq
+@using System.Text
+@using System.Text.Json
 @using Microsoft.AspNetCore.Components.Forms
 @using adwportal.Dtos
 @using adwportal.Services
@@ -126,11 +128,44 @@
 
                 <div class="col-md-12 d-flex gap-2 mt-2">
                     <button type="submit" class="btn btn-primary">ค้นหา</button>
+                    <button type="button" class="btn btn-outline-primary" @onclick="PrepareFlowAccountPayloads">
+                        เตรียมข้อมูล
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" @onclick="SyncPreparedToFlowAccount" disabled="@(isSyncingErp || preparedPayloads.Count == 0)">
+                        @(isSyncingErp ? "Syncing..." : "Sync ERP")
+                    </button>
                     <button type="button" class="btn btn-outline-success" @onclick="ExportCsvLocal">Export CSV</button>
                     <button type="button" class="btn btn-outline-info" @onclick="ExportExcelLocal">Export Excel</button>
                 </div>              
             </div>
         </EditForm>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">FlowAccount Environment</label>
+                <select class="form-select" @bind="flowBaseUrl">
+                    <option value="https://openapi.flowaccount.com/test">Sandbox</option>
+                    <option value="https://openapi.flowaccount.com/v1">Production</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">FlowAccount Access Token</label>
+                <input class="form-control" type="password" @bind="flowAccessToken" placeholder="Bearer token" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Other Channel Id</label>
+                <InputNumber class="form-control" @bind-Value="flowOtherChannelId" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Payment Channel</label>
+                <InputNumber class="form-control" @bind-Value="flowOtherChannelPaymentChannel" />
+                <div class="form-text">7 = Online Shop/E-Commerce</div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -182,6 +217,55 @@ else
     <div class="d-flex gap-2">
         <button class="btn btn-outline-secondary" @onclick="PrevPage" disabled="@IsPrevDisabled">Prev</button>
         <button class="btn btn-outline-secondary" @onclick="NextPage" disabled="@IsNextDisabled">Next</button>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(erpSyncMessage))
+{
+    <div class="alert alert-info mt-3">@erpSyncMessage</div>
+}
+
+@if (preparedPayloads.Count > 0)
+{
+    <div class="card mt-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>FlowAccount Payload Preview</strong>
+            <span class="text-muted small">@preparedPayloads.Count document(s)</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:220px">Reference</th>
+                            <th style="width:130px">Date</th>
+                            <th>Customer</th>
+                            <th style="width:90px" class="text-end">Items</th>
+                            <th style="width:140px" class="text-end">Grand Total</th>
+                            <th style="width:120px">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in preparedPayloads)
+                        {
+                            <tr>
+                                <td>@p.Reference</td>
+                                <td>@p.PublishedOn</td>
+                                <td>@p.ContactName</td>
+                                <td class="text-end">@p.ItemCount</td>
+                                <td class="text-end">@p.GrandTotal.ToString("#,##0.00", CultureInfo.InvariantCulture)</td>
+                                <td>@(erpSyncResults.TryGetValue(p.Reference, out var r) ? r : "Prepared")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <details class="mt-3">
+                <summary class="text-muted small">ดู JSON payload</summary>
+                <pre class="bg-light border rounded p-3 small mt-2" style="max-height:520px;overflow:auto;white-space:pre-wrap">@PreparedJson</pre>
+            </details>
+        </div>
     </div>
 }
 
@@ -299,7 +383,14 @@ else
 
     private FilterVm filter = new();
     private bool isLoading;
+    private bool isSyncingErp;
     private string? errorMessage;
+    private string? erpSyncMessage;
+
+    private string flowBaseUrl = "https://openapi.flowaccount.com/test";
+    private string flowAccessToken = "";
+    private int? flowOtherChannelId;
+    private int flowOtherChannelPaymentChannel = 7;
 
     private int totalItems;
     private int filteredCount;
@@ -308,6 +399,12 @@ else
     private List<Dictionary<string, object?>> rawItems = new();
     private List<string> columns = new();
     private List<Dictionary<string, string>> exportRows = new();
+    private List<PreparedFlowPayload> preparedPayloads = new();
+    private Dictionary<string, string> erpSyncResults = new(StringComparer.OrdinalIgnoreCase);
+
+    private string PreparedJson => JsonSerializer.Serialize(
+        preparedPayloads.Select(x => x.Payload),
+        new JsonSerializerOptions { WriteIndented = true });
 
     private bool IsPrevDisabled => filter.Page <= 1;
     private bool IsNextDisabled => (filter.Page * filter.PageSize) >= totalItems;
@@ -438,6 +535,9 @@ else
         items = null; totalItems = 0; filteredCount = 0;
         rawItems.Clear();
         columns.Clear(); exportRows.Clear();
+        preparedPayloads.Clear();
+        erpSyncResults.Clear();
+        erpSyncMessage = null;
 
         // require channel + shop
         if (filter.Channel == "" || filter.ShopId == "")
@@ -602,6 +702,201 @@ else
         await JS.InvokeVoidAsync("adwExportExcelFromRows", columns, exportRows, file);
     }
 
+    private void PrepareFlowAccountPayloads()
+    {
+        errorMessage = null;
+        erpSyncMessage = null;
+        erpSyncResults.Clear();
+        preparedPayloads.Clear();
+
+        if (filter.ExportType != "CashSale")
+        {
+            errorMessage = "กรุณาเลือก Export Type เป็น FlowAccount Cash Sale Format ก่อนเตรียมข้อมูล";
+            return;
+        }
+
+        if (items is null || items.Count == 0)
+        {
+            errorMessage = "ยังไม่มีข้อมูลสำหรับเตรียม payload กรุณาค้นหาข้อมูลก่อน";
+            return;
+        }
+
+        var groups = items
+            .Where(x => !string.IsNullOrWhiteSpace(Cell(x, "หมายเลขคำสั่งซื้อ/อ้างอิงจากเอกสาร")))
+            .GroupBy(x => Cell(x, "หมายเลขคำสั่งซื้อ/อ้างอิงจากเอกสาร"), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key);
+
+        foreach (var g in groups)
+        {
+            var rows = g.ToList();
+            var first = rows[0];
+            var publishedOn = DateOnlyText(Cell(first, "วันที่เอกสาร"));
+            var reference = g.Key;
+            var contactName = FirstNonEmpty(Cell(first, "ชื่อลูกค้า"), "Cash Sale / ขายเงินสด")!;
+            var contactAddress = Cell(first, "ที่อยู่");
+            var contactTaxId = Cell(first, "เลขผู้เสียภาษี");
+            var contactBranch = Cell(first, "สาขา");
+            var salesName = Cell(first, "พนักงานขาย");
+            var remarks = Cell(first, "หมายเหตุ");
+            var internalNotes = Cell(first, "โน้ตภายในบริษัท");
+
+            var productItems = new List<Dictionary<string, object?>>();
+            decimal subTotal = 0;
+            decimal totalDiscount = 0;
+            decimal grandTotal = 0;
+
+            foreach (var row in rows)
+            {
+                var qty = DecimalCell(row, "จำนวน", 1);
+                var price = DecimalCell(row, "ราคาต่อหน่วย", 0);
+                var discount = DecimalCell(row, "ส่วนลด(บาท)", 0);
+                var lineTotal = Math.Round((price * qty) - discount, 2);
+                subTotal += Math.Round(price * qty, 2);
+                totalDiscount += discount;
+                grandTotal += lineTotal;
+
+                productItems.Add(new Dictionary<string, object?>
+                {
+                    ["type"] = 3,
+                    ["name"] = FirstNonEmpty(Cell(row, "ชื่อสินค้า/บริการ"), Cell(row, "รหัสสินค้า"), "สินค้า")!,
+                    ["description"] = Cell(row, "รหัสสินค้า"),
+                    ["quantity"] = qty,
+                    ["unitName"] = FirstNonEmpty(Cell(row, "หน่วย"), "ชิ้น")!,
+                    ["pricePerUnit"] = price,
+                    ["total"] = lineTotal,
+                    ["discountAmount"] = discount,
+                    ["vatRate"] = -1,
+                    ["documentStructureType"] = "InlineProductItem"
+                });
+            }
+
+            var payload = new Dictionary<string, object?>
+            {
+                ["recordId"] = 0,
+                ["documentStructureType"] = "InlineDocument",
+                ["documentPaymentStructureType"] = "InlineDocumentWithPaymentReceivingOtherChannel",
+                ["saleAndPurchaseChannel"] = filter.Channel,
+                ["contactName"] = contactName,
+                ["contactAddress"] = contactAddress,
+                ["contactTaxId"] = contactTaxId,
+                ["contactBranch"] = contactBranch,
+                ["publishedOn"] = publishedOn,
+                ["dueDate"] = publishedOn,
+                ["creditType"] = 3,
+                ["creditDays"] = 0,
+                ["salesName"] = salesName,
+                ["reference"] = reference,
+                ["externalDocumentId"] = $"{filter.Channel}-{filter.ShopId}-{reference}",
+                ["isVatInclusive"] = false,
+                ["useInlineDiscount"] = true,
+                ["discountType"] = 3,
+                ["useInlineVat"] = false,
+                ["subTotal"] = Math.Round(subTotal, 2),
+                ["discountAmount"] = 0,
+                ["totalAfterDiscount"] = Math.Round(grandTotal, 2),
+                ["isVat"] = false,
+                ["isManualVat"] = false,
+                ["vatAmount"] = 0,
+                ["grandTotal"] = Math.Round(grandTotal, 2),
+                ["remarks"] = remarks,
+                ["internalNotes"] = internalNotes,
+                ["showSignatureOrStamp"] = false,
+                ["paymentMethod"] = 13,
+                ["paymentDate"] = publishedOn,
+                ["collected"] = Math.Round(grandTotal, 2),
+                ["paymentDeductionType"] = 0,
+                ["paymentDeductionAmount"] = 0,
+                ["withheldPercentage"] = 0,
+                ["withheldAmount"] = 0,
+                ["paymentRemarks"] = FirstNonEmpty(Cell(first, "วิธีการรับชำระ"), "Marketplace")!,
+                ["remainingCollectedType"] = 0,
+                ["remainingCollected"] = 0,
+                ["otherChannelId"] = flowOtherChannelId,
+                ["otherChannelPaymentChannel"] = flowOtherChannelPaymentChannel,
+                ["otherChannelName"] = FirstNonEmpty(Cell(first, "วิธีการรับชำระ"), filter.Channel, "Marketplace")!,
+                ["items"] = productItems
+            };
+
+            preparedPayloads.Add(new PreparedFlowPayload(
+                Reference: reference,
+                PublishedOn: publishedOn,
+                ContactName: contactName,
+                ItemCount: productItems.Count,
+                GrandTotal: Math.Round(grandTotal, 2),
+                Payload: payload));
+        }
+
+        if (preparedPayloads.Count == 0)
+        {
+            errorMessage = "ไม่พบรายการที่มีหมายเลขคำสั่งซื้อสำหรับเตรียม payload";
+            return;
+        }
+
+        erpSyncMessage = $"เตรียมข้อมูลสำเร็จ {preparedPayloads.Count} เอกสาร พร้อมยิงไป FlowAccount endpoint /cash-invoices/inline/with-payment";
+    }
+
+    private async Task SyncPreparedToFlowAccount()
+    {
+        errorMessage = null;
+        erpSyncMessage = null;
+
+        if (preparedPayloads.Count == 0)
+        {
+            errorMessage = "ยังไม่มี payload ที่เตรียมไว้";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(flowAccessToken))
+        {
+            errorMessage = "กรุณาระบุ FlowAccount Access Token";
+            return;
+        }
+
+        if (flowOtherChannelId is null or <= 0)
+        {
+            errorMessage = "กรุณาระบุ Other Channel Id ของ FlowAccount";
+            return;
+        }
+
+        isSyncingErp = true;
+        erpSyncResults.Clear();
+
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(flowBaseUrl.TrimEnd('/') + "/") };
+            var token = flowAccessToken.Trim();
+            if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                token = token[7..].Trim();
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            foreach (var doc in preparedPayloads)
+            {
+                doc.Payload["otherChannelId"] = flowOtherChannelId;
+                doc.Payload["otherChannelPaymentChannel"] = flowOtherChannelPaymentChannel;
+
+                var json = JsonSerializer.Serialize(doc.Payload);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var resp = await http.PostAsync("cash-invoices/inline/with-payment", content);
+                var body = await resp.Content.ReadAsStringAsync();
+
+                erpSyncResults[doc.Reference] = resp.IsSuccessStatusCode
+                    ? "Synced"
+                    : $"Failed {(int)resp.StatusCode}: {TrimForDisplay(body, 180)}";
+            }
+
+            var ok = erpSyncResults.Count(x => x.Value == "Synced");
+            erpSyncMessage = $"Sync ERP เสร็จแล้ว สำเร็จ {ok}/{preparedPayloads.Count} เอกสาร";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSyncingErp = false;
+        }
+    }
+
     private string BuildApiUrl(string path, bool withPaging = false)
     {
         var baseUri = _mdwClient!.BaseAddress!;
@@ -708,6 +1003,43 @@ else
             return f.ToString(null, CultureInfo.InvariantCulture);
         return v.ToString() ?? "";
     }
+
+    private static string Cell(Dictionary<string, object?> row, string key)
+    {
+        return row.TryGetValue(key, out var v) ? FmtCell(v).Trim() : "";
+    }
+
+    private static decimal DecimalCell(Dictionary<string, object?> row, string key, decimal fallback)
+    {
+        var text = Cell(row, key);
+        return decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var value) ? value : fallback;
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        return values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+    }
+
+    private static string DateOnlyText(string value)
+    {
+        return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var dt)
+            ? dt.ToString("yyyy-MM-dd")
+            : DateTime.Today.ToString("yyyy-MM-dd");
+    }
+
+    private static string TrimForDisplay(string value, int max)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= max) return value;
+        return value[..max] + "...";
+    }
+
+    private sealed record PreparedFlowPayload(
+        string Reference,
+        string PublishedOn,
+        string ContactName,
+        int ItemCount,
+        decimal GrandTotal,
+        Dictionary<string, object?> Payload);
 }
 
 <script>
