@@ -256,12 +256,6 @@
                                     <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewDetail(r.UnifiedOrderId)">
                                         View
                                     </button>
-                                    @if (string.Equals(r.Channel, "Shopee", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        <button class="btn btn-sm btn-outline-success ms-1" @onclick="() => SyncShopeeEscrow(r.UnifiedOrderId)" disabled="@syncingEscrow">
-                                            Sync
-                                        </button>
-                                    }
                                 </td>
                             </tr>
                         }
@@ -292,12 +286,6 @@
                 <span class="text-muted">(@(detail.Channel ?? "-"))</span>
             </div>
             <div class="d-flex gap-2">
-                @if (string.Equals(detail.Channel, "Shopee", StringComparison.OrdinalIgnoreCase))
-                {
-                    <button class="btn btn-sm btn-outline-success" @onclick="() => SyncShopeeEscrow(detail.UnifiedOrderId)" disabled="@syncingEscrow">
-                        @(syncingEscrow ? "Syncing..." : "Sync Shopee")
-                    </button>
-                }
                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => detail = null">Close</button>
             </div>
         </div>
@@ -851,11 +839,13 @@
         {
             detail = await MdwSvc.FeOrderGetByIdAsync(mdwToken, id);
             if (detail is null) await JS.InvokeVoidAsync("alert", $"Order {id} not found.");
+            else if (string.Equals(detail.Channel, "Shopee", StringComparison.OrdinalIgnoreCase))
+                await SyncShopeeEscrow(id, showSuccess: false);
         }
         catch (Exception ex) { await JS.InvokeVoidAsync("alert", ex.Message); }
     }
 
-    private async Task SyncShopeeEscrow(long id)
+    private async Task SyncShopeeEscrow(long id, bool showSuccess = true)
     {
         if (syncingEscrow) return;
         syncingEscrow = true;
@@ -883,7 +873,8 @@
                 }
             }
 
-            info = $"Synced Shopee escrow for order {id}.";
+            if (showSuccess)
+                info = $"Synced Shopee escrow for order {id}.";
         }
         catch (Exception ex)
         {
