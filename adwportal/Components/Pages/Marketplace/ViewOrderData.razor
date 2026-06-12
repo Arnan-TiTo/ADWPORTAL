@@ -201,6 +201,10 @@
         {
             <div>Loading...</div>
         }
+        else if (!hasSearched)
+        {
+            <div class="text-muted">กรุณาระบุ filter แล้วกด Search เพื่อค้นหา orders.</div>
+        }
         else if (data?.Items is null || data.Items.Count == 0)
         {
             <div class="text-muted">No orders found.</div>
@@ -461,6 +465,7 @@
     // ---------- Filters / paging ----------
     private bool loading;
     private bool syncingEscrow;
+    private bool hasSearched;
     private string? error;
     private string? info;
 
@@ -647,8 +652,6 @@
             {
                 // ignore
             }
-
-            await Reload();
         }
         catch (Exception ex)
         {
@@ -676,31 +679,11 @@
 
         try
         {
+            hasSearched = true;
+
             long? shopId = null;
             if (!string.IsNullOrWhiteSpace(filterShopId) && long.TryParse(filterShopId, out var sid))
                 shopId = sid;
-
-            if (!string.IsNullOrWhiteSpace(mdwToken))
-            {
-                if (_mdwClient == null)
-                {
-                    _mdwClient = ClientFactory.CreateClient("MdwApiBaseUrl");
-                    _mdwClient.DefaultRequestHeaders.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", mdwToken);
-                }
-
-                var updateQs = new Dictionary<string, string?>
-                {
-                    ["channel"] = filterChannel,
-                    ["shopId"] = filterShopId,
-                    ["dryRun"] = "false",
-                    ["overwrite"] = "false"
-                };
-
-                var updateUrl = QueryHelpers.AddQueryString("api/adw/maintenance/update-addresses", updateQs);
-                using var updResp = await _mdwClient.PostAsync(updateUrl, content: null);
-                updResp.EnsureSuccessStatusCode();
-            }
 
             var fromUtc = ParseLocalToUtc(fromLocalText);
             var toUtc = ParseLocalToUtc(toLocalText);
@@ -710,20 +693,13 @@
             // Determine dateFieldParam based on dateField enum
             var dateFieldParam = dateField == DateFieldMode.Created ? "created" : "updated";
 
-            var result = await MdwSvc.FeOrdersListAsync(
-              token: mdwToken,
-              channel: string.IsNullOrWhiteSpace(filterChannel) ? null : filterChannel,
-              shopId: shopId,
-              buyerUserId: string.IsNullOrWhiteSpace(filterBuyerUserId) ? null : filterBuyerUserId,
-              q: string.IsNullOrWhiteSpace(filterQ) ? null : filterQ,
-              status: statusParam,
-              fromUtc: fromUtc,
-              toUtc: toUtc,
-              dateField: dateFieldParam,
-              page: currentPage,
-              pageSize: pageSize,
-              sort: filterSort
-            );
+            var result = await FetchOrdersAsync(shopId, fromUtc, toUtc, statusParam, dateFieldParam);
+
+            if (result?.Items?.Count > 0)
+            {
+                await UpdateAddressesAsync(result.Items);
+                result = await FetchOrdersAsync(shopId, fromUtc, toUtc, statusParam, dateFieldParam);
+            }
 
             if (result?.Items is not null)
             {
@@ -769,6 +745,72 @@
         finally { loading = false; StateHasChanged(); }
     }
 
+    private Task<PagedResult<FeUnifiedOrderDtos>> FetchOrdersAsync(
+        long? shopId,
+        DateTime fromUtc,
+        DateTime toUtc,
+        string? statusParam,
+        string dateFieldParam)
+    {
+        return MdwSvc.FeOrdersListAsync(
+          token: mdwToken,
+          channel: string.IsNullOrWhiteSpace(filterChannel) ? null : filterChannel,
+          shopId: shopId,
+          buyerUserId: string.IsNullOrWhiteSpace(filterBuyerUserId) ? null : filterBuyerUserId,
+          q: string.IsNullOrWhiteSpace(filterQ) ? null : filterQ,
+          status: statusParam,
+          fromUtc: fromUtc,
+          toUtc: toUtc,
+          dateField: dateFieldParam,
+          page: currentPage,
+          pageSize: pageSize,
+          sort: filterSort
+        );
+    }
+
+    private async Task UpdateAddressesAsync(IEnumerable<FeUnifiedOrderDtos> orders)
+    {
+        if (string.IsNullOrWhiteSpace(mdwToken)) return;
+
+        if (_mdwClient == null)
+        {
+            _mdwClient = ClientFactory.CreateClient("MdwApiBaseUrl");
+            _mdwClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", mdwToken);
+        }
+
+        var targets = orders
+            .Where(x => !string.IsNullOrWhiteSpace(x.Channel) && x.ShopId is > 0)
+            .Select(x => new { Channel = CanonicalPlatform(x.Channel), ShopId = x.ShopId!.Value })
+            .Distinct()
+            .ToList();
+
+        if (targets.Count == 0)
+        {
+            long? selectedShopId = null;
+            if (!string.IsNullOrWhiteSpace(filterShopId) && long.TryParse(filterShopId, out var sid))
+                selectedShopId = sid;
+
+            if (!string.IsNullOrWhiteSpace(filterChannel) && selectedShopId is > 0)
+                targets.Add(new { Channel = CanonicalPlatform(filterChannel), ShopId = selectedShopId.Value });
+        }
+
+        foreach (var target in targets)
+        {
+            var updateQs = new Dictionary<string, string?>
+            {
+                ["channel"] = target.Channel,
+                ["shopId"] = target.ShopId.ToString(CultureInfo.InvariantCulture),
+                ["dryRun"] = "false",
+                ["overwrite"] = "false"
+            };
+
+            var updateUrl = QueryHelpers.AddQueryString("api/adw/maintenance/update-addresses", updateQs);
+            using var updResp = await _mdwClient.PostAsync(updateUrl, content: null);
+            updResp.EnsureSuccessStatusCode();
+        }
+    }
+
     private static string GetPropString(object? obj, string propName)
     {
         if (obj is null) return "";
@@ -798,6 +840,8 @@
         currentPage = 1;
         fromLocalText = DateTime.Now.AddHours(-1).ToString("yyyy-MM-ddTHH:mm");
         toLocalText = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+        hasSearched = false;
+        data = null;
         detail = null;
     }
 
