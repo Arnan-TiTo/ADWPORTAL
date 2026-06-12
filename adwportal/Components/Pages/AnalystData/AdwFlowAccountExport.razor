@@ -60,6 +60,12 @@
                 </div>
 
                 <div class="col-md-3">
+                    <label class="form-label">External Order No</label>
+                    <InputText class="form-control" @bind-Value="filter.ExternalOrderNo" />
+                    <div class="form-text">ถ้าใส่เลขนี้ ไม่จำเป็นต้องเลือก Platform/Shop หรือ filter อื่น</div>
+                </div>
+
+                <div class="col-md-3">
                     <label class="form-label">Created From (TH)</label>
                     <InputDate class="form-control" @bind-Value="filter.CreatedFrom" />
                 </div>
@@ -142,33 +148,6 @@
     </div>
 </div>
 
-<div class="card mb-3">
-    <div class="card-body">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label">FlowAccount Environment</label>
-                <select class="form-select" @bind="flowBaseUrl">
-                    <option value="https://openapi.flowaccount.com/test">Sandbox</option>
-                    <option value="https://openapi.flowaccount.com/v1">Production</option>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">FlowAccount Access Token</label>
-                <input class="form-control" type="password" @bind="flowAccessToken" placeholder="Bearer token" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Other Channel Id</label>
-                <InputNumber class="form-control" @bind-Value="flowOtherChannelId" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Payment Channel</label>
-                <InputNumber class="form-control" @bind-Value="flowOtherChannelPaymentChannel" />
-                <div class="form-text">7 = Online Shop/E-Commerce</div>
-            </div>
-        </div>
-    </div>
-</div>
-
 @if (!string.IsNullOrWhiteSpace(errorMessage))
 {
     <div class="alert alert-danger">@errorMessage</div>
@@ -243,6 +222,7 @@ else
                             <th style="width:90px" class="text-end">Items</th>
                             <th style="width:140px" class="text-end">Grand Total</th>
                             <th style="width:120px">Status</th>
+                            <th style="width:150px">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -255,14 +235,31 @@ else
                                 <td class="text-end">@p.ItemCount</td>
                                 <td class="text-end">@p.GrandTotal.ToString("#,##0.00", CultureInfo.InvariantCulture)</td>
                                 <td>@(erpSyncResults.TryGetValue(p.Reference, out var r) ? r : "Prepared")</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary" type="button" @onclick="() => ShowPayload(p)">Payload</button>
+                                        <button class="btn btn-outline-danger" type="button" @onclick="() => SyncPreparedRowToFlowAccount(p)" disabled="@isSyncingErp">Sync</button>
+                                    </div>
+                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
 
+            @if (selectedPayload is not null)
+            {
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>Payload: @selectedPayload.Reference</strong>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="ClosePayload">Close</button>
+                    </div>
+                    <pre class="bg-light border rounded p-3 small" style="max-height:520px;overflow:auto;white-space:pre-wrap">@PayloadJson(selectedPayload)</pre>
+                </div>
+            }
+
             <details class="mt-3">
-                <summary class="text-muted small">ดู JSON payload</summary>
+                <summary class="text-muted small">ดู JSON payload ทั้งหมด</summary>
                 <pre class="bg-light border rounded p-3 small mt-2" style="max-height:520px;overflow:auto;white-space:pre-wrap">@PreparedJson</pre>
             </details>
         </div>
@@ -367,6 +364,7 @@ else
         public string ExportType { get; set; } = "Standard";
         public string Channel { get; set; } = "";
         public string? ShopId { get; set; } = "";
+        public string? ExternalOrderNo { get; set; } = "";
         public DateTime? CreatedFrom { get; set; }
         public DateTime? CreatedTo { get; set; }
         public DateTime? UpdatedFrom { get; set; }
@@ -387,11 +385,6 @@ else
     private string? errorMessage;
     private string? erpSyncMessage;
 
-    private string flowBaseUrl = "https://openapi.flowaccount.com/test";
-    private string flowAccessToken = "";
-    private int? flowOtherChannelId;
-    private int flowOtherChannelPaymentChannel = 7;
-
     private int totalItems;
     private int filteredCount;
 
@@ -401,6 +394,7 @@ else
     private List<Dictionary<string, string>> exportRows = new();
     private List<PreparedFlowPayload> preparedPayloads = new();
     private Dictionary<string, string> erpSyncResults = new(StringComparer.OrdinalIgnoreCase);
+    private PreparedFlowPayload? selectedPayload;
 
     private string PreparedJson => JsonSerializer.Serialize(
         preparedPayloads.Select(x => x.Payload),
@@ -537,32 +531,24 @@ else
         columns.Clear(); exportRows.Clear();
         preparedPayloads.Clear();
         erpSyncResults.Clear();
+        selectedPayload = null;
         erpSyncMessage = null;
 
-        // require channel + shop
-        if (filter.Channel == "" || filter.ShopId == "")
+        var hasExternalOrderNo = !string.IsNullOrWhiteSpace(filter.ExternalOrderNo);
+        var hasShopScope = !string.IsNullOrWhiteSpace(filter.Channel) && !string.IsNullOrWhiteSpace(filter.ShopId);
+
+        if (!hasExternalOrderNo && !hasShopScope)
         {
-            errorMessage = "Platform and Shop is require.";
+            errorMessage = "กรุณาเลือก Platform/Shop หรือใส่ External Order No";
             isLoading = false;
             return;
         }
 
         try
         {
-            // (1) update addresses
-            var updateQs = new Dictionary<string, string?>
-            {
-                ["channel"] = filter.Channel,
-                ["shopId"] = filter.ShopId,
-                ["dryRun"] = "false",
-                ["overwrite"] = "false"
-            };
+            if (hasShopScope)
+                await UpdateAddressesForTargetsAsync(new[] { (filter.Channel, long.Parse(filter.ShopId!)) });
 
-            var updateUrl = QueryHelpers.AddQueryString("api/adw/maintenance/update-addresses", updateQs);
-            using var updResp = await _mdwClient.PostAsync(updateUrl, content: null);
-            updResp.EnsureSuccessStatusCode();
-
-            // (2) โหลดข้อมูลจาก API ตามเดิม (ไม่ส่ง status)
             string apiPath = filter.ExportType == "CashSale" 
                 ? "/api/adw/export/flowaccount/cashsale" 
                 : "/api/adw/export/flowaccount/orders";
@@ -572,6 +558,18 @@ else
             totalItems = resp?.total ?? 0;
 
             rawItems = (resp?.items ?? new()).Select(RowToDict).ToList();
+
+            if (!hasShopScope && rawItems.Count > 0)
+            {
+                var targets = ExtractAddressTargets(rawItems).ToList();
+                if (targets.Count > 0)
+                {
+                    await UpdateAddressesForTargetsAsync(targets);
+                    resp = await _mdwClient.GetFromJsonAsync<ApiResp>(url);
+                    totalItems = resp?.total ?? 0;
+                    rawItems = (resp?.items ?? new()).Select(RowToDict).ToList();
+                }
+            }
 
             // (3) columns + filtered display/export rows
             columns = filter.ExportType == "CashSale" 
@@ -811,8 +809,6 @@ else
                 ["paymentRemarks"] = FirstNonEmpty(Cell(first, "วิธีการรับชำระ"), "Marketplace")!,
                 ["remainingCollectedType"] = 0,
                 ["remainingCollected"] = 0,
-                ["otherChannelId"] = flowOtherChannelId,
-                ["otherChannelPaymentChannel"] = flowOtherChannelPaymentChannel,
                 ["otherChannelName"] = FirstNonEmpty(Cell(first, "วิธีการรับชำระ"), filter.Channel, "Marketplace")!,
                 ["items"] = productItems
             };
@@ -835,6 +831,16 @@ else
         erpSyncMessage = $"เตรียมข้อมูลสำเร็จ {preparedPayloads.Count} เอกสาร พร้อมยิงไป FlowAccount endpoint /cash-invoices/inline/with-payment";
     }
 
+    private void ShowPayload(PreparedFlowPayload payload)
+    {
+        selectedPayload = payload;
+    }
+
+    private void ClosePayload()
+    {
+        selectedPayload = null;
+    }
+
     private async Task SyncPreparedToFlowAccount()
     {
         errorMessage = null;
@@ -846,42 +852,14 @@ else
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(flowAccessToken))
-        {
-            errorMessage = "กรุณาระบุ FlowAccount Access Token";
-            return;
-        }
-
-        if (flowOtherChannelId is null or <= 0)
-        {
-            errorMessage = "กรุณาระบุ Other Channel Id ของ FlowAccount";
-            return;
-        }
-
         isSyncingErp = true;
         erpSyncResults.Clear();
 
         try
         {
-            using var http = new HttpClient { BaseAddress = new Uri(flowBaseUrl.TrimEnd('/') + "/") };
-            var token = flowAccessToken.Trim();
-            if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                token = token[7..].Trim();
-            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
             foreach (var doc in preparedPayloads)
             {
-                doc.Payload["otherChannelId"] = flowOtherChannelId;
-                doc.Payload["otherChannelPaymentChannel"] = flowOtherChannelPaymentChannel;
-
-                var json = JsonSerializer.Serialize(doc.Payload);
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                using var resp = await http.PostAsync("cash-invoices/inline/with-payment", content);
-                var body = await resp.Content.ReadAsStringAsync();
-
-                erpSyncResults[doc.Reference] = resp.IsSuccessStatusCode
-                    ? "Synced"
-                    : $"Failed {(int)resp.StatusCode}: {TrimForDisplay(body, 180)}";
+                erpSyncResults[doc.Reference] = await PostPreparedPayloadAsync(doc);
             }
 
             var ok = erpSyncResults.Count(x => x.Value == "Synced");
@@ -897,16 +875,62 @@ else
         }
     }
 
+    private async Task SyncPreparedRowToFlowAccount(PreparedFlowPayload doc)
+    {
+        errorMessage = null;
+        erpSyncMessage = null;
+
+        isSyncingErp = true;
+        try
+        {
+            erpSyncResults[doc.Reference] = await PostPreparedPayloadAsync(doc);
+            erpSyncMessage = erpSyncResults[doc.Reference] == "Synced"
+                ? $"Sync ERP สำเร็จ: {doc.Reference}"
+                : $"Sync ERP ไม่สำเร็จ: {doc.Reference}";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSyncingErp = false;
+        }
+    }
+
+    private async Task<string> PostPreparedPayloadAsync(PreparedFlowPayload doc)
+    {
+        if (_mdwClient is null)
+            throw new InvalidOperationException("Token MDW is not ready.");
+
+        var qs = new Dictionary<string, string?>
+        {
+            ["channel"] = filter.Channel,
+            ["shopId"] = filter.ShopId,
+            ["reference"] = doc.Reference
+        };
+
+        var endpoint = QueryHelpers.AddQueryString("api/adw/export/flowaccount/cashsale/sync", qs);
+        var json = JsonSerializer.Serialize(doc.Payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var resp = await _mdwClient.PostAsync(endpoint, content);
+        var body = await resp.Content.ReadAsStringAsync();
+
+        return resp.IsSuccessStatusCode
+            ? "Synced"
+            : $"Failed {(int)resp.StatusCode}: {TrimForDisplay(body, 180)}";
+    }
+
     private string BuildApiUrl(string path, bool withPaging = false)
     {
         var baseUri = _mdwClient!.BaseAddress!;
         var root = new Uri(baseUri, path);
 
-        var qs = new Dictionary<string, string?>
-        {
-            ["channel"] = filter.Channel,
-            ["shopId"] = filter.ShopId
-        };
+        var qs = new Dictionary<string, string?>();
+
+        if (!string.IsNullOrWhiteSpace(filter.Channel)) qs["channel"] = filter.Channel;
+        if (!string.IsNullOrWhiteSpace(filter.ShopId)) qs["shopId"] = filter.ShopId;
+        if (!string.IsNullOrWhiteSpace(filter.ExternalOrderNo)) qs["q"] = filter.ExternalOrderNo.Trim();
 
         if (filter.CreatedFrom.HasValue) qs["createdFrom"] = filter.CreatedFrom.Value.ToString("yyyy-MM-dd");
         if (filter.CreatedTo.HasValue) qs["createdTo"] = filter.CreatedTo.Value.ToString("yyyy-MM-dd");
@@ -920,6 +944,49 @@ else
         }
 
         return QueryHelpers.AddQueryString(root.ToString(), qs!);
+    }
+
+    private async Task UpdateAddressesForTargetsAsync(IEnumerable<(string Channel, long ShopId)> targets)
+    {
+        foreach (var target in targets
+            .Where(x => !string.IsNullOrWhiteSpace(x.Channel) && x.ShopId > 0)
+            .Select(x => (Channel: CanonicalPlatform(x.Channel), x.ShopId))
+            .Distinct())
+        {
+            var updateQs = new Dictionary<string, string?>
+            {
+                ["channel"] = target.Channel,
+                ["shopId"] = target.ShopId.ToString(CultureInfo.InvariantCulture),
+                ["dryRun"] = "false",
+                ["overwrite"] = "false"
+            };
+
+            var updateUrl = QueryHelpers.AddQueryString("api/adw/maintenance/update-addresses", updateQs);
+            using var updResp = await _mdwClient!.PostAsync(updateUrl, content: null);
+            updResp.EnsureSuccessStatusCode();
+        }
+    }
+
+    private static IEnumerable<(string Channel, long ShopId)> ExtractAddressTargets(IEnumerable<Dictionary<string, object?>> rows)
+    {
+        foreach (var row in rows)
+        {
+            var channel = FirstNonEmpty(
+                Cell(row, "channel"),
+                Cell(row, "Channel"),
+                Cell(row, "sale_channel"),
+                Cell(row, "platform"),
+                Cell(row, "Platform"));
+
+            var shopText = FirstNonEmpty(
+                Cell(row, "shopId"),
+                Cell(row, "ShopId"),
+                Cell(row, "shop_id"),
+                Cell(row, "shopid"));
+
+            if (!string.IsNullOrWhiteSpace(channel) && long.TryParse(shopText, NumberStyles.Any, CultureInfo.InvariantCulture, out var shopId))
+                yield return (channel!, shopId);
+        }
     }
 
     private void PrevPage() { if (!IsPrevDisabled) { filter.Page--; _ = SearchAsync(); } }
@@ -1031,6 +1098,11 @@ else
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length <= max) return value;
         return value[..max] + "...";
+    }
+
+    private static string PayloadJson(PreparedFlowPayload payload)
+    {
+        return JsonSerializer.Serialize(payload.Payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
     private sealed record PreparedFlowPayload(
