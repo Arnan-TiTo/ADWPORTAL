@@ -448,18 +448,28 @@ public class IdwImportService
     {
         using var http = CreateClient(token);
 
-        var basePath = $"api/TblImport/batch/{Uri.EscapeDataString(batchNo ?? string.Empty)}";
-
         var qs = new Dictionary<string, string?>();
         if (!string.IsNullOrWhiteSpace(orderNo)) qs["orderNo"] = orderNo;
         if (!string.IsNullOrWhiteSpace(sku)) qs["sku"] = sku;
         if (page > 0) qs["page"] = page.ToString(CultureInfo.InvariantCulture);
         if (size > 0) qs["size"] = size.ToString(CultureInfo.InvariantCulture);
 
-        var url = qs.Count > 0 ? Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(basePath, qs) : basePath;
+        var basePath = !string.IsNullOrWhiteSpace(batchNo)
+            ? $"api/TblImport/batch/{Uri.EscapeDataString(batchNo)}"
+            : "api/TblImport/search";
+
+        var url = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(basePath, qs);
 
         var res = await http.GetAsync(url, ct);
         var json = await res.Content.ReadAsStringAsync(ct);
+
+        if (!res.IsSuccessStatusCode && string.IsNullOrWhiteSpace(batchNo))
+        {
+            var fallbackUrl = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("api/TblImport", qs);
+            res = await http.GetAsync(fallbackUrl, ct);
+            json = await res.Content.ReadAsStringAsync(ct);
+            url = fallbackUrl;
+        }
 
         Console.WriteLine($"[IDW Search] GET {url} -> {(int)res.StatusCode}");
         Console.WriteLine(json);

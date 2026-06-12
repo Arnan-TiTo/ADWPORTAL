@@ -35,14 +35,12 @@
             <div class="col-md-3">
                 <label class="form-label">Order No.</label>
                 <input class="form-control"
-                       @bind-value="OrderNo" @bind-value:event="oninput"
-                       disabled="@(!HasBatchLoaded)" />
+                       @bind-value="OrderNo" @bind-value:event="oninput" />
             </div>
             <div class="col-md-3">
                 <label class="form-label">SKU</label>
                 <input class="form-control"
-                       @bind-value="Sku" @bind-value:event="oninput"
-                       disabled="@(!HasBatchLoaded)" />
+                       @bind-value="Sku" @bind-value:event="oninput" />
             </div>
             <div class="col-md-3 d-flex gap-2">
                 <button class="btn btn-primary mt-auto" @onclick="Search" disabled="@loading">Search</button>
@@ -138,7 +136,7 @@
 }
 else if (!HasBatchLoaded)
 {
-    <div class="alert alert-info">กรอก Batch No เพื่อค้นหา</div>
+    <div class="alert alert-info">กรอก Batch No หรือ Order No./SKU เพื่อค้นหา</div>
 }
 else
 {
@@ -320,19 +318,53 @@ else
 
     async Task Search()
     {
-        if (string.IsNullOrWhiteSpace(State.BatchNo))
+        var hasBatch = !string.IsNullOrWhiteSpace(State.BatchNo);
+        var hasOrderNo = !string.IsNullOrWhiteSpace(State.OrderNo);
+        var hasSku = !string.IsNullOrWhiteSpace(State.Sku);
+
+        if (!hasBatch && !hasOrderNo && !hasSku)
         {
-            await JS.InvokeVoidAsync("showToast", "กรุณากรอก Batch No", "warning");
+            await JS.InvokeVoidAsync("showToast", "กรุณากรอก Batch No หรือ Order No./SKU", "warning");
             return;
         }
 
-        State.OrderNo = null;
-        State.Sku = null;
         Pag.SetPageSize(State.Size);
         Pag.GoTo(1);
-        await LoadAllByBatch(State.BatchNo!);
-        ApplyClientFilter();
+
+        if (hasBatch)
+        {
+            await LoadAllByBatch(State.BatchNo!);
+            ApplyClientFilter();
+        }
+        else
+        {
+            await SearchByFilterWithoutBatch();
+        }
+
         State.Dirty = false;
+    }
+
+    async Task SearchByFilterWithoutBatch()
+    {
+        try
+        {
+            loading = true;
+            var result = await Idw.SearchAsync(
+                token,
+                batchNo: null,
+                orderNo: string.IsNullOrWhiteSpace(State.OrderNo) ? null : State.OrderNo,
+                sku: string.IsNullOrWhiteSpace(State.Sku) ? null : State.Sku,
+                page: Pag.Page,
+                size: State.Size);
+
+            State.Source = result.Items.ToList();
+            State.Data = result;
+            Pag.SetTotal(result.TotalItems);
+        }
+        finally
+        {
+            loading = false;
+        }
     }
 
     async Task LoadAllByBatch(string batchNo)
@@ -399,7 +431,15 @@ else
     async Task ChangePage(int p)
     {
         Pag.GoTo(p);
-        ApplyClientFilter();
+        if (string.IsNullOrWhiteSpace(State.BatchNo) &&
+            (!string.IsNullOrWhiteSpace(State.OrderNo) || !string.IsNullOrWhiteSpace(State.Sku)))
+        {
+            await SearchByFilterWithoutBatch();
+        }
+        else
+        {
+            ApplyClientFilter();
+        }
         await Task.CompletedTask;
     }
 
