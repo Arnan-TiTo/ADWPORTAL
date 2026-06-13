@@ -636,17 +636,18 @@
     private async Task ApplyNormalizeReloadStatusesAsync(IEnumerable<AutoNormalizeItem> targetItems)
     {
         var lookupItems = targetItems
-            .Where(i => i.Order.ShopId.HasValue && !string.IsNullOrWhiteSpace(i.Order.ExternalOrderNo))
-            .GroupBy(i => NormalizeLookupKey(i.Order.ShopId!.Value, i.Order.ExternalOrderNo!))
+            .Select(i => new { Item = i, ShopId = ResolveShopIdForOrder(i) })
+            .Where(x => x.ShopId.HasValue && !string.IsNullOrWhiteSpace(x.Item.Order.ExternalOrderNo))
+            .GroupBy(x => NormalizeLookupKey(x.ShopId!.Value, x.Item.Order.ExternalOrderNo!))
             .Select(g => g.First())
             .ToList();
 
         if (lookupItems.Count == 0) return;
 
-        var requests = lookupItems.Select(i => new NormalizeReloadStatusLookupRequestDtos
+        var requests = lookupItems.Select(x => new NormalizeReloadStatusLookupRequestDtos
         {
-            ShopId = i.Order.ShopId!.Value,
-            ExternalOrder = i.Order.ExternalOrderNo!.Trim()
+            ShopId = x.ShopId!.Value,
+            ExternalOrder = x.Item.Order.ExternalOrderNo!.Trim()
         }).ToList();
 
         var statuses = await MdwSvc.LookupNormalizeReloadStatusesAsync(requests, mdwToken);
@@ -658,15 +659,24 @@
                 g => g.First(),
                 StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in lookupItems)
+        foreach (var row in lookupItems)
         {
-            var key = NormalizeLookupKey(item.Order.ShopId!.Value, item.Order.ExternalOrderNo!);
+            var item = row.Item;
+            var key = NormalizeLookupKey(row.ShopId!.Value, item.Order.ExternalOrderNo!);
             if (!statusMap.TryGetValue(key, out var status)) continue;
 
             item.State = ParseNormalizeState(status.NormalizeReloadStatus);
             item.ErrorMessage = status.LastErrorMessage;
             SaveNormalizeResult(item);
         }
+    }
+
+    private long? ResolveShopIdForOrder(AutoNormalizeItem item)
+    {
+        if (!string.IsNullOrWhiteSpace(shopIdStr) && long.TryParse(shopIdStr, out var selectedShopIdValue))
+            return selectedShopIdValue;
+
+        return item.Order.ShopId;
     }
 
     private static string NormalizeLookupKey(long shopId, string externalOrder) =>
@@ -813,7 +823,7 @@
         try
         {
             var targetPlatform = item.Order.Channel ?? platform;
-            var targetShopId = item.Order.ShopId.ToString();
+            var targetShopId = ResolveShopIdForOrder(item)?.ToString();
             var targetOrderRef = item.Order.ExternalOrderNo ?? item.Order.UnifiedOrderId.ToString();
 
             if (string.IsNullOrWhiteSpace(targetPlatform) || string.IsNullOrWhiteSpace(targetShopId) || string.IsNullOrWhiteSpace(targetOrderRef))
