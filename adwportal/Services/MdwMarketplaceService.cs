@@ -147,16 +147,19 @@ namespace adwportal.Services
             };
             if (!string.IsNullOrWhiteSpace(source)) qb.Add("source", source);
             var url = "/api/market/normalize/by-ref" + qb.ToQueryString();
+            var requestBody = "{}";
 
             using var req = new HttpRequestMessage(HttpMethod.Post, url)
             {
-                Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json")
+                Content = new StringContent(requestBody, System.Text.Encoding.UTF8, "application/json")
             };
             using var res = await http.SendAsync(req, ct);
             var raw = await res.Content.ReadAsStringAsync(ct);
 
             return (res.IsSuccessStatusCode,
-                    string.IsNullOrWhiteSpace(raw) ? $"{(int)res.StatusCode} {res.ReasonPhrase}" : raw);
+                    res.IsSuccessStatusCode
+                        ? (string.IsNullOrWhiteSpace(raw) ? $"{(int)res.StatusCode} {res.ReasonPhrase}" : raw)
+                        : $"POST {url}\nPayload: {requestBody}\nResponse {(int)res.StatusCode} {res.ReasonPhrase}: {raw}");
         }
 
         public async Task<(bool ok, string body)> NormalizeByListAsync(
@@ -204,17 +207,24 @@ namespace adwportal.Services
             CancellationToken ct = default)
         {
             using var http = CreateClient(token);
+            var requestList = requests.ToList();
+            const string url = "/api/market/normalize-reload-status/lookup";
+            var requestBody = JsonSerializer.Serialize(requestList, JsonOpts);
 
             using var res = await http.PostAsJsonAsync(
-                "/api/market/normalize-reload-status/lookup",
-                requests,
+                url,
+                requestList,
                 JsonOpts,
                 ct);
 
             if (!res.IsSuccessStatusCode)
             {
                 var body = await res.Content.ReadAsStringAsync(ct);
-                throw new Exception($"Lookup normalize reload status failed {(int)res.StatusCode}: {body}");
+                throw new Exception(
+                    $"Lookup normalize reload status failed {(int)res.StatusCode} {res.ReasonPhrase}\n" +
+                    $"Endpoint: POST {url}\n" +
+                    $"Payload: {requestBody}\n" +
+                    $"Response: {body}");
             }
 
             return await res.Content.ReadFromJsonAsync<List<NormalizeReloadStatusDtos>>(JsonOpts, ct)
