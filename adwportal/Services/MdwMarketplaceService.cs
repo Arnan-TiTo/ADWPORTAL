@@ -211,7 +211,11 @@ namespace adwportal.Services
                 JsonOpts,
                 ct);
 
-            res.EnsureSuccessStatusCode();
+            if (!res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadAsStringAsync(ct);
+                throw new Exception($"Lookup normalize reload status failed {(int)res.StatusCode}: {body}");
+            }
 
             return await res.Content.ReadFromJsonAsync<List<NormalizeReloadStatusDtos>>(JsonOpts, ct)
                    ?? new List<NormalizeReloadStatusDtos>();
