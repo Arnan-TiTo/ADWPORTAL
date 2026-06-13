@@ -133,6 +133,7 @@ namespace adwportal.Services
             string platform,
             string shopId,
             string orderRef,
+            string? source = null,
             string? token = null,
             CancellationToken ct = default)
         {
@@ -144,6 +145,7 @@ namespace adwportal.Services
                 { "shopId",   shopId   },
                 { "orderRef", orderRef }
             };
+            if (!string.IsNullOrWhiteSpace(source)) qb.Add("source", source);
             var url = "/api/market/normalize/by-ref" + qb.ToQueryString();
 
             using var req = new HttpRequestMessage(HttpMethod.Post, url)
@@ -194,6 +196,25 @@ namespace adwportal.Services
 
             return (res.IsSuccessStatusCode,
                     string.IsNullOrWhiteSpace(raw) ? $"{(int)res.StatusCode} {res.ReasonPhrase}" : raw);
+        }
+
+        public async Task<List<NormalizeReloadStatusDtos>> LookupNormalizeReloadStatusesAsync(
+            IEnumerable<NormalizeReloadStatusLookupRequestDtos> requests,
+            string? token = null,
+            CancellationToken ct = default)
+        {
+            using var http = CreateClient(token);
+
+            using var res = await http.PostAsJsonAsync(
+                "/api/market/normalize-reload-status/lookup",
+                requests,
+                JsonOpts,
+                ct);
+
+            res.EnsureSuccessStatusCode();
+
+            return await res.Content.ReadFromJsonAsync<List<NormalizeReloadStatusDtos>>(JsonOpts, ct)
+                   ?? new List<NormalizeReloadStatusDtos>();
         }
 
         // ===== Legacy order APIs (ถ้ายังใช้อยู่ที่อื่น) =====

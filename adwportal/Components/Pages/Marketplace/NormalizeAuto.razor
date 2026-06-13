@@ -14,8 +14,8 @@
 @inject MiscService MiscSvc
 @inject IJSRuntime JS
 
-<h3 class="mb-3">MDW — Normalize Orders Auto</h3>
-<p class="text-muted">ค้นหาออเดอร์และเลือกออเดอร์ที่ต้องการเพื่อยิงซ่อม (by-ref) แบบอัตโนมัติทีละรายการ</p>
+<h3 class="mb-3">MDW — Normalize Reload</h3>
+<p class="text-muted">ค้นหาออเดอร์และยิงซ่อม (by-ref) แบบอัตโนมัติทีละรายการ ตั้งแต่หน้าแรกจนถึงหน้าสุดท้ายตามเงื่อนไขที่ค้นหา</p>
 
 <div class="card mb-3">
     <div class="card-body">
@@ -155,8 +155,8 @@
                 <div class="col-md-6 d-flex align-items-end gap-2">
                     @if (!isRunning)
                     {
-                        <button class="btn btn-success px-4" @onclick="StartAutoNormalize" disabled="@(SelectedCount == 0)">
-                            <i class="bi bi-play-fill me-1"></i>เริ่มซ่อมแบบ Auto (@SelectedCount ออเดอร์)
+                        <button class="btn btn-success px-4" @onclick="StartAutoNormalize" disabled="@(totalItems == 0)">
+                            <i class="bi bi-play-fill me-1"></i>เริ่มซ่อมแบบ Auto (@totalItems ออเดอร์)
                         </button>
                     }
                     else
@@ -176,7 +176,8 @@
                         <span class="fw-semibold">Progress: @processedCount / @totalToProcess (@(GetPercent())%)</span>
                         <span class="small text-muted">
                             สำเร็จ: <span class="text-success fw-bold">@successCount</span> | 
-                            ล้มเหลว: <span class="text-danger fw-bold">@failedCount</span>
+                            ล้มเหลว: <span class="text-danger fw-bold">@failedCount</span> |
+                            ข้าม: <span class="text-secondary fw-bold">@skippedCount</span>
                         </span>
                     </div>
                     <div class="progress" style="height: 20px;">
@@ -215,9 +216,6 @@
                 <table class="table table-hover align-middle">
                     <thead class="table-light">
                         <tr>
-                            <th style="width:50px">
-                                <input type="checkbox" class="form-check-input" checked="@IsAllSelected" @onchange="ToggleSelectAll" disabled="@isRunning" />
-                            </th>
                             <th style="width:120px">OrderId</th>
                             <th>ExternalOrder</th>
                             <th style="width:110px">Channel</th>
@@ -232,9 +230,6 @@
                         @foreach (var r in items)
                         {
                             <tr class="@GetRowClass(r)">
-                                <td>
-                                    <input type="checkbox" class="form-check-input" @bind="r.IsSelected" disabled="@isRunning" />
-                                </td>
                                 <td>@r.Order.UnifiedOrderId</td>
                                 <td>@(r.Order.ExternalOrderNo ?? "-")</td>
                                 <td>@(r.Order.Channel ?? "-")</td>
@@ -258,9 +253,17 @@
                                             <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Success</span>
                                             break;
                                         case NormalizeState.Failed:
-                                            <span class="badge bg-danger" title="@r.ErrorMessage" style="cursor:help;">
-                                                <i class="bi bi-exclamation-octagon me-1"></i>Failed
-                                            </span>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="badge bg-danger" title="@r.ErrorMessage" style="cursor:help;">
+                                                    <i class="bi bi-exclamation-octagon me-1"></i>Failed
+                                                </span>
+                                                <button class="btn btn-outline-danger btn-sm"
+                                                        title="ยิงซ่อมเฉพาะออเดอร์นี้"
+                                                        @onclick="() => RetryNormalizeRowAsync(r)"
+                                                        disabled="@isRunning">
+                                                    <i class="bi bi-arrow-clockwise me-1"></i>ยิงซ่อม
+                                                </button>
+                                            </div>
                                             <div class="small text-danger text-truncate" style="max-width:180px;" title="@r.ErrorMessage">@r.ErrorMessage</div>
                                             break;
                                     }
@@ -309,8 +312,13 @@
     private class AutoNormalizeItem
     {
         public FeUnifiedOrderDtos Order { get; set; } = null!;
-        public bool IsSelected { get; set; }
         public NormalizeState State { get; set; } = NormalizeState.Pending;
+        public string? ErrorMessage { get; set; }
+    }
+
+    private sealed class NormalizeRowResult
+    {
+        public NormalizeState State { get; set; }
         public string? ErrorMessage { get; set; }
     }
 
@@ -346,6 +354,7 @@
     private string? info;
 
     private List<AutoNormalizeItem>? items;
+    private readonly Dictionary<long, NormalizeRowResult> normalizeResults = new();
 
     // Batch Auto state
     private bool isRunning;
@@ -355,21 +364,7 @@
     private int totalToProcess = 0;
     private int successCount = 0;
     private int failedCount = 0;
-
-    private int SelectedCount => items?.Count(i => i.IsSelected) ?? 0;
-    private bool IsAllSelected => items != null && items.Count > 0 && items.All(i => i.IsSelected);
-
-    private void ToggleSelectAll(ChangeEventArgs e)
-    {
-        var val = e.Value is bool b && b;
-        if (items != null)
-        {
-            foreach (var item in items)
-            {
-                item.IsSelected = val;
-            }
-        }
-    }
+    private int skippedCount = 0;
 
     private int GetPercent()
     {
@@ -565,6 +560,7 @@
         pageSize = 50;
         SetLast24h();
         items = null;
+        normalizeResults.Clear();
         error = info = null;
     }
 
@@ -574,40 +570,16 @@
         loading = true;
         error = info = null;
         items = null;
+        normalizeResults.Clear();
 
         try
         {
-            long? shopId = null;
-            if (!string.IsNullOrWhiteSpace(shopIdStr) && long.TryParse(shopIdStr, out var sid))
-                shopId = sid;
-
-            var fromUtc = ParseLocalToUtc(fromLocalText);
-            var toUtc = ParseLocalToUtc(toLocalText);
-
-            var result = await MdwSvc.FeOrdersListAsync(
-                token: mdwToken,
-                channel: string.IsNullOrWhiteSpace(platform) ? null : platform,
-                shopId: shopId,
-                buyerUserId: null,
-                q: string.IsNullOrWhiteSpace(filterQ) ? null : filterQ,
-                status: string.IsNullOrWhiteSpace(filterOrderStatus) ? null : filterOrderStatus,
-                fromUtc: fromUtc,
-                toUtc: toUtc,
-                dateField: "updated",
-                page: currentPage,
-                pageSize: pageSize,
-                sort: "updatedDesc"
-            );
+            var result = await FetchOrdersPageAsync(currentPage);
 
             if (result?.Items != null)
             {
-                items = result.Items.Select(o => new AutoNormalizeItem
-                {
-                    Order = o,
-                    IsSelected = true, // default checked to be user friendly
-                    State = NormalizeState.Pending,
-                    ErrorMessage = null
-                }).ToList();
+                items = ToAutoNormalizeItems(result.Items);
+                await ApplyNormalizeReloadStatusesAsync(items);
                 totalItems = result.TotalItems;
             }
             else
@@ -624,6 +596,92 @@
         {
             loading = false;
         }
+    }
+
+    private async Task<PagedResult<FeUnifiedOrderDtos>> FetchOrdersPageAsync(int page)
+    {
+        long? shopId = null;
+        if (!string.IsNullOrWhiteSpace(shopIdStr) && long.TryParse(shopIdStr, out var sid))
+            shopId = sid;
+
+        var fromUtc = ParseLocalToUtc(fromLocalText);
+        var toUtc = ParseLocalToUtc(toLocalText);
+
+        return await MdwSvc.FeOrdersListAsync(
+            token: mdwToken,
+            channel: string.IsNullOrWhiteSpace(platform) ? null : platform,
+            shopId: shopId,
+            buyerUserId: null,
+            q: string.IsNullOrWhiteSpace(filterQ) ? null : filterQ,
+            status: string.IsNullOrWhiteSpace(filterOrderStatus) ? null : filterOrderStatus,
+            fromUtc: fromUtc,
+            toUtc: toUtc,
+            dateField: "updated",
+            page: page,
+            pageSize: pageSize,
+            sort: "updatedDesc"
+        );
+    }
+
+    private List<AutoNormalizeItem> ToAutoNormalizeItems(IEnumerable<FeUnifiedOrderDtos> orders)
+    {
+        return orders.Select(o => new AutoNormalizeItem
+        {
+            Order = o,
+            State = normalizeResults.TryGetValue(o.UnifiedOrderId, out var result) ? result.State : NormalizeState.Pending,
+            ErrorMessage = normalizeResults.TryGetValue(o.UnifiedOrderId, out result) ? result.ErrorMessage : null
+        }).ToList();
+    }
+
+    private async Task ApplyNormalizeReloadStatusesAsync(IEnumerable<AutoNormalizeItem> targetItems)
+    {
+        var lookupItems = targetItems
+            .Where(i => i.Order.ShopId.HasValue && !string.IsNullOrWhiteSpace(i.Order.ExternalOrderNo))
+            .GroupBy(i => NormalizeLookupKey(i.Order.ShopId!.Value, i.Order.ExternalOrderNo!))
+            .Select(g => g.First())
+            .ToList();
+
+        if (lookupItems.Count == 0) return;
+
+        var requests = lookupItems.Select(i => new NormalizeReloadStatusLookupRequestDtos
+        {
+            ShopId = i.Order.ShopId!.Value,
+            ExternalOrder = i.Order.ExternalOrderNo!.Trim()
+        }).ToList();
+
+        var statuses = await MdwSvc.LookupNormalizeReloadStatusesAsync(requests, mdwToken);
+        var statusMap = statuses
+            .Where(s => s.ShopId > 0 && !string.IsNullOrWhiteSpace(s.ExternalOrder))
+            .GroupBy(s => NormalizeLookupKey(s.ShopId, s.ExternalOrder), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.First(),
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in lookupItems)
+        {
+            var key = NormalizeLookupKey(item.Order.ShopId!.Value, item.Order.ExternalOrderNo!);
+            if (!statusMap.TryGetValue(key, out var status)) continue;
+
+            item.State = ParseNormalizeState(status.NormalizeReloadStatus);
+            item.ErrorMessage = status.LastErrorMessage;
+            SaveNormalizeResult(item);
+        }
+    }
+
+    private static string NormalizeLookupKey(long shopId, string externalOrder) =>
+        $"{shopId}:{externalOrder.Trim()}";
+
+    private static NormalizeState ParseNormalizeState(string? status)
+    {
+        if (string.Equals(status, nameof(NormalizeState.Processing), StringComparison.OrdinalIgnoreCase))
+            return NormalizeState.Processing;
+        if (string.Equals(status, nameof(NormalizeState.Success), StringComparison.OrdinalIgnoreCase))
+            return NormalizeState.Success;
+        if (string.Equals(status, nameof(NormalizeState.Failed), StringComparison.OrdinalIgnoreCase))
+            return NormalizeState.Failed;
+
+        return NormalizeState.Pending;
     }
 
     private bool CanPrev => currentPage > 1;
@@ -649,87 +707,174 @@
 
     private async Task StartAutoNormalize()
     {
-        if (items == null || items.Count == 0 || isRunning) return;
+        if (totalItems <= 0 || isRunning) return;
 
         error = info = null;
-        var selectedItems = items.Where(i => i.IsSelected && i.State != NormalizeState.Success).ToList();
-        if (selectedItems.Count == 0)
-        {
-            error = "กรุณาเลือกอย่างน้อย 1 ออเดอร์ที่ยังไม่เสร็จสิ้น";
-            return;
-        }
-
         isRunning = true;
         stopRequested = false;
-        totalToProcess = selectedItems.Count;
+        normalizeResults.Clear();
+        totalToProcess = totalItems;
         processedCount = 0;
         successCount = 0;
         failedCount = 0;
+        skippedCount = 0;
 
-        foreach (var item in selectedItems)
+        try
         {
+            var allItems = new List<AutoNormalizeItem>();
+            var firstPage = await FetchOrdersPageAsync(1);
+            totalItems = firstPage.TotalItems;
+            totalToProcess = firstPage.TotalItems;
+            var totalPages = Math.Max(1, (int)Math.Ceiling((double)firstPage.TotalItems / Math.Max(1, pageSize)));
+            allItems.AddRange(ToAutoNormalizeItems(firstPage.Items));
+            await ApplyNormalizeReloadStatusesAsync(allItems);
+            currentPage = 1;
+            items = allItems.Take(pageSize).ToList();
+            StateHasChanged();
+
+            for (var pageToLoad = 2; pageToLoad <= totalPages; pageToLoad++)
+            {
+                if (stopRequested)
+                    break;
+
+                currentPage = pageToLoad;
+                items = ToAutoNormalizeItems((await FetchOrdersPageAsync(pageToLoad)).Items);
+                await ApplyNormalizeReloadStatusesAsync(items);
+                allItems.AddRange(items);
+                StateHasChanged();
+            }
+
+            skippedCount = allItems.Count(i => i.State == NormalizeState.Success);
+            totalToProcess = allItems.Count;
+
+            for (var pageToRun = 1; pageToRun <= totalPages; pageToRun++)
+            {
+                if (stopRequested)
+                    break;
+
+                currentPage = pageToRun;
+                items = allItems
+                    .Skip((pageToRun - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+                StateHasChanged();
+
+                foreach (var item in items)
+                {
+                    if (stopRequested)
+                        break;
+
+                    if (item.State == NormalizeState.Success)
+                    {
+                        processedCount++;
+                        StateHasChanged();
+                        continue;
+                    }
+
+                    await NormalizeOneAsync(item);
+                    processedCount++;
+                    StateHasChanged();
+
+                    if (delayMs > 0 && processedCount < totalToProcess)
+                    {
+                        await Task.Delay(delayMs);
+                    }
+                }
+
+            }
+
             if (stopRequested)
             {
                 info = $"หยุดการยิงซ่อมชั่วคราว ดำเนินการแล้วทั้งหมด {processedCount} รายการ";
-                break;
             }
-
-            item.State = NormalizeState.Processing;
-            StateHasChanged();
-
-            try
+            else
             {
-                var targetPlatform = item.Order.Channel ?? platform;
-                var targetShopId = item.Order.ShopId.ToString();
-                var targetOrderRef = item.Order.ExternalOrderNo ?? item.Order.UnifiedOrderId.ToString();
-
-                if (string.IsNullOrWhiteSpace(targetPlatform) || string.IsNullOrWhiteSpace(targetShopId) || string.IsNullOrWhiteSpace(targetOrderRef))
-                {
-                    throw new Exception("Platform, Shop ID, or OrderRef is missing.");
-                }
-
-                var (ok, body) = await MdwSvc.NormalizeByRefAsync(
-                    platform: targetPlatform,
-                    shopId: targetShopId,
-                    orderRef: targetOrderRef,
-                    token: mdwToken
-                );
-
-                if (ok)
-                {
-                    item.State = NormalizeState.Success;
-                    item.ErrorMessage = null;
-                    successCount++;
-                }
-                else
-                {
-                    item.State = NormalizeState.Failed;
-                    item.ErrorMessage = GetErrorMessageFromJson(body);
-                    failedCount++;
-                }
+                info = $"ยิงซ่อม Auto เสร็จสิ้น! สำเร็จ: {successCount}, ล้มเหลว: {failedCount}";
             }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isRunning = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task NormalizeOneAsync(AutoNormalizeItem item)
+    {
+        item.State = NormalizeState.Processing;
+        item.ErrorMessage = null;
+        SaveNormalizeResult(item);
+        StateHasChanged();
+
+        try
+        {
+            var targetPlatform = item.Order.Channel ?? platform;
+            var targetShopId = item.Order.ShopId.ToString();
+            var targetOrderRef = item.Order.ExternalOrderNo ?? item.Order.UnifiedOrderId.ToString();
+
+            if (string.IsNullOrWhiteSpace(targetPlatform) || string.IsNullOrWhiteSpace(targetShopId) || string.IsNullOrWhiteSpace(targetOrderRef))
+            {
+                throw new Exception("Platform, Shop ID, or OrderRef is missing.");
+            }
+
+            var (ok, body) = await MdwSvc.NormalizeByRefAsync(
+                platform: targetPlatform,
+                shopId: targetShopId,
+                orderRef: targetOrderRef,
+                source: "NormalizeReload",
+                token: mdwToken
+            );
+
+            if (ok)
+            {
+                item.State = NormalizeState.Success;
+                item.ErrorMessage = null;
+                successCount++;
+            }
+            else
             {
                 item.State = NormalizeState.Failed;
-                item.ErrorMessage = ex.Message;
+                item.ErrorMessage = GetErrorMessageFromJson(body);
                 failedCount++;
             }
-
-            processedCount++;
-            StateHasChanged();
-
-            if (delayMs > 0 && processedCount < totalToProcess)
-            {
-                await Task.Delay(delayMs);
-            }
         }
-
-        isRunning = false;
-        if (!stopRequested)
+        catch (Exception ex)
         {
-            info = $"ยิงซ่อม Auto เสร็จสิ้น! สำเร็จ: {successCount}, ล้มเหลว: {failedCount}";
+            item.State = NormalizeState.Failed;
+            item.ErrorMessage = ex.Message;
+            failedCount++;
         }
+
+        SaveNormalizeResult(item);
+    }
+
+    private async Task RetryNormalizeRowAsync(AutoNormalizeItem item)
+    {
+        if (isRunning || item.State != NormalizeState.Failed) return;
+
+        error = info = null;
+        if (failedCount > 0) failedCount--;
+
+        await NormalizeOneAsync(item);
+
+        info = item.State == NormalizeState.Success
+            ? $"ยิงซ่อมออเดอร์ {item.Order.ExternalOrderNo ?? item.Order.UnifiedOrderId.ToString()} สำเร็จ"
+            : $"ยิงซ่อมออเดอร์ {item.Order.ExternalOrderNo ?? item.Order.UnifiedOrderId.ToString()} ไม่สำเร็จ";
+
         StateHasChanged();
+    }
+
+    private void SaveNormalizeResult(AutoNormalizeItem item)
+    {
+        normalizeResults[item.Order.UnifiedOrderId] = new NormalizeRowResult
+        {
+            State = item.State,
+            ErrorMessage = item.ErrorMessage
+        };
     }
 
     private void StopAutoNormalize()
